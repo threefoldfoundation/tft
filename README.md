@@ -1,2 +1,1 @@
-# tftoken
-Threefold token
+# Threefold token
