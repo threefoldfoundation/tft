@@ -7,19 +7,15 @@ The Solidity code is in the [contract](./contract) subdirectory
 Withdrawing tokens from the ERC20 contract back to TFT is attempted any time there is an action which modifies the balance of an account, or modifies the list of registered withdrawal addresses.
 As such, there are currently 4 methods which might trigger a withdraw:
 
-- [transfer](./contract/tokenV1.sol#L88)
-- [transferFrom](./contract/tokenV1.sol#L121)
-- [registerWithdrawalAddress](./contract/tokenV1.sol#L166)
-- [mintTokens](./contract/tokenV1.sol#L151)
+- [transfer](./contract/tokenV0.sol#L78)
+- [transferFrom](./contract/tokenV0.sol#L110)
+- [mintTokens](./contract/tokenV0.sol#L147)
 
-When a withdraw occurs,  a [withdraw event](./contract/tokenV1.sol#L42) is raised. The event includes the address from which the balance is withdrawn, as well as the amount of tokens which have been withdrawn. Anyone on the threefold chain has the ability to create the corresponding transaction on the threefold chain side, which adds the withdrawn tokens as an output to the TFT address which is linked to the withdraw address included in the withdraw event. The threefold chain transaction also includes an ethereum block ID and transaction ID, these are the IDs of the transaction which actually triggered the withdraw event, and its parent block. Nodes which are running the `ethvalidation` module can then validate if they should allow the transaction, by verifying that the withdraw event is indeed emitted from the transaction identified by the included ID, that the right amount of tokens has been awarded, and that the receving address is indeed linked to the ERC20 address from where the withdraw event occurred.
+When a withdraw occurs,  a [withdraw event](./contract/tokenV0.sol#L40) is raised. The event includes the address from which the balance is withdrawn, as well as the amount of tokens which have been withdrawn, also the destination blockchain address and destination blockchain network is included. A bridge can listen to these events and return the tokens on the target blockchain to the target blockchain address and network.
 
 High level, the withdraw flow works as follows:
 
-1) An action in the contract is called which might trigger a withdraw.
-2) Attempt to complete this action. If successful, check if we can / have to withdraw. These actions will currently all emit an event of their own if they are indeed successful, though this is not a requirement.
-3) Verify that the withdraw conditions have been met. The conditions are: target is a known withdrawal address, and has enough balance ( > 0.1).
-4) If the conditions have been met, remove all balance from the target address, and emit a Withdraw event for this exact amount.
+When the withdraw action is called, it removes the exact amount from the target address balance and emits a Withdraw event for this exact amount.
 
 ## Proxy Contract setup
 

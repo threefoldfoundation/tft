@@ -71,14 +71,6 @@ contract TFT is OwnedUpgradeableTokenStorage {
     }
 
     // ------------------------------------------------------------------------
-    // _canWithdraw checks if the balance is enough to withdraw
-    // ------------------------------------------------------------------------
-    function _canWithdraw(uint _balance) private view returns (bool) {
-        // 0.1 TFT withdrawal cost
-        return _balance > 10**uint(getDecimals() - 1);
-    }
-
-    // ------------------------------------------------------------------------
     // Transfer the balance from token owner's account to `to` account
     // - Owner's account must have sufficient balance to transfer
     // - 0 value transfers are allowed
