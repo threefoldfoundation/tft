@@ -17,6 +17,26 @@ High level, the withdraw flow works as follows:
 
 When the withdraw action is called, it removes the exact amount from the target address balance and emits a Withdraw event for this exact amount.
 
+## Multisig contract setup
+
+### Motivation
+
+Following methods on the token contract can only be called by the owner of the token contract:
+
+- [mintTokens](./contract/tokenV0.sol#L147)
+- [upgradeTo](./contract/upgradeable.sol#L52)
+
+To make sure these methods can only be called in an ethical and distributed way, we decided to work with a multisig contract. The multisig contract address will be the owner of the TFT token contract.
+When a `mintTokens` or `upgradeTo` must happen, one of the owners of the multisig contract can start a transaction and ask for approval of the other owners of this multisig contract. Once enough approvals have been submitted, the transaction is executed. The amount of confirmations needed is a configurable value on the multisig contract.
+
+This is particulary good for a token bridge. Calls to `mintTokens` can happen in a fair and distributed manner without requiring human intervention.
+
+We also harden security of the token contract in the case that one of the keys are compromised. If that happens we can identity which key that is and remove that key as an owner of the multisig contract and replace it with another.
+
+### Building
+
+[readme](./multisig/README.md) explains how to build the multisig contract.
+
 ## Proxy Contract setup
 
 ### Motivation
