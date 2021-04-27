@@ -33,9 +33,10 @@ const (
 // stellarWallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
 type stellarWallet struct {
-	keypair *keypair.Full
-	network string
-	client  *SignersClient
+	keypair        *keypair.Full
+	network        string
+	client         *SignersClient
+	signatureCount int
 }
 
 func newStellarWallet(ctx context.Context, network, seed string, host host.Host, router routing.PeerRouting) (*stellarWallet, error) {
@@ -62,6 +63,9 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 		}
 		keys = append(keys, signer.Key)
 	}
+
+	log.Info("required signature count", "signatures", int(account.Thresholds.MedThreshold))
+	w.signatureCount = int(account.Thresholds.MedThreshold) - 1
 
 	w.client, err = NewSignersClient(ctx, host, router, keys)
 	if err != nil {
@@ -122,12 +126,11 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 
 	signReq := SignRequest{
 		TxnXDR:             xdr,
-		RequiredSignatures: int(sourceAccount.Thresholds.MedThreshold) - 1,
+		RequiredSignatures: w.signatureCount,
 		Receiver:           receiver,
 		Block:              blockheight,
 	}
 
-	log.Info("required signature count", "signatures", int(sourceAccount.Thresholds.MedThreshold))
 	signatures, err := w.client.Sign(ctx, signReq)
 	if err != nil {
 		return err
