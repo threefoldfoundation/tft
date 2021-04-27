@@ -21,9 +21,9 @@ import (
 	"github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/protocols/horizon/operations"
 
-	tfeth "github.com/threefoldfoundation/tft-stellar/eth-bridge/api"
-	"github.com/threefoldfoundation/tft-stellar/eth-bridge/api/bridge/contract"
-	"github.com/threefoldfoundation/tft-stellar/eth-bridge/api/bridge/mscontract"
+	tfeth "github.com/threefoldfoundation/tft/bsc/bridges/stellar/api"
+	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/contract"
+	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/mscontract"
 )
 
 const ERC20AddressLength = 20

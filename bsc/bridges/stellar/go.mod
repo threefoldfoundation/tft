@@ -1,4 +1,4 @@
-module github.com/threefoldfoundation/tft-stellar/eth-bridge
+module github.com/threefoldfoundation/tft/bsc/bridges/stellar
 
 go 1.16
 

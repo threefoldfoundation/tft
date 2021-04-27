@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 
-	tfeth "github.com/threefoldfoundation/tft-stellar/eth-bridge/api"
+	tfeth "github.com/threefoldfoundation/tft/bsc/bridges/stellar/api"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"

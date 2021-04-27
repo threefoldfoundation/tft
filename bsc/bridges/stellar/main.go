@@ -10,7 +10,7 @@ import (
 
 	"github.com/multiformats/go-multiaddr"
 	flag "github.com/spf13/pflag"
-	"github.com/threefoldfoundation/tft-stellar/eth-bridge/api/bridge"
+	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"

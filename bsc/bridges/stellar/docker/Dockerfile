@@ -1,4 +1,4 @@
 FROM alpine:latest
-COPY eth-bridge /bin/
+COPY stellar /bin/
 ADD genesis /genesis/
-ENTRYPOINT [ "/bin/eth-bridge" ]
+ENTRYPOINT [ "/bin/stellar" ]
