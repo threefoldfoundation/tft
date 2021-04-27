@@ -62,7 +62,7 @@ A master bridge is a bridge that will initiate all transactions (deposits/withdr
 
 ### It scans it's stellar address to look for incoming transactions.
 
-The bridge monitors a central stellar account that is goverened by the threefoldfoundation. When a user send an amount of TFT to that stellar account, the bridge will pick up this transaction. In the memo text of this transaction is a base64 encoded smart chain address (BEP20, ERC20, ...). 
+The bridge monitors a central stellar account that is goverened by the threefoldfoundation. When a user send an amount of TFT to that stellar account, the bridge will pick up this transaction. In the memo text of this transaction is a base64 encoded smart chain address (BEP20, ERC20, ...) of the receiver on the smart chain (which is first hex decoded). 
 
 The bridge checks the amount that are transfered and the target on the smart chain and mints the tokens on the smart chain accordingly. To mint, the bridge calls the `mint` function on the smart contract.
 
