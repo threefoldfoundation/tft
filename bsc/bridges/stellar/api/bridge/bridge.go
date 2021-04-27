@@ -38,11 +38,19 @@ type BridgeConfig struct {
 	AccountJSON             string
 	AccountPass             string
 	Datadir                 string
-	StellarNetwork          string
-	StellarSeed             string
 	RescanBridgeAccount     bool
 	PersistencyFile         string
 	Follower                bool
+	StellarConfig
+}
+
+type StellarConfig struct {
+	// network for the stellar config
+	StellarNetwork string
+	// seed for the stellar bridge wallet
+	StellarSeed string
+	// stellar fee wallet address
+	StellarFeeWallet string
 }
 
 // NewBridge creates a new Bridge.
@@ -60,7 +68,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 	var wallet *stellarWallet
 	// Only create the stellar wallet if the bridge is a master bridge
 	if !config.Follower {
-		wallet, err = newStellarWallet(ctx, config.StellarNetwork, config.StellarSeed, host, router)
+		wallet, err = newStellarWallet(ctx, config.StellarConfig, host, router)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +197,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 						hash := we.TxHash()
 						log.Info("Attempting to create an ERC20 withdraw tx", "ethTx", hash)
 
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash)
+						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "")
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 						}
