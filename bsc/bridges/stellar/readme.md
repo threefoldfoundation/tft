@@ -76,7 +76,7 @@ When the mint occurs, the transaction ID is saved to the contract's storage. It 
 
 Flow: a user will deposit funds into the master bridge wallet, this wallet is [Multignature Stellar Wallet](https://developers.stellar.org/docs/glossary/multisig/). The master will initiate the minting transaction on the smart chain by calling the multisig contract `SubmitTransaction` call with the encoded `Mint` call of our token contract. Follower bridges will listen on Submission events on the multisig contract and confirm the transaction accordingly. Once enough confirmations have been submitted, the multisig contract will call the token contract `Mint` function and the funds will be minted on the target smart chain.
 
-### It reads events from the contract and looks for `withdraw` events.
+### It reads events from the contract and looks for `withdraw` events
 
 When a user on the smart chain interacts with the smart contract `withdraw` function, the bridge will pick up this event and start a withdrawal from the smart chain back to Stellar.
 

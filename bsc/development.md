@@ -1,13 +1,13 @@
 # TFT on Binance Smart Chain
 
-Token address on Binance Smart Chain Testnet: https://testnet.bscscan.com/address/0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e
+Token address on Binance Smart Chain Testnet: [0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e](https://testnet.bscscan.com/address/0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e)
 
 You can add the token address to a Web3 compatible wallet. If you are using Metamask, check out following [guide](https://academy.binance.com/en/articles/connecting-metamask-to-binance-smart-chain) on how to connect Metamask to Binance Smart Chain Testnet or Mainnet.
 
 If you have setup Metamask for Binance Chain Testnet, use the [bnb-faucet](https://testnet.binance.org/faucet-smart) to fund your account with some Testnet BNB's.
 (You need BNB in order to deploy the contract on BSC)
 
-## Deploy the contract yourself.
+## Deploy the contract yourself
 
 You can use [remix](https://remix.ethereum.org/#optimize=false&runs=200&evmVersion=null&version=soljson-v0.8.3+commit.8d00100c.js) to compile and deploy the Token contract on any EVM compatible Smart Chain.
 
@@ -76,7 +76,7 @@ Copy the contract address (Click on the copy button in the deployed contracts se
 
 Now browse to [bscscan-testnet](https://testnet.bscscan.com/) and search for your deployed contract.
 
-### 10: Make multisig contract owner of the Token contract.
+### 10: Make multisig contract owner of the Token contract
 
 Copy the multisig contract address, click on the 3th tab in the remix editor and click on the token contract implementation in the section `deployed contracts`.
 
