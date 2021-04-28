@@ -89,35 +89,43 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 
 	asset := w.GetAssetCodeAndIssuer()
 
+	operations := []txnbuild.Operation{}
+
+	if target != w.config.StellarFeeWallet {
+		amount = amount - withdrawFee
+		feeWalletAddress := w.keypair.Address()
+		if w.config.StellarFeeWallet != "" {
+			feeWalletAddress = w.config.StellarFeeWallet
+		}
+		log.Info("Fee wallet address", "address", feeWalletAddress)
+		// Transfer the fee amount to the fee wallet
+		feePayoutOperation := txnbuild.Payment{
+			Destination: feeWalletAddress,
+			Amount:      big.NewRat(int64(withdrawFee), stellarPrecision).FloatString(stellarPrecisionDigits),
+			Asset: txnbuild.CreditAsset{
+				Code:   asset[0],
+				Issuer: asset[1],
+			},
+			SourceAccount: sourceAccount.AccountID,
+		}
+
+		operations = append(operations, &feePayoutOperation)
+	}
+
 	// Payout the amount minus the fee back to the user
 	payoutOperation := txnbuild.Payment{
 		Destination: target,
-		Amount:      big.NewRat(int64(amount-withdrawFee), stellarPrecision).FloatString(stellarPrecisionDigits),
+		Amount:      big.NewRat(int64(amount), stellarPrecision).FloatString(stellarPrecisionDigits),
 		Asset: txnbuild.CreditAsset{
 			Code:   asset[0],
 			Issuer: asset[1],
 		},
 		SourceAccount: sourceAccount.AccountID,
 	}
-
-	feeWalletAddress := w.keypair.Address()
-	if w.config.StellarFeeWallet != "" {
-		feeWalletAddress = w.config.StellarFeeWallet
-	}
-	log.Info("Fee wallet address", "address", feeWalletAddress)
-	// Transfer the fee amount to the fee wallet
-	feePayoutOperation := txnbuild.Payment{
-		Destination: feeWalletAddress,
-		Amount:      big.NewRat(int64(withdrawFee), stellarPrecision).FloatString(stellarPrecisionDigits),
-		Asset: txnbuild.CreditAsset{
-			Code:   asset[0],
-			Issuer: asset[1],
-		},
-		SourceAccount: sourceAccount.AccountID,
-	}
+	operations = append(operations, &payoutOperation)
 
 	txnBuild := txnbuild.TransactionParams{
-		Operations:           []txnbuild.Operation{&payoutOperation, &feePayoutOperation},
+		Operations:           operations,
 		Timebounds:           txnbuild.NewTimeout(300),
 		SourceAccount:        &sourceAccount,
 		BaseFee:              txnbuild.MinBaseFee * 3,
