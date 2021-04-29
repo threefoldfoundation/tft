@@ -121,6 +121,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
     // -----------------------------------------------------------------------
     function withdraw(uint tokens, string memory blockchain_address, string memory network) public returns (bool success) {
         setBalance(msg.sender, getBalance(msg.sender).sub(tokens));
+        setTotalSupply(getTotalSupply().sub(tokens));
         emit Withdraw(msg.sender, tokens, blockchain_address, network);
         return true;
     }
@@ -149,6 +150,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
         require(!_isMintID(txid), "TFT transacton ID already known");
         _setMintID(txid);
         setBalance(receiver, getBalance(receiver).add(tokens));
+        setTotalSupply(getTotalSupply().add(tokens));
         emit Mint(receiver, tokens, txid);
     }
 

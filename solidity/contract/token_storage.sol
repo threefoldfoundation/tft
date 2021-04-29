@@ -82,8 +82,7 @@ contract TokenStorage is Storage {
         uint8 _decimals = 7;
         setDecimals(_decimals);
 
-        // Theoretically all TFT could be converted to this Token, so 4 billion total supply
-        uint _totalSupply = 4000000000 * 10 ** uint(_decimals);
-        setTotalSupply(_totalSupply);
+        // Set initial supply to 0
+        setTotalSupply(0);
     }
 }
