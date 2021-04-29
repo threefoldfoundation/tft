@@ -86,6 +86,8 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info("Provided contract address", "address", bridgeConfig.ContractAddress)
 	// override contract address if it's provided
 	if bridgeConfig.ContractAddress != "" {
 		networkConfig.ContractAddress = common.HexToAddress(bridgeConfig.ContractAddress)
