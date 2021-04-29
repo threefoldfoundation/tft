@@ -25,8 +25,7 @@ library SafeMath {
 }
 
 // ----------------------------------------------------------------------------
-// ERC20 Token, with the addition of symbol, name and decimals and a
-// fixed supply
+// ERC20 Token, with the addition of a symbol, name and decimals 
 // ----------------------------------------------------------------------------
 contract TFT is OwnedUpgradeableTokenStorage {
     using SafeMath for uint;
@@ -58,7 +57,6 @@ contract TFT is OwnedUpgradeableTokenStorage {
     // Total supply
     // ------------------------------------------------------------------------
     function totalSupply() public view returns (uint) {
-        // TODO: Is this valid for us?
         return getTotalSupply().sub(getBalance(address(0)));
     }
 
@@ -116,8 +114,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
     }
 
     // -----------------------------------------------------------------------
-    // Owner can withdraw and amount of tokens, these tokens will be burned.
-    // Owner must provide a network where tokens will be minted on the stellar side
+    // Owner can withdraw and amount of tokens to another network, these tokens will be burned.
     // -----------------------------------------------------------------------
     function withdraw(uint tokens, string memory blockchain_address, string memory network) public returns (bool success) {
         setBalance(msg.sender, getBalance(msg.sender).sub(tokens));
