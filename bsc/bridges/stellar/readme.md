@@ -103,7 +103,7 @@ Following parameters can be set:
 |--password|json key password|
 |--eth|Smart chain client url|`https://data-seed-prebsc-1-s1.binance.org:8545`/
 |--eth-network|Smart chain network|smart-chain-testnet
-|--persistency|Persistency file for the brige|node.json)
+|--persistency|Persistency file for the brige|node.json
 |--contract|TFT token address on chain|0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e
 |--mscontract|Multisig token address on chain|0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F
 |--follower|If bridge is follower (signer)|false
