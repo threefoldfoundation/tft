@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -261,6 +262,11 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 								err := w.CreateAndSubmitPayment(context.Background(), paymentOpation.From, w.config.StellarNetwork, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
 								if err != nil {
 									log.Error("error while trying to refund user", "err", err.Error())
+									for err == errRequiredSignaturesNotMet {
+										log.Error("error while trying to reach peers, retrying ...")
+										time.Sleep(retryDelay)
+										err = w.CreateAndSubmitPayment(context.Background(), paymentOpation.From, w.config.StellarNetwork, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
+									}
 								}
 							}
 						}
@@ -277,12 +283,23 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 
 				err = mintFn(ethAddress, eth_amount, tx.Hash)
 				if err != nil {
+					// TODO CHECK IF OWNER ERROR
+					if err == errNotOwner {
+						log.Error(err.Error())
+						break
+					}
+
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 
 					log.Info("Going to try to refund due to a failed mint")
 					err := w.CreateAndSubmitPayment(context.Background(), tx.Account, w.config.StellarNetwork, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
 					if err != nil {
 						log.Error("error while trying to refund user for a failed mint", "err", err.Error())
+						for err == errRequiredSignaturesNotMet {
+							log.Error("error while trying to reach peers, retrying ...")
+							time.Sleep(retryDelay)
+							err = w.CreateAndSubmitPayment(context.Background(), tx.Account, w.config.StellarNetwork, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
+						}
 					}
 					continue
 				}
@@ -292,6 +309,11 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 					err = w.CreateAndSubmitPayment(context.Background(), w.config.StellarFeeWallet, w.config.StellarNetwork, uint64(feeAmount), common.Address{}, 0, common.Hash{}, "")
 					if err != nil {
 						log.Error("error while trying to refund user", "err", err.Error())
+						for err == errRequiredSignaturesNotMet {
+							log.Error("error while trying to reach peers, retrying ...")
+							time.Sleep(retryDelay)
+							err = w.CreateAndSubmitPayment(context.Background(), tx.Account, w.config.StellarNetwork, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
+						}
 					}
 				}
 			}
