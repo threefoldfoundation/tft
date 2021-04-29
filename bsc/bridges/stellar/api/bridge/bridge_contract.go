@@ -88,12 +88,14 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 	}
 	// override contract address if it's provided
 	if bridgeConfig.ContractAddress != "" {
+		log.Info("Overriding default token contract", "address", bridgeConfig.ContractAddress)
 		networkConfig.ContractAddress = common.HexToAddress(bridgeConfig.ContractAddress)
 		// TODO: validate ABI of contract,
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 	// override contract address if it's provided
 	if bridgeConfig.MultisigContractAddress != "" {
+		log.Info("Overriding default multisig contract", "address", bridgeConfig.MultisigContractAddress)
 		networkConfig.MultisigContractAddress = common.HexToAddress(bridgeConfig.MultisigContractAddress)
 		// TODO: validate ABI of contract,
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
@@ -139,6 +141,7 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 }
 
 func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethclient.Client) (*Contract, error) {
+	log.Info("Creating token contract binding", "address", networkConfig.ContractAddress)
 	filter, err := contract.NewTokenFilterer(networkConfig.ContractAddress, client)
 	if err != nil {
 		return nil, err
@@ -169,6 +172,7 @@ func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethcl
 }
 
 func createMultisigContract(networkConfig tfeth.NetworkConfiguration, client *ethclient.Client) (*MsContract, error) {
+	log.Info("Creating multisig contract binding", "address", networkConfig.MultisigContractAddress)
 	filter, err := mscontract.NewTokenFilterer(networkConfig.MultisigContractAddress, client)
 	if err != nil {
 		return nil, err

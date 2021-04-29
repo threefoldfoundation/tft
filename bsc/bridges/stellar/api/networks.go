@@ -77,21 +77,21 @@ var MainnetBootstrapNodes = []string{
 
 var ethNetworkConfigurations = map[string]NetworkConfiguration{
 	"smart-chain-mainnet": {
-		56,
-		"main",
-		GetMainnetGenesisBlock(),
+		NetworkID:    56,
+		NetworkName:  "main",
+		GenesisBlock: GetMainnetGenesisBlock(),
 		//Todo: replace with actual address
-		common.HexToAddress("0x21826CC49B92029553af86F4e7A62C427E61e53a"),
-		common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
-		MainnetBootstrapNodes,
+		ContractAddress:         common.HexToAddress("0x21826CC49B92029553af86F4e7A62C427E61e53a"),
+		MultisigContractAddress: common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
+		bootnodes:               MainnetBootstrapNodes,
 	},
 	"smart-chain-testnet": {
-		97,
-		"bsc-testnet",
-		GetTestnetGenesisBlock(),
-		common.HexToAddress("0xDAD7A460EA562e28fB90cF524B62ea4cBc1685af"),
-		common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
-		TestnetBootstrapNodes,
+		NetworkID:               97,
+		NetworkName:             "bsc-testnet",
+		GenesisBlock:            GetTestnetGenesisBlock(),
+		ContractAddress:         common.HexToAddress("0xDAD7A460EA562e28fB90cF524B62ea4cBc1685af"),
+		MultisigContractAddress: common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
+		bootnodes:               TestnetBootstrapNodes,
 	},
 }
 
@@ -100,7 +100,7 @@ func GetEthNetworkConfiguration(networkname string) (networkconfig NetworkConfig
 	fmt.Println(networkname)
 	networkconfig, found := ethNetworkConfigurations[networkname]
 	if !found {
-		err = fmt.Errorf("Ethereum network %s not supported", networkname)
+		err = fmt.Errorf("Network %s not supported", networkname)
 	}
 	return
 }
