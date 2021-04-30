@@ -81,7 +81,7 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 		"main",
 		GetMainnetGenesisBlock(),
 		//Todo: replace with actual address
-		common.HexToAddress("0x21826CC49B92029553af86F4e7A62C427E61e53a"),
+		common.HexToAddress("0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f"),
 		common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
 		MainnetBootstrapNodes,
 	},
@@ -89,8 +89,8 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 		97,
 		"bsc-testnet",
 		GetTestnetGenesisBlock(),
-		common.HexToAddress("0x40a58Ae7942cDAA7E7659242645bc801e4bd68e0"),
-		common.HexToAddress("0x21456e8a29e1972bb010Df6f54FAa81F6D53C768"),
+		common.HexToAddress("0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f"),
+		common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
 		TestnetBootstrapNodes,
 	},
 }

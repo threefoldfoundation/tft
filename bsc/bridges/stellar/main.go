@@ -24,8 +24,8 @@ func main() {
 	flag.StringVar(&ethClientUrl, "eth", "https://data-seed-prebsc-1-s1.binance.org:8545", "eth client url")
 	flag.Uint16Var(&bridgeCfg.EthPort, "port", 23111, "eth port")
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
-	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "0x40a58Ae7942cDAA7E7659242645bc801e4bd68e0", "smart contract address")
-	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "0x21456e8a29e1972bb010Df6f54FAa81F6D53C768", "multisig smart contract address")
+	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f", "smart contract address")
+	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F", "multisig smart contract address")
 
 	flag.StringVar(&bridgeCfg.Datadir, "datadir", "./storage", "chain data directory")
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
