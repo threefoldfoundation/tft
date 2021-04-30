@@ -13,9 +13,6 @@ contract Storage {
     mapping(bytes32 => bool)       private boolStorage;
     mapping(bytes32 => int256)     private intStorage;
 
-    mapping (address => bool) public isOwner;
-    address[] internal owners;
-
     /**** Get Methods ***********/
 
     /// @param _key The key for the record
