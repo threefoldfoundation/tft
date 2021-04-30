@@ -81,3 +81,29 @@ Now browse to [bscscan-testnet](https://testnet.bscscan.com/) and search for you
 Copy the multisig contract address, click on the 3th tab in the remix editor and click on the token contract implementation in the section `deployed contracts`.
 
 Execute the transaction `addOwner` and provide the multisig contract address and click `transact`.
+
+
+## Generating go code based on token / multisig contract ABI
+
+In Remix when you compile a contract you can select ABI button (this will copy the ABI string to your clipboard).
+
+Save the contents to a file.
+
+### Install Abigen
+
+Build binance chain `abigen` binary from [source](https://github.com/binance-chain/bsc#building-the-source).
+
+### Generate code
+
+```
+abigen --abi path_to_token_abi --pkg contract --type Token --out token.go
+```
+
+With `--out` you can specify the location where the code should be generated
+
+Or use predefined make commands:
+
+For token: `make generate-token`
+
+
+For Multisig Contract: `make generate-mscontract`
