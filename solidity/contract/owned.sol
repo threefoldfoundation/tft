@@ -17,9 +17,6 @@ contract Owned is Storage {
     event AddedOwner(address newOwner);
     event RemovedOwner(address removedOwner);
 
-    mapping (address => bool) public isOwner;
-    address[] internal owners;
-
     // -----------------------------------------------------
     // storage utilities
     // -----------------------------------------------------
@@ -46,6 +43,14 @@ contract Owned is Storage {
 
         deleteBool(keccak256(abi.encode("owner", _owner)));
         setAddresses(keccak256(abi.encode("owners")), owners);
+    }
+
+    function setOwners(address[] storage _addresses) internal {
+        setAddresses(keccak256(abi.encode("owners")), _addresses);
+    }
+
+    function getOwners() internal view returns (address[] storage) {
+        return getAddresses(keccak256(abi.encode("owners")));
     }
 
     // -----------------------------------------------------

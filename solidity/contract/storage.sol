@@ -8,10 +8,13 @@ contract Storage {
     mapping(bytes32 => uint256)    private uIntStorage;
     mapping(bytes32 => string)     private stringStorage;
     mapping(bytes32 => address)    private addressStorage;
-    mapping(bytes32 => address[])    private addressesStorage;
+    mapping(bytes32 => address[])  private addressesStorage;
     mapping(bytes32 => bytes)      private bytesStorage;
     mapping(bytes32 => bool)       private boolStorage;
     mapping(bytes32 => int256)     private intStorage;
+
+    mapping (address => bool) public isOwner;
+    address[] internal owners;
 
     /**** Get Methods ***********/
 

@@ -24,8 +24,6 @@ contract Proxy is TokenStorage, Owned {
         }
     }
 
-    receive() external payable { }
-
     constructor() {
         //set initial contract address, needs to be hardcoded
         // TODO: Set correct address

@@ -44,10 +44,6 @@ contract TokenStorage is Storage {
         return getUint(keccak256(abi.encode("allowed", _account, _spender)));
     }
 
-    function getOwners() internal view returns (address[] storage) {
-        return getAddresses(keccak256(abi.encode("owners")));
-    }
-
     // -----------------------------------------------------
     // setter utilities
     // -----------------------------------------------------
@@ -73,10 +69,6 @@ contract TokenStorage is Storage {
 
     function setAllowed(address _account, address _spender, uint _allowance) internal {
         setUint(keccak256(abi.encode("allowed", _account, _spender)), _allowance);
-    }
-
-    function setOwners(address[] storage _addresses) internal {
-        setAddresses(keccak256(abi.encode("owners")), _addresses);
     }
 
     // ------------------------------------------------------------------------
