@@ -1,6 +1,7 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import "./storage.sol";
+import "./owned.sol";
 
 contract TokenStorage is Storage {
 
@@ -43,6 +44,10 @@ contract TokenStorage is Storage {
         return getUint(keccak256(abi.encode("allowed", _account, _spender)));
     }
 
+    function getOwners() internal view returns (address[] storage) {
+        return getAddresses(keccak256(abi.encode("owners")));
+    }
+
     // -----------------------------------------------------
     // setter utilities
     // -----------------------------------------------------
@@ -70,11 +75,15 @@ contract TokenStorage is Storage {
         setUint(keccak256(abi.encode("allowed", _account, _spender)), _allowance);
     }
 
+    function setOwners(address[] storage _addresses) internal {
+        setAddresses(keccak256(abi.encode("owners")), _addresses);
+    }
+
     // ------------------------------------------------------------------------
     // Constructor
     // ------------------------------------------------------------------------
     // Token constructor here so it is also inheritted by our proxy. Needed to set some constants
-    constructor() public {
+    constructor() {
         setSymbol("TFT");
         setName("TFT on BSC");
 

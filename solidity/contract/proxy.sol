@@ -1,10 +1,11 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import "./token_storage.sol";
+import "./owned.sol";
 
 // inherit from TokenStorage so we have the constructor, since the token variables need to be stored in the
 // proxy's storage
-contract Proxy is TokenStorage {
+contract Proxy is TokenStorage, Owned {
     fallback () external payable {
         // directly get the implementation contract address from the storage. This way we don't need to depend
         // on the upgradeable contract
@@ -22,6 +23,8 @@ contract Proxy is TokenStorage {
             default { return(ptr, size) }
         }
     }
+
+    receive() external payable { }
 
     constructor() {
         //set initial contract address, needs to be hardcoded

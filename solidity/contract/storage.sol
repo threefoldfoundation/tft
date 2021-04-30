@@ -8,6 +8,7 @@ contract Storage {
     mapping(bytes32 => uint256)    private uIntStorage;
     mapping(bytes32 => string)     private stringStorage;
     mapping(bytes32 => address)    private addressStorage;
+    mapping(bytes32 => address[])    private addressesStorage;
     mapping(bytes32 => bytes)      private bytesStorage;
     mapping(bytes32 => bool)       private boolStorage;
     mapping(bytes32 => int256)     private intStorage;
@@ -17,6 +18,11 @@ contract Storage {
     /// @param _key The key for the record
     function getAddress(bytes32 _key) internal view returns (address) {
         return addressStorage[_key];
+    }
+
+    /// @param _key The key for the record
+    function getAddresses(bytes32 _key) internal view returns (address[] storage) {
+        return addressesStorage[_key];
     }
 
     /// @param _key The key for the record
@@ -51,6 +57,11 @@ contract Storage {
     /// @param _key The key for the record
     function setAddress(bytes32 _key, address _value) internal {
         addressStorage[_key] = _value;
+    }
+
+    /// @param _key The key for the record
+    function setAddresses(bytes32 _key, address[] storage _value) internal {
+        addressesStorage[_key] = _value;
     }
 
     /// @param _key The key for the record
