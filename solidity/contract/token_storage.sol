@@ -74,7 +74,7 @@ contract TokenStorage is Storage {
     // Constructor
     // ------------------------------------------------------------------------
     // Token constructor here so it is also inheritted by our proxy. Needed to set some constants
-    constructor() public {
+    constructor() {
         setSymbol("TFT");
         setName("TFT on BSC");
 
