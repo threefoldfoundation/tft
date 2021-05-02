@@ -216,9 +216,9 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 					continue
 				}
 
-				eth_amount := big.NewInt(int64(parsedAmount))
+				depositedAmount := big.NewInt(int64(parsedAmount))
 
-				err = mintFn(ethAddress, eth_amount, tx.Hash)
+				err = mintFn(ethAddress, depositedAmount, tx.Hash)
 				if err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 					continue

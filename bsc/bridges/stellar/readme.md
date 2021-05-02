@@ -2,16 +2,7 @@
 
 ## Token contract
 
-We already produced an ERC20 token contract that can handle following things:
-
-- Tranfer
-- Withdraw (to Stellar at first, effectivly burns tokens of the user)
-- Mint (only contract owners can mint)
-- ..
-
-For the token contract to be live on a smart chain we need to deploy it there.
-
-[contract link](https://github.com/threefoldfoundation/tft-ethereum)
+For TFT as a btoken on the Binance Smart chain, see the [tft bsc readme](../../readme.md).
 
 ### Token contract security
 

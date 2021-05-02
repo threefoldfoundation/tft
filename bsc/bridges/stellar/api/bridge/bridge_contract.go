@@ -556,7 +556,7 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: newGas,
 	}
 
-	log.Info("Sumbitting transaction to multisig contract")
+	log.Info("Submitting transaction to multisig contract", "tokenaddress", bridge.networkConfig.ContractAddress)
 	_, err = bridge.multisigContract.transactor.SubmitTransaction(opts, common.Address(bridge.networkConfig.ContractAddress), big.NewInt(0), bytes)
 	if err != nil {
 		return err

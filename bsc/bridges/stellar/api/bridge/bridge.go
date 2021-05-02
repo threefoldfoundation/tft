@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -27,6 +28,7 @@ type Bridge struct {
 	blockPersistency *ChainPersistency
 	mut              sync.Mutex
 	config           *BridgeConfig
+	depositFee       *big.Int
 }
 
 type BridgeConfig struct {
@@ -47,6 +49,7 @@ type BridgeConfig struct {
 
 // NewBridge creates a new Bridge.
 func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router routing.PeerRouting) (*Bridge, error) {
+
 	contract, err := NewBridgeContract(config)
 	if err != nil {
 		return nil, err
@@ -77,12 +80,14 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 			return nil, err
 		}
 	}
-
+	var depositFee big.Int
+	depositFee.SetInt64(500000000) // 50 TFT with a precision of 7decimals
 	bridge := &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
 		wallet:           wallet,
 		config:           config,
+		depositFee:       &depositFee,
 	}
 
 	return bridge, nil
@@ -96,18 +101,23 @@ func (bridge *Bridge) Close() error {
 	return err
 }
 
-func (bridge *Bridge) mint(receiver ERC20Address, amount *big.Int, txID string) error {
+func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
+	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
+		return errors.New("Deposited amount is <= Fee")
+	}
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
 	if err != nil {
-		return err
+		return
 	}
 	if known {
-		log.Info(fmt.Sprintf("Skipping known minting transaction %s", txID))
+		log.Info("Skipping known minting transaction", "txID", txID)
 		// we already know this withdrawal address, so ignore the transaction
-		return nil
+		return
 	}
+	amount := &big.Int{}
+	amount.Sub(depositedAmount, bridge.depositFee)
 	return bridge.bridgeContract.Mint(receiver, amount, txID)
 }
 
@@ -187,7 +197,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					we := txMap[id]
 					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
 						hash := we.TxHash()
-						log.Info("Attempting to create an ERC20 withdraw tx", "ethTx", hash)
+						log.Info("Create a withdraw tx", "ethTx", hash)
 
 						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash)
 						if err != nil {
