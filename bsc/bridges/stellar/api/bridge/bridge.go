@@ -97,7 +97,7 @@ func (bridge *Bridge) Close() error {
 }
 
 func (bridge *Bridge) mint(receiver ERC20Address, amount *big.Int, txID string) error {
-	log.Info(fmt.Sprintf("Minting transaction for %s", hex.EncodeToString(receiver[:])))
+	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
 	if err != nil {
