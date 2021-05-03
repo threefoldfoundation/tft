@@ -14,6 +14,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/routing"
 )
 
+var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
+
 const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the tfchain network
@@ -105,7 +107,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
 	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
-		return errors.New("Deposited amount is <= Fee")
+		return errInsufficientDepositAmount
 	}
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
 	if err != nil {
@@ -199,7 +201,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 						hash := we.TxHash()
 						log.Info("Create a withdraw tx", "ethTx", hash)
 
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash)
+						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "")
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 						}

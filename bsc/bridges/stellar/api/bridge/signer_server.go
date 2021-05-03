@@ -30,6 +30,7 @@ type SignRequest struct {
 	RequiredSignatures int
 	Receiver           common.Address
 	Block              uint64
+	Message            string
 }
 
 type SignResponse struct {
@@ -72,6 +73,53 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		return fmt.Errorf("provided transaction is of wrong type")
 	}
 
+	if request.Block != 0 {
+		err := s.validateWithdrawal(request, txn)
+		if err != nil {
+			return err
+		}
+	} else if request.Message != "" {
+		// If the signrequest has a message attached we know it's a refund transaction
+		err := s.validateRefundTransaction(request, txn)
+		if err != nil {
+			return err
+		}
+	}
+
+	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
+	if err != nil {
+		return err
+	}
+
+	signatures := txn.Signatures()
+	if len(signatures) != 1 {
+		return fmt.Errorf("invalid number of signatures on the transaction")
+	}
+
+	response.Address = s.kp.Address()
+	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
+	return nil
+}
+
+func newSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) (*gorpc.Server, error) {
+	full, err := keypair.ParseFull(secret)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("wallet address", "address", full.Address())
+	server := gorpc.NewServer(host, Protocol)
+
+	signer := SignerService{
+		network:        network,
+		kp:             full,
+		bridgeContract: bridgeContract,
+	}
+
+	err = server.Register(&signer)
+	return server, err
+}
+
+func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Transaction) error {
 	log.Info("address to check", "address", request.Receiver)
 	withdraw, err := s.bridgeContract.tftContract.filter.FilterWithdraw(&bind.FilterOpts{Start: request.Block}, []common.Address{request.Receiver})
 	if err != nil {
@@ -113,37 +161,59 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		}
 	}
 
-	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
-	if err != nil {
-		return err
-	}
-
-	signatures := txn.Signatures()
-	if len(signatures) != 1 {
-		return fmt.Errorf("invalid number of signatures on the transaction")
-	}
-
-	response.Address = s.kp.Address()
-	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
 	return nil
 }
 
-func newSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) (*gorpc.Server, error) {
-	full, err := keypair.ParseFull(secret)
-	if err != nil {
-		return nil, err
-	}
-	log.Debug("wallet address", "address", full.Address())
-	server := gorpc.NewServer(host, Protocol)
+func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnbuild.Transaction) error {
+	log.Info("Validating refund request...")
 
-	signer := SignerService{
-		network:        network,
-		kp:             full,
-		bridgeContract: bridgeContract,
-	}
+	log.Info("number of operations to check", "length", len(txn.Operations()))
+	for _, op := range txn.Operations() {
+		opXDR, err := op.BuildXDR()
+		if err != nil {
+			return fmt.Errorf("failed to build operation xdr")
+		}
 
-	err = server.Register(&signer)
-	return server, err
+		if opXDR.Body.Type != xdr.OperationTypePayment {
+			continue
+		}
+
+		paymentOperation, ok := opXDR.Body.GetPaymentOp()
+		if !ok {
+			return fmt.Errorf("blabla")
+		}
+
+		destinationAccount := paymentOperation.Destination.ToAccountId()
+
+		log.Info("destination address", "address", destinationAccount)
+		// log.Info("stellar fee wallet", "feewallet", s.config.StellarFeeWallet)
+		// // ignore fee wallet transactions here
+		// if destinationAccount.Address() == s.config.StellarFeeWallet {
+		// 	log.Info("fee wallet transfer, breaking ...")
+		// 	continue
+		// }
+
+		txnEffectsFromMessage, err := s.getTransactionEffects(request.Message)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve transaction from message")
+		}
+
+		// Check if the source transaction actually was sent from the account that we are trying to credit
+		// This way we can infer that it is indeed a refund transaction
+		for _, effect := range txnEffectsFromMessage.Embedded.Records {
+			if effect.GetType() == "account_debited" {
+				if destinationAccount.Address() != effect.GetAccount() {
+					return fmt.Errorf("destination is not correct, got %s, need user wallet %s", destinationAccount.Address(), effect.GetAccount())
+				}
+
+				// if paymentOperation.Amount > feeAmount {
+				// 	return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %f but we received %d", feeAmount, paymentOperation.Amount)
+				// }
+			}
+		}
+
+	}
+	return nil
 }
 
 // getNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network

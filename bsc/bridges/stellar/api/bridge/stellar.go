@@ -18,6 +18,7 @@ import (
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/effects"
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
+	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 )
@@ -74,7 +75,7 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 	return w, nil
 }
 
-func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash) error {
+func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string) error {
 	// if amount is zero, do nothing
 	if amount == 0 {
 		return nil
@@ -129,6 +130,7 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		RequiredSignatures: w.signatureCount,
 		Receiver:           receiver,
 		Block:              blockheight,
+		Message:            message,
 	}
 
 	signatures, err := w.client.Sign(ctx, signReq)
@@ -221,6 +223,26 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
 				if err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
+					if err == errInsufficientDepositAmount {
+						log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", parsedAmount)
+						ops, err := w.getOperationEffect(tx.Hash)
+						if err != nil {
+							continue
+						}
+						for _, op := range ops.Embedded.Records {
+							if op.GetType() == "payment" {
+								paymentOpation := op.(operations.Payment)
+
+								if paymentOpation.To == w.keypair.Address() {
+									log.Warn("Calling refund")
+									err := w.CreateAndSubmitPayment(context.Background(), paymentOpation.From, w.network, uint64(parsedAmount), common.Address{}, 0, common.Hash{}, tx.Hash)
+									if err != nil {
+										log.Error("error while trying to refund user", "err", err.Error())
+									}
+								}
+							}
+						}
+					}
 					continue
 				}
 				log.Info("Mint succesfull")
@@ -281,6 +303,23 @@ func (w *stellarWallet) getTransactionEffects(txHash string) (effects effects.Ef
 	}
 
 	return effects, nil
+}
+
+func (w *stellarWallet) getOperationEffect(txHash string) (ops operations.OperationsPage, err error) {
+	client, err := w.GetHorizonClient()
+	if err != nil {
+		return ops, err
+	}
+
+	opsRequest := horizonclient.OperationRequest{
+		ForTransaction: txHash,
+	}
+	ops, err = client.Operations(opsRequest)
+	if err != nil {
+		return ops, err
+	}
+
+	return ops, nil
 }
 
 // GetHorizonClient gets the horizon client based on the wallet's network
