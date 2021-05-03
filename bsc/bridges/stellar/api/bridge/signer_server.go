@@ -46,22 +46,6 @@ type SignerService struct {
 	config         *StellarConfig
 }
 
-func NewSignerServer(host host.Host, config *StellarConfig, bridgeContract *BridgeContract) error {
-	log.Info("server started", "identity", host.ID().Pretty())
-	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
-	if err != nil {
-		return err
-	}
-
-	for _, addr := range host.Addrs() {
-		full := addr.Encapsulate(ipfs)
-		log.Info("p2p node address", "address", full.String())
-	}
-
-	_, err = newSignerServer(host, config, bridgeContract)
-	return err
-}
-
 func newSignerServer(host host.Host, config *StellarConfig, bridgeContract *BridgeContract) (*gorpc.Server, error) {
 	full, err := keypair.ParseFull(config.StellarSeed)
 	if err != nil {
@@ -172,6 +156,22 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		}
 	}
 	return nil
+}
+
+func NewSignerServer(host host.Host, config *StellarConfig, bridgeContract *BridgeContract) error {
+	log.Info("server started", "identity", host.ID().Pretty())
+	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
+	if err != nil {
+		return err
+	}
+
+	for _, addr := range host.Addrs() {
+		full := addr.Encapsulate(ipfs)
+		log.Info("p2p node address", "address", full.String())
+	}
+
+	_, err = newSignerServer(host, config, bridgeContract)
+	return err
 }
 
 func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.Transaction) error {
