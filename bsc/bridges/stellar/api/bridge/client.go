@@ -272,7 +272,7 @@ func (lc *LightClient) Synchronising() bool {
 // IsNoPeerErr checks if an error is means an ethereum client could not execute
 // a call because it has no valid peers
 func IsNoPeerErr(err error) bool {
-	return err == light.ErrNoPeers
+	return err.Error() == light.ErrNoPeers.Error()
 }
 
 // GetStatus implements ERC20TransactionValidator.GetStatus
