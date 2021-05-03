@@ -30,6 +30,8 @@ const ERC20AddressLength = 20
 
 type ERC20Address [ERC20AddressLength]byte
 
+var errNotOwner = errors.New("Bridge is not owner of the multisig contract")
+
 const (
 	// retryDelay is the delay to retry calls when there are no peers
 	retryDelay = time.Second * 15
@@ -531,9 +533,27 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	if amount == nil {
 		return errors.New("invalid amount")
 	}
+
+	owners, err := bridge.multisigContract.caller.GetOwners(&bind.CallOpts{})
+	if err != nil {
+		return err
+	}
+
 	accountAddress, err := bridge.lc.AccountAddress()
 	if err != nil {
 		return err
+	}
+
+	ownerExists := false
+	for _, owner := range owners {
+		if owner == accountAddress {
+			ownerExists = true
+			break
+		}
+	}
+
+	if !ownerExists {
+		return errNotOwner
 	}
 
 	bytes, err := bridge.tftContract.abi.Pack("mintTokens", common.Address(receiver), amount, txID)
