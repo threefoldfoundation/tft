@@ -77,12 +77,11 @@ var MainnetBootstrapNodes = []string{
 
 var ethNetworkConfigurations = map[string]NetworkConfiguration{
 	"smart-chain-mainnet": {
-		NetworkID:    56,
-		NetworkName:  "main",
-		GenesisBlock: GetMainnetGenesisBlock(),
-		//Todo: replace with actual address
-		ContractAddress:         common.HexToAddress("0x21826CC49B92029553af86F4e7A62C427E61e53a"),
-		MultisigContractAddress: common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
+		NetworkID:               56,
+		NetworkName:             "main",
+		GenesisBlock:            GetMainnetGenesisBlock(),
+		ContractAddress:         common.HexToAddress("0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf"),
+		MultisigContractAddress: common.HexToAddress("0xa4E8d413004d46f367D4F09D6BD4EcBccfE51D33"),
 		bootnodes:               MainnetBootstrapNodes,
 	},
 	"smart-chain-testnet": {
