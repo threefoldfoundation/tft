@@ -6,7 +6,7 @@ Transfer the TFT to the bridge address **GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4C
 
 Hex decode the target address and then base64 encode it again.
 
-Example in python to send to 0x65e491D7b985f77e60c85105834A0332fF3002CE:
+Example in python to generate the memo text to send to 0x65e491D7b985f77e60c85105834A0332fF3002CE:
 
 ```python
 b= bytes.fromhex("65e491D7b985f77e60c85105834A0332fF3002CE")
