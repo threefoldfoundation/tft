@@ -525,15 +525,16 @@ func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID 
 }
 
 func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID string) error {
+	log.Info("Calling mint function in contract")
+	if amount == nil {
+		return errors.New("invalid amount")
+	}
+
 	accountAddress, err := bridge.lc.AccountAddress()
 	if err != nil {
 		return err
 	}
 
-	log.Info("Calling mint function in contract")
-	if amount == nil {
-		return errors.New("invalid amount")
-	}
 	bytes, err := bridge.tftContract.abi.Pack("mintTokens", common.Address(receiver), amount, txID)
 	log.Info("Calling mint function")
 	if err != nil {
@@ -555,12 +556,10 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	}
 
 	log.Info("Sumbitting transaction to multisig contract")
-	tx, err := bridge.multisigContract.transactor.SubmitTransaction(opts, common.Address(bridge.networkConfig.ContractAddress), big.NewInt(0), bytes)
+	_, err = bridge.multisigContract.transactor.SubmitTransaction(opts, common.Address(bridge.networkConfig.ContractAddress), big.NewInt(0), bytes)
 	if err != nil {
 		return err
 	}
-
-	log.Info("tx", "tx", tx)
 
 	return nil
 }
