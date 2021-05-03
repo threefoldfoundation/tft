@@ -89,21 +89,20 @@ In Remix when you compile a contract you can select ABI button (this will copy t
 
 Save the contents to a file.
 
-### Install Abigen
+### Prequisites
 
-Build binance chain `abigen` binary from [source](https://github.com/binance-chain/bsc#building-the-source).
+- [abigen](https://github.com/binance-chain/bsc#building-the-source)
 
-### Generate code
+### Generate token contract
 
 ```
-abigen --abi path_to_token_abi --pkg contract --type Token --out token.go
+cd api/bridge/contract
+go generate
 ```
 
-With `--out` you can specify the location where the code should be generated
+### Generate multisig contract
 
-Or use predefined make commands:
-
-For token: `make generate-token`
-
-
-For Multisig Contract: `make generate-mscontract`
+```
+cd api/bridge/mscontract
+go generate
+```
