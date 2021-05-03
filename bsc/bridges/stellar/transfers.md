@@ -1,6 +1,6 @@
 # Transferring TFT from Stellar to BSC
 
-Transfer the TFT to the bridge address **GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5** with the target addredssd  in the meme text in a specially encoded way.
+Transfer the TFT to the bridge address **GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5** with the target address in the memo text in a specially encoded way.
 
 ## Encoding the target address
 
