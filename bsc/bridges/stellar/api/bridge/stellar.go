@@ -284,10 +284,10 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 				err = mintFn(ethAddress, eth_amount, tx.Hash)
 				if err != nil {
 					// TODO CHECK IF OWNER ERROR
-					if err == errNotOwner {
-						log.Error(err.Error())
-						break
-					}
+					// if err == errNotOwner {
+					// 	log.Error(err.Error())
+					// 	break
+					// }
 
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 

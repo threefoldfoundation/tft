@@ -28,8 +28,6 @@ import (
 
 const ERC20AddressLength = 20
 
-var errNotOwner = errors.New("Bridge is not owner of the multisig contract")
-
 type ERC20Address [ERC20AddressLength]byte
 
 const (
@@ -527,25 +525,9 @@ func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID 
 }
 
 func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID string) error {
-	owners, err := bridge.multisigContract.caller.GetOwners(&bind.CallOpts{})
-	if err != nil {
-		return err
-	}
 	accountAddress, err := bridge.lc.AccountAddress()
 	if err != nil {
 		return err
-	}
-
-	ownerExists := false
-	for _, owner := range owners {
-		if owner == accountAddress {
-			ownerExists = true
-			break
-		}
-	}
-
-	if !ownerExists {
-		return errNotOwner
 	}
 
 	log.Info("Calling mint function in contract")
