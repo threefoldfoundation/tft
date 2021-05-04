@@ -35,6 +35,8 @@ func main() {
 
 	flag.StringVar(&bridgeCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network url")
+	// Fee wallet address where fees are held
+	flag.StringVar(&bridgeCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
 
@@ -88,7 +90,7 @@ func main() {
 	}
 
 	if bridgeCfg.Follower {
-		err = bridge.NewSignerServer(host, bridgeCfg.StellarNetwork, bridgeCfg.StellarSeed, br.GetBridgeContract())
+		err = bridge.NewSignerServer(host, &bridgeCfg.StellarConfig, br.GetBridgeContract())
 		if err != nil {
 			panic(err)
 		}

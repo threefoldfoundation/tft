@@ -22,6 +22,8 @@ import (
 	"github.com/stellar/go/support/errors"
 )
 
+var errRequiredSignaturesNotMet = errors.New("required number of signatures is not met")
+
 type SignerConfig struct {
 	Secret   string
 	BridgeID string
@@ -186,7 +188,7 @@ loop:
 	}
 
 	if len(results) != signRequest.RequiredSignatures {
-		return nil, fmt.Errorf("required number of signatures is not met")
+		return nil, errRequiredSignaturesNotMet
 	}
 
 	return results, nil
