@@ -88,8 +88,8 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 		NetworkID:               97,
 		NetworkName:             "bsc-testnet",
 		GenesisBlock:            GetTestnetGenesisBlock(),
-		ContractAddress:         common.HexToAddress("0xDAD7A460EA562e28fB90cF524B62ea4cBc1685af"),
-		MultisigContractAddress: common.HexToAddress("0x8a511F1C6C94B051A6CFCF0FdC83e7FA37CF687F"),
+		ContractAddress:         common.HexToAddress("0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f"),
+		MultisigContractAddress: common.HexToAddress("0xF363303d4A93e3dC2F019f13D0764b7aAf825F4E"),
 		bootnodes:               TestnetBootstrapNodes,
 	},
 }
