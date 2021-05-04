@@ -181,6 +181,8 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				if we.network == BridgeNetwork {
 					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), we.network)
 					txMap[we.txHash.String()] = we
+				} else {
+					log.Warn("ignoring withdrawal", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
 				}
 			// If we get a new head, check every withdraw we have to see if it has matured
 			case submission := <-submissionChan:
