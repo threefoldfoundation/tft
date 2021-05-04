@@ -28,6 +28,7 @@ const (
 
 	stellarPrecision       = 1e7
 	stellarPrecisionDigits = 7
+	stellarNetwork         = "stellar"
 )
 
 // stellarWallet is the bridge wallet
@@ -80,8 +81,8 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return nil
 	}
 
-	if network != w.network {
-		return fmt.Errorf("cannot withdraw on network: %s, while the bridge is running on: %s", network, w.network)
+	if network != stellarNetwork {
+		return fmt.Errorf("cannot withdraw on network: %s, while the bridge is running on %s network", network, stellarNetwork)
 	}
 
 	sourceAccount, err := w.GetAccountDetails(w.keypair.Address())
