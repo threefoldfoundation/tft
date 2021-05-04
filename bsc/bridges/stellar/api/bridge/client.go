@@ -272,6 +272,9 @@ func (lc *LightClient) Synchronising() bool {
 // IsNoPeerErr checks if an error is means an ethereum client could not execute
 // a call because it has no valid peers
 func IsNoPeerErr(err error) bool {
+	if err == nil {
+		return false
+	}
 	return err.Error() == light.ErrNoPeers.Error()
 }
 
