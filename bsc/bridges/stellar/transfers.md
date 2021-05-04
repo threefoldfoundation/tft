@@ -26,4 +26,4 @@ The `withdraw` method must be called on contract **0x8f0FB159380176D324542b3a793
 
 - blockchain_address: Your stellar address
 - network: stellar
-- amount: any amount that does not exceed your balance (integer with a precision of 7 decimals, so 1 TFT = 10000000 )
+- amount: any amount that does not exceed your balance (unsigned integer with a precision of 7 decimals, so 1 TFT = 10000000 )
