@@ -180,18 +180,10 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("blabla")
+			return fmt.Errorf("failed to get payment operation")
 		}
 
 		destinationAccount := paymentOperation.Destination.ToAccountId()
-
-		log.Info("destination address", "address", destinationAccount)
-		// log.Info("stellar fee wallet", "feewallet", s.config.StellarFeeWallet)
-		// // ignore fee wallet transactions here
-		// if destinationAccount.Address() == s.config.StellarFeeWallet {
-		// 	log.Info("fee wallet transfer, breaking ...")
-		// 	continue
-		// }
 
 		txnEffectsFromMessage, err := s.getTransactionEffects(request.Message)
 		if err != nil {
@@ -206,9 +198,9 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 					return fmt.Errorf("destination is not correct, got %s, need user wallet %s", destinationAccount.Address(), effect.GetAccount())
 				}
 
-				// if paymentOperation.Amount > feeAmount {
-				// 	return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %f but we received %d", feeAmount, paymentOperation.Amount)
-				// }
+				if paymentOperation.Amount > DepositFee {
+					return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %d but we received %d", DepositFee, paymentOperation.Amount)
+				}
 			}
 		}
 

@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/effects"
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stellar/go/support/errors"
@@ -109,6 +109,19 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		BaseFee:              txnbuild.MinBaseFee * 3,
 		IncrementSequenceNum: true,
 		Memo:                 txnbuild.MemoHash(txHash),
+	}
+
+	// if a message is passed, this is a refund operations
+	// attach the memo return with the original transaction hash
+	if message != "" {
+		parsedMessage, err := hex.DecodeString(message)
+		if err != nil {
+			return err
+		}
+
+		var memo [32]byte
+		copy(memo[:], parsedMessage)
+		txnBuild.Memo = txnbuild.MemoReturn(memo)
 	}
 
 	tx, err := txnbuild.NewTransaction(txnBuild)
@@ -288,7 +301,7 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 	return client.StreamTransactions(ctx, opRequest, handler)
 }
 
-func (w *stellarWallet) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
+func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return effects, err
