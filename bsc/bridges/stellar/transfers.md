@@ -20,8 +20,10 @@ To cover the costs of the bridge ( like the multisig interactions with the Binan
 
 # Withdrawing TFT from BSC to Stellar
 
-If you wish to withdraw funds from BSC to Stellar then you need to interact with the token contract. The `withdraw` method must be called on the contract with following parameters:
+If you wish to withdraw funds from BSC to Stellar then you need to interact with the token contract. See [addresses](../../addresses.md)
+
+The `withdraw` method must be called on the contract with following parameters:
 
 - blockchain_address: Your stellar address
 - network: stellar
-- amount: any amount that does not exceed you balance (7 decimals)
+- amount: any amount that does not exceed your balance (7 decimals)
