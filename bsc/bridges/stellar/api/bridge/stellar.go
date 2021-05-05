@@ -81,10 +81,6 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return nil
 	}
 
-	if network != w.network {
-		return fmt.Errorf("cannot withdraw on network: %s, while the bridge is running on: %s", network, w.network)
-	}
-
 	sourceAccount, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
 		return errors.Wrap(err, "failed to get source account")
@@ -185,14 +181,6 @@ type mint func(ERC20Address, *big.Int, string) error
 
 func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
-		// save cursor
-		cursor := tx.PagingToken()
-		err := persistency.saveStellarCursor(cursor)
-		if err != nil {
-			log.Error("error while saving cursor:", err.Error())
-			return
-		}
-
 		if !tx.Successful {
 			return
 		}
@@ -258,7 +246,15 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 					}
 					continue
 				}
-				log.Info("Mint succesfull")
+				log.Info("Mint succesfull, saving cursor now")
+
+				// save cursor
+				cursor := tx.PagingToken()
+				err = persistency.saveStellarCursor(cursor)
+				if err != nil {
+					log.Error("error while saving cursor:", err.Error())
+					return
+				}
 			}
 		}
 

@@ -1,8 +1,10 @@
-# Transferring TFT from Stellar to BSC
+# Transferring TFT between Stellar to BSC
+
+## From Stellar to BSC
 
 Transfer the TFT to the bridge address **GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5** with the target address in the memo text in a specially encoded way.
 
-## Encoding the target address
+### Encoding the target address
 
 Hex decode the target address and then base64 encode it again.
 
@@ -14,16 +16,14 @@ base64.b64encode(b).decode("utf-8")
 'ZeSR17mF935gyFEFg0oDMv8wAs4='
 ```
 
-## Fee
+### Fee
 
 To cover the costs of the bridge ( like the multisig interactions with the Binance chain), a fee of 50 TFT is charged. Make sure the amount received on the bridge's Stellar address is larger than 50 TFT.
 
-# Withdrawing TFT from BSC to Stellar
+## From BSC to Stellar
 
-If you wish to withdraw funds from BSC to Stellar then you need to interact with the token contract. See [addresses](../../addresses.md)
-
-The `withdraw` method must be called on the contract with following parameters:
+The `withdraw` method must be called on contract **0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf** with the following parameters:
 
 - blockchain_address: Your stellar address
 - network: stellar
-- amount: any amount that does not exceed your balance (7 decimals)
+- amount: any amount that does not exceed your balance (unsigned integer with a precision of 7 decimals, so 1 TFT = 10000000 )

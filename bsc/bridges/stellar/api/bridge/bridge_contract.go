@@ -494,6 +494,7 @@ func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *c
 func (bridge *BridgeContract) TransferFunds(recipient common.Address, amount *big.Int) error {
 	err := bridge.transferFunds(recipient, amount)
 	for IsNoPeerErr(err) {
+		log.Warn("no peers while trying to transfer funds, retrying...")
 		time.Sleep(retryDelay)
 		err = bridge.transferFunds(recipient, amount)
 	}
@@ -522,6 +523,7 @@ func (bridge *BridgeContract) transferFunds(recipient common.Address, amount *bi
 func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID string) error {
 	err := bridge.mint(receiver, amount, txID)
 	for IsNoPeerErr(err) {
+		log.Warn("no peers while trying to mint, retrying...")
 		time.Sleep(retryDelay)
 		err = bridge.mint(receiver, amount, txID)
 	}
@@ -631,6 +633,7 @@ func (bridge *BridgeContract) IsConfirmedTxID(txID *big.Int) (bool, error) {
 func (bridge *BridgeContract) IsMintTxID(txID string) (bool, error) {
 	res, err := bridge.isMintTxID(txID)
 	for IsNoPeerErr(err) {
+		log.Warn("no peers while trying to check mint txid, retrying...")
 		time.Sleep(retryDelay)
 		res, err = bridge.isMintTxID(txID)
 	}
