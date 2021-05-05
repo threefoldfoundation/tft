@@ -1,4 +1,9 @@
+FROM golang:1.16
+WORKDIR /go/src/github.com/threefoldfoundation/tft/bsc/bridges/stellar
+COPY ./ ./
+RUN go build -ldflags '-w -s -extldflags "-static"'
+
 FROM alpine:latest
-COPY stellar /bin/
-ADD genesis /genesis/
+COPY --from=0 /go/src/github.com/threefoldfoundation/tft/bsc/bridges/stellar/stellar /bin/
+COPY genesis/ /genesis/
 ENTRYPOINT [ "/bin/stellar" ]
