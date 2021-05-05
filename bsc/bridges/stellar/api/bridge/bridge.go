@@ -18,6 +18,7 @@ const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the tfchain network
 	EthBlockDelay = 3
+	BridgeNetwork = "stellar"
 )
 
 // Bridge is a high lvl structure which listens on contract events and bridge-related
@@ -177,8 +178,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			select {
 			// Remember new withdraws
 			case we := <-withdrawChan:
-				log.Info("Remembering withdraw event", "txHash", we.TxHash(), "height", we.BlockHeight())
-				txMap[we.txHash.String()] = we
+				if we.network == BridgeNetwork {
+					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), we.network)
+					txMap[we.txHash.String()] = we
+				} else {
+					log.Warn("ignoring withdrawal", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
+				}
 			// If we get a new head, check every withdraw we have to see if it has matured
 			case submission := <-submissionChan:
 				log.Info("Submission Event seen", "txid", submission.TransactionId())

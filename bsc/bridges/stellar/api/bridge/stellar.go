@@ -80,10 +80,6 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return nil
 	}
 
-	if network != w.network {
-		return fmt.Errorf("cannot withdraw on network: %s, while the bridge is running on: %s", network, w.network)
-	}
-
 	sourceAccount, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
 		return errors.Wrap(err, "failed to get source account")
