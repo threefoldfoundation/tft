@@ -16,10 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/stellar/go/clients/horizonclient"
-	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/protocols/horizon/operations"
 
 	tfeth "github.com/threefoldfoundation/tft/bsc/bridges/stellar/api"
 	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/contract"
@@ -630,6 +626,18 @@ func (bridge *BridgeContract) IsConfirmedTxID(txID *big.Int) (bool, error) {
 	return bridge.multisigContract.caller.IsConfirmed(opts, txID)
 }
 
+func (bridge *BridgeContract) GetTransactionByID(txID *big.Int) (struct {
+	Destination common.Address
+	Value       *big.Int
+	Data        []byte
+	Executed    bool
+}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	return bridge.multisigContract.caller.Transactions(opts, txID)
+}
+
 func (bridge *BridgeContract) IsMintTxID(txID string) (bool, error) {
 	res, err := bridge.isMintTxID(txID)
 	for IsNoPeerErr(err) {
@@ -695,59 +703,4 @@ func bindMultisig(address common.Address, caller bind.ContractCaller, transactor
 		return nil, parsed, err
 	}
 	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), parsed, nil
-}
-
-// GetHorizonClient gets the horizon client based on the wallet's network
-func (b *BridgeContract) GetHorizonClient() (*horizonclient.Client, error) {
-	switch b.networkName {
-	case "smart-chain-testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "main":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
-}
-
-func (b *BridgeContract) StreamStellarAccountPayments(ctx context.Context, accountID string, handler func(op operations.Operation)) error {
-	client, err := b.GetHorizonClient()
-	if err != nil {
-		return err
-	}
-
-	opRequest := horizonclient.OperationRequest{
-		ForAccount: accountID,
-	}
-
-	return client.StreamPayments(ctx, opRequest, handler)
-}
-
-func (b *BridgeContract) StreamStellarAccountTransactions(ctx context.Context, accountID string, handler func(op hProtocol.Transaction)) error {
-	client, err := b.GetHorizonClient()
-	if err != nil {
-		return err
-	}
-
-	opRequest := horizonclient.TransactionRequest{
-		ForAccount: accountID,
-	}
-
-	return client.StreamTransactions(ctx, opRequest, handler)
-}
-
-func (b *BridgeContract) GetTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
-	client, err := b.GetHorizonClient()
-	if err != nil {
-		return effects, err
-	}
-
-	effectsReq := horizonclient.EffectRequest{
-		ForTransaction: txHash,
-	}
-	effects, err = client.Effects(effectsReq)
-	if err != nil {
-		return effects, err
-	}
-
-	return effects, nil
 }

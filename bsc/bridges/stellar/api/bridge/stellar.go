@@ -33,13 +33,17 @@ const (
 // stellarWallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
 type stellarWallet struct {
-	keypair        *keypair.Full
-	network        string
+	keypair *keypair.Full
+	network string
+	signerWallet
+}
+
+type signerWallet struct {
 	client         *SignersClient
 	signatureCount int
 }
 
-func newStellarWallet(ctx context.Context, network, seed string, host host.Host, router routing.PeerRouting) (*stellarWallet, error) {
+func newStellarWallet(network, seed string) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(seed)
 
 	if err != nil {
@@ -49,16 +53,19 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 	w := &stellarWallet{
 		keypair: kp,
 		network: network,
-		//client:  client,
 	}
 
-	account, err := w.GetAccountDetails(kp.Address())
+	return w, nil
+}
+
+func (w *stellarWallet) newSignerWallet(ctx context.Context, host host.Host, router routing.PeerRouting) error {
+	account, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var keys []string
 	for _, signer := range account.Signers {
-		if signer.Key == kp.Address() {
+		if signer.Key == w.keypair.Address() {
 			continue
 		}
 		keys = append(keys, signer.Key)
@@ -69,9 +76,9 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 
 	w.client, err = NewSignersClient(ctx, host, router, keys)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return w, nil
+	return nil
 }
 
 func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash) error {
