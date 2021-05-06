@@ -158,7 +158,8 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 
 			select {
 			case <-ctxWithTimeout.Done():
-			case ch <- response{answer: answer, err: err}:
+			default:
+				ch <- response{answer: answer, err: err}
 			}
 		}(addr)
 	}
