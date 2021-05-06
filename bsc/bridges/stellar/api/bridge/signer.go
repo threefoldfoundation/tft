@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -147,19 +148,19 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
 	ch := make(chan response)
-	defer close(ch)
-
+	var wg sync.WaitGroup
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	for _, addr := range s.peers {
+		wg.Add(1)
 		go func(peerID peer.ID) {
+			defer wg.Done()
 			answer, err := s.sign(ctxWithTimeout, peerID, signRequest)
 
 			select {
 			case <-ctxWithTimeout.Done():
-			default:
-				ch <- response{answer: answer, err: err}
+			case ch <- response{answer: answer, err: err}:
 			}
 		}(addr)
 	}
@@ -185,6 +186,11 @@ loop:
 		}
 	}
 
+	cancel()
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
 	if len(results) != signRequest.RequiredSignatures {
 		return nil, fmt.Errorf("required number of signatures is not met")
 	}
