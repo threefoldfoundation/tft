@@ -147,6 +147,7 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
 	ch := make(chan response)
+	defer close(ch)
 
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
