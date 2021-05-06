@@ -83,9 +83,9 @@ Flow: a user will call the token contract `Withdraw`, the Master bridge will ini
 
 Build the bridge
 
-`make build`
+`go build`
 
-Following parameters can be set:
+Following parameters can be set when starting the bridge:
 
 |Name|Description|Default
 |---|---|---
