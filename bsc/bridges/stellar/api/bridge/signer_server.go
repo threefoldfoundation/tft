@@ -30,6 +30,7 @@ type SignRequest struct {
 	RequiredSignatures int
 	Receiver           common.Address
 	Block              uint64
+	ResponseChan       chan SignResponse
 }
 
 type SignResponse struct {

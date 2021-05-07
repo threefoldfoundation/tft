@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -146,42 +147,53 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 }
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
-	ch := make(chan response)
-	defer close(ch)
+	cases := make([]reflect.SelectCase, 0)
 
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+
 	for _, addr := range s.peers {
-		go func(peerID peer.ID) {
+		respCh := make(chan response)
+		go func(peerID peer.ID, ch chan response) {
+			defer close(ch)
 			answer, err := s.sign(ctxWithTimeout, peerID, signRequest)
 
 			select {
 			case <-ctxWithTimeout.Done():
-			default:
-				ch <- response{answer: answer, err: err}
+			case ch <- response{answer: answer, err: err}:
 			}
-		}(addr)
+		}(addr, respCh)
+
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(respCh)})
 	}
 
 	var results []SignResponse
 	replies := 0
-loop:
-	for {
-		select {
-		case <-ctxWithTimeout.Done():
-			break loop
-		case reply := <-ch:
-			replies++
-			if reply.err != nil {
-				log.Error("failed to get signature from", "err", reply.err.Error())
-				continue
-			}
 
-			results = append(results, *reply.answer)
-			if len(results) == signRequest.RequiredSignatures || replies == len(s.peers) {
-				break loop
-			}
+	remaining := len(cases)
+	for remaining > 0 {
+		log.Info("remaining signers to check", "remaining", remaining)
+
+		chosen, value, ok := reflect.Select(cases)
+		remaining -= 1
+		// The chosen channel has been closed, so zero out the channel to disable the case
+		cases[chosen].Chan = reflect.ValueOf(nil)
+		if !ok {
+			continue
+		}
+
+		reply := value.Interface().(response)
+
+		if reply.err != nil {
+			log.Error("failed to get signature from", "err", reply.err.Error())
+			continue
+		}
+
+		log.Info("got a valid reply from a signer")
+		results = append(results, *reply.answer)
+		if len(results) == signRequest.RequiredSignatures || replies == len(s.peers) {
+			break
 		}
 	}
 
