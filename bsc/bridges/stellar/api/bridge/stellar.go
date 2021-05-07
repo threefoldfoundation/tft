@@ -228,14 +228,6 @@ type mint func(ERC20Address, *big.Int, string) error
 
 func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
-		// save cursor
-		cursor := tx.PagingToken()
-		err := persistency.saveStellarCursor(cursor)
-		if err != nil {
-			log.Error("error while saving cursor:", err.Error())
-			return
-		}
-
 		if !tx.Successful {
 			return
 		}
@@ -301,13 +293,22 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 					}
 					continue
 				}
-
 				if w.config.StellarFeeWallet != "" {
 					log.Info("Trying to transfer the fees generated to the fee wallet", "address", w.config.StellarFeeWallet)
 					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee)
 					if err != nil {
 						log.Error("error while to send fees to the fee wallet", "err", err.Error())
 					}
+				}
+
+				log.Info("Mint succesfull, saving cursor now")
+
+				// save cursor
+				cursor := tx.PagingToken()
+				err = persistency.saveStellarCursor(cursor)
+				if err != nil {
+					log.Error("error while saving cursor:", err.Error())
+					return
 				}
 			}
 		}
