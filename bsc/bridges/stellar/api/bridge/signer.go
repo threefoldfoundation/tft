@@ -192,10 +192,8 @@ loop:
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRequest) (*SignResponse, error) {
-	if len(s.host.Peerstore().Addrs(id)) == 0 {
-		if err := connectToPeer(ctx, s.host, s.router, id); err != nil {
-			return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
-		}
+	if err := connectToPeer(ctx, s.host, s.router, id); err != nil {
+		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
 	}
 
 	var response SignResponse
@@ -207,7 +205,6 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRe
 }
 
 func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
-
 	versionbyte, pubkeydata, err := strkey.DecodeAny(address)
 	if err != nil {
 		return
@@ -226,7 +223,6 @@ func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
 }
 
 func connectToPeer(ctx context.Context, p2phost host.Host, hostRouting routing.PeerRouting, peerID peer.ID) (err error) {
-
 	findPeerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	peeraddrInfo, err := hostRouting.FindPeer(findPeerCtx, peerID)
