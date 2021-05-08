@@ -176,10 +176,11 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 		if !tx.Successful {
 			return
 		}
+		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
-			log.Error("error while decoding transaction memo:", err.Error())
+			log.Error("error decoding transaction memo", "error", err.Error())
 			return
 		}
 

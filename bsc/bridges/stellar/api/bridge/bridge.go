@@ -212,7 +212,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	if !bridge.config.Follower {
 		// Monitor the bridge wallet for incoming transactions
 		// mint transactions on ERC20 if possible
-		go bridge.wallet.MonitorBridgeAndMint(bridge.mint, bridge.blockPersistency)
+
+		go func() {
+			if err := bridge.wallet.MonitorBridgeAndMint(bridge.mint, bridge.blockPersistency); err != nil {
+				panic(err)
+			}
+		}()
 
 		height, err := bridge.blockPersistency.GetHeight()
 		if err != nil {
