@@ -265,7 +265,7 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 		ForAccount: w.keypair.Address(),
 		Cursor:     cursor,
 	}
-
+	log.Info("Start streaming stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
 	return client.StreamTransactions(ctx, opRequest, handler)
 }
 
