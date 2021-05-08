@@ -18,14 +18,17 @@ var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
 
 const (
 	// EthBlockDelay is the amount of blocks to wait before
-	// pushing eth transaction to the tfchain network
+	// pushing eth transaction to the stellar network
 	EthBlockDelay = 3
-	DepositFee    = 500000000
+	// Depositing from Stellar to smart chain fee
+	DepositFee = 50 * stellarPrecision
+	// Withdrawing from smartchain to Stellar fee
+	WithdrawFee   = 1 * stellarPrecision
 	BridgeNetwork = "stellar"
 )
 
 // Bridge is a high lvl structure which listens on contract events and bridge-related
-// tfchain transactions, and handles them
+// stellar transactions, and handles them
 type Bridge struct {
 	bridgeContract   *BridgeContract
 	wallet           *stellarWallet
@@ -215,7 +218,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 						hash := we.TxHash()
 						log.Info("Create a withdraw tx", "ethTx", hash)
 
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "")
+						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "", true)
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 						}

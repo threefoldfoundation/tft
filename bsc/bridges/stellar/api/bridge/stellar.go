@@ -75,8 +75,8 @@ func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host
 	return w, nil
 }
 
-func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string) error {
-	txnBuild, err := w.generatePaymentOperation(amount, target)
+func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
+	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
 	}
@@ -93,8 +93,8 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string) error {
-	txnBuild, err := w.generatePaymentOperation(amount, target)
+func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
+	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 		feeWalletAddress = w.config.StellarFeeWallet
 	}
 
-	txnBuild, err := w.generatePaymentOperation(amount, feeWalletAddress)
+	txnBuild, err := w.generatePaymentOperation(amount, feeWalletAddress, false)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate payment operation")
 	}
@@ -137,7 +137,7 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) generatePaymentOperation(amount uint64, destination string) (txnbuild.TransactionParams, error) {
+func (w *stellarWallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
 	// if amount is zero, do nothing
 	if amount == 0 {
 		return txnbuild.TransactionParams{}, errors.New("invalid amount")
@@ -150,6 +150,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 
 	asset := w.GetAssetCodeAndIssuer()
 
+	var paymentOperations []txnbuild.Operation
 	paymentOP := txnbuild.Payment{
 		Destination: destination,
 		Amount:      big.NewRat(int64(amount), stellarPrecision).FloatString(stellarPrecisionDigits),
@@ -159,9 +160,23 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 		},
 		SourceAccount: sourceAccount.AccountID,
 	}
+	paymentOperations = append(paymentOperations, &paymentOP)
+
+	if includeWithdrawFee {
+		feePaymentOP := txnbuild.Payment{
+			Destination: w.config.StellarFeeWallet,
+			Amount:      big.NewRat(int64(WithdrawFee), stellarPrecision).FloatString(stellarPrecisionDigits),
+			Asset: txnbuild.CreditAsset{
+				Code:   asset[0],
+				Issuer: asset[1],
+			},
+			SourceAccount: sourceAccount.AccountID,
+		}
+		paymentOperations = append(paymentOperations, &feePaymentOP)
+	}
 
 	txnBuild := txnbuild.TransactionParams{
-		Operations:           []txnbuild.Operation{&paymentOP},
+		Operations:           paymentOperations,
 		Timebounds:           txnbuild.NewTimeout(300),
 		SourceAccount:        &sourceAccount,
 		BaseFee:              txnbuild.MinBaseFee * 3,
@@ -283,7 +298,7 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 
 								if paymentOpation.To == w.keypair.Address() {
 									log.Warn("Calling refund")
-									err := w.CreateAndSubmitRefund(context.Background(), paymentOpation.From, uint64(parsedAmount), tx.Hash)
+									err := w.CreateAndSubmitRefund(context.Background(), paymentOpation.From, uint64(parsedAmount), tx.Hash, true)
 									if err != nil {
 										log.Error("error while trying to refund user", "err", err.Error())
 									}
