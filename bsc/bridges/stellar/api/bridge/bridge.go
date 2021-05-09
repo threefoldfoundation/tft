@@ -212,9 +212,8 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	if !bridge.config.Follower {
 		// Monitor the bridge wallet for incoming transactions
 		// mint transactions on ERC20 if possible
-
 		go func() {
-			if err := bridge.wallet.MonitorBridgeAndMint(bridge.mint, bridge.blockPersistency); err != nil {
+			if err := bridge.wallet.MonitorBridgeAccountAndMint(ctx, bridge.mint, bridge.blockPersistency); err != nil {
 				panic(err)
 			}
 		}()
