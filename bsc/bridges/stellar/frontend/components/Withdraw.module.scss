@@ -1,0 +1,13 @@
+.container {
+  padding: 50px;
+  display: flex;
+  flex-direction: column;
+  width: 60%;
+  margin: auto;
+}
+
+.errorField {
+  color: red;
+  margin-left: 5px;
+  margin-top: 5px;
+}
