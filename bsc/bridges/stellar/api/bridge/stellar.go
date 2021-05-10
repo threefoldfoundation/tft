@@ -128,23 +128,26 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return errors.Wrap(err, "failed to serialize transaction")
 	}
 
-	signReq := SignRequest{
-		TxnXDR:             xdr,
-		RequiredSignatures: w.signatureCount,
-		Receiver:           receiver,
-		Block:              blockheight,
-	}
+	// Only try to request signatures if there are signatures required
+	if w.signatureCount > 0 {
+		signReq := SignRequest{
+			TxnXDR:             xdr,
+			RequiredSignatures: w.signatureCount,
+			Receiver:           receiver,
+			Block:              blockheight,
+		}
 
-	signatures, err := w.client.Sign(ctx, signReq)
-	if err != nil {
-		return err
-	}
-
-	for _, signature := range signatures {
-		tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
+		signatures, err := w.client.Sign(ctx, signReq)
 		if err != nil {
-			log.Error("Failed to add signature", "err", err.Error())
 			return err
+		}
+
+		for _, signature := range signatures {
+			tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
+			if err != nil {
+				log.Error("Failed to add signature", "err", err.Error())
+				return err
+			}
 		}
 	}
 
