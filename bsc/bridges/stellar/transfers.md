@@ -1,4 +1,4 @@
-# Transferring TFT between Stellar to BSC
+# Transferring TFT between Stellar and BSC
 
 ## From Stellar to BSC
 
