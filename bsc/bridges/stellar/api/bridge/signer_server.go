@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -111,6 +112,52 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		if paymentOperation.Amount != xdr.Int64(withdraw.Event.Tokens.Int64()) {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
+
+		client, err := s.getHorizonClient()
+		if err != nil {
+			return err
+		}
+
+		opRequest := horizonclient.TransactionRequest{
+			ForAccount:    txn.SourceAccount().AccountID,
+			Order:         horizonclient.OrderDesc,
+			IncludeFailed: false,
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "error", err)
+		}
+
+		txMemo, err := txn.Memo().ToXDR()
+		if err != nil {
+			return err
+		}
+
+		// only check transaction with hash memos
+		if txMemo.Type != xdr.MemoTypeMemoHash {
+			return nil
+		}
+
+		hashMemo := txn.Memo().(txnbuild.MemoHash)
+		txMemoString := hex.EncodeToString(hashMemo[:])
+
+		for _, record := range response.Embedded.Records {
+			if record.MemoType != "hash" {
+				continue
+			}
+
+			bytes, err := base64.StdEncoding.DecodeString(record.Memo)
+			if err != nil {
+				return err
+			}
+			memoAsHex := hex.EncodeToString(bytes)
+
+			if memoAsHex == txMemoString {
+				return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+			}
+		}
+
 	}
 
 	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
