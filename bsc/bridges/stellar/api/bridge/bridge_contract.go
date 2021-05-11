@@ -500,7 +500,6 @@ func (bridge *BridgeContract) FilterWithdraw(wc chan<- WithdrawEvent, startHeigh
 	}
 
 	for withdrawEvent.Next() {
-		log.Info("e", "e", withdrawEvent.Event)
 		if withdrawEvent.Event == nil {
 			break
 		}
@@ -517,7 +516,6 @@ func (bridge *BridgeContract) FilterWithdraw(wc chan<- WithdrawEvent, startHeigh
 			raw:                withdrawEvent.Event.Raw.Data,
 		}
 	}
-	log.Info("returning now")
 	return nil
 }
 
