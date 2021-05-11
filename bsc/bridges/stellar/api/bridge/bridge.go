@@ -226,6 +226,23 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		if height.LastHeight > EthBlockDelay {
 			lastHeight = height.LastHeight - EthBlockDelay
 		}
+
+		// Sync up any withdrawals made if the blockheight is manually set
+		// to a previous value
+		status, err := bridge.bridgeContract.lc.GetStatus()
+		if err != nil {
+			return err
+		}
+
+		if lastHeight < status.CurrentBlock {
+			// todo filter logs
+			go func() {
+				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, status.CurrentBlock); err != nil {
+					panic(err)
+				}
+			}()
+		}
+
 		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, lastHeight)
 	} else {
 		go bridge.bridgeContract.SubscribeSubmission(submissionChan)
@@ -279,6 +296,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					}
 				}
 
+				log.Info("Going to save height")
 				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
 				if err != nil {
 					log.Error("error occured saving blockheight", "error", err)
