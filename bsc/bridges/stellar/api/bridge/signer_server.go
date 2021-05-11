@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	Protocol = protocol.ID("/p2p/rpc/signer")
+	Protocol         = protocol.ID("/p2p/rpc/signer")
+	stellarPageLimit = 200
 )
 
 type SignRequest struct {
@@ -41,9 +42,10 @@ type SignResponse struct {
 }
 
 type SignerService struct {
-	network        string
-	kp             *keypair.Full
-	bridgeContract *BridgeContract
+	network               string
+	kp                    *keypair.Full
+	bridgeContract        *BridgeContract
+	knownTransactionMemos []string
 }
 
 func NewSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) error {
@@ -113,51 +115,10 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
-		client, err := s.getHorizonClient()
+		err = s.checkExistingTransactionHash(txn)
 		if err != nil {
 			return err
 		}
-
-		opRequest := horizonclient.TransactionRequest{
-			ForAccount:    txn.SourceAccount().AccountID,
-			Order:         horizonclient.OrderDesc,
-			IncludeFailed: false,
-		}
-
-		response, err := client.Transactions(opRequest)
-		if err != nil {
-			log.Info("Error getting transactions for stellar account", "error", err)
-		}
-
-		txMemo, err := txn.Memo().ToXDR()
-		if err != nil {
-			return err
-		}
-
-		// only check transaction with hash memos
-		if txMemo.Type != xdr.MemoTypeMemoHash {
-			return nil
-		}
-
-		hashMemo := txn.Memo().(txnbuild.MemoHash)
-		txMemoString := hex.EncodeToString(hashMemo[:])
-
-		for _, record := range response.Embedded.Records {
-			if record.MemoType != "hash" {
-				continue
-			}
-
-			bytes, err := base64.StdEncoding.DecodeString(record.Memo)
-			if err != nil {
-				return err
-			}
-			memoAsHex := hex.EncodeToString(bytes)
-
-			if memoAsHex == txMemoString {
-				return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
-			}
-		}
-
 	}
 
 	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
@@ -172,6 +133,87 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 
 	response.Address = s.kp.Address()
 	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
+	return nil
+}
+
+func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) error {
+	txMemo, err := txn.Memo().ToXDR()
+	if err != nil {
+		return err
+	}
+
+	// only check transaction with hash memos
+	if txMemo.Type != xdr.MemoTypeMemoHash {
+		return nil
+	}
+
+	hashMemo := txn.Memo().(txnbuild.MemoHash)
+	txMemoString := hex.EncodeToString(hashMemo[:])
+
+	// Check transaction hash in memory first
+	for _, knownMemoHash := range s.knownTransactionMemos {
+		if knownMemoHash == txMemoString {
+			return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+		}
+	}
+
+	// If transaction hash does not exist in memory
+	// check horizon
+	client, err := s.getHorizonClient()
+	if err != nil {
+		return err
+	}
+
+	cursor := ""
+	opRequest := horizonclient.TransactionRequest{
+		ForAccount:    txn.SourceAccount().AccountID,
+		Order:         horizonclient.OrderDesc,
+		IncludeFailed: false,
+		Cursor:        cursor,
+		Limit:         stellarPageLimit,
+	}
+
+	response, err := client.Transactions(opRequest)
+	if err != nil {
+		log.Info("Error getting transactions for stellar account", "error", err)
+	}
+
+	for len(response.Embedded.Records) != 0 {
+		for _, record := range response.Embedded.Records {
+			if record.MemoType != "hash" {
+				continue
+			}
+
+			bytes, err := base64.StdEncoding.DecodeString(record.Memo)
+			if err != nil {
+				return err
+			}
+			memoAsHex := hex.EncodeToString(bytes)
+
+			// add the transaction memo to the list of known transaction memos
+			s.knownTransactionMemos = append(s.knownTransactionMemos, memoAsHex)
+
+			if memoAsHex == txMemoString {
+				return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+			}
+
+			cursor = record.PagingToken()
+		}
+		// if the amount of records fetched is smaller than the page limit
+		// we can assume we are on the last page and we break to prevent another
+		// call to horizon
+		if len(response.Embedded.Records) < stellarPageLimit {
+			break
+		}
+
+		opRequest.Cursor = cursor
+		log.Info("fetching balance for address with cursor", "cursor", cursor)
+		response, err = client.Transactions(opRequest)
+		if err != nil {
+			return errors.Wrap(err, "could not get transactions")
+		}
+	}
+
 	return nil
 }
 
