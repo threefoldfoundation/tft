@@ -45,14 +45,16 @@ type SignerService struct {
 	network               string
 	kp                    *keypair.Full
 	bridgeContract        *BridgeContract
-	knownTransactionMemos []string
+	knownTransactionMemos map[string]struct{}
+	brideMasterAddress    string
+	cursor                string
 }
 
-func NewSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) error {
+func NewSignerServer(host host.Host, network, secret, brideMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, addr := range host.Addrs() {
@@ -60,8 +62,8 @@ func NewSignerServer(host host.Host, network, secret string, bridgeContract *Bri
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	_, err = newSignerServer(host, network, secret, bridgeContract)
-	return err
+	_, signer, err := newSignerServer(host, network, secret, brideMasterAddress, bridgeContract)
+	return signer, err
 }
 
 func (s *SignerService) Sign(ctx context.Context, request SignRequest, response *SignResponse) error {
@@ -150,13 +152,32 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 	hashMemo := txn.Memo().(txnbuild.MemoHash)
 	txMemoString := hex.EncodeToString(hashMemo[:])
 
-	// Check transaction hash in memory first
-	for _, knownMemoHash := range s.knownTransactionMemos {
-		if knownMemoHash == txMemoString {
-			return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
-		}
+	_, ok := s.knownTransactionMemos[txMemoString]
+	if ok {
+		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
 	}
 
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err = s.ScanBridgeAccount()
+	if err != nil {
+		return err
+	}
+
+	_, ok = s.knownTransactionMemos[txMemoString]
+	if ok {
+		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+	}
+	log.Info("transaction not found")
+
+	return nil
+}
+
+func (s *SignerService) ScanBridgeAccount() error {
+	if s.brideMasterAddress == "" {
+		return errors.New("no master bridge account set, aborting now")
+	}
+	log.Info("scanning bridge account")
 	// If transaction hash does not exist in memory
 	// check horizon
 	client, err := s.getHorizonClient()
@@ -164,12 +185,10 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 		return err
 	}
 
-	cursor := ""
 	opRequest := horizonclient.TransactionRequest{
-		ForAccount:    txn.SourceAccount().AccountID,
-		Order:         horizonclient.OrderDesc,
+		ForAccount:    s.brideMasterAddress,
 		IncludeFailed: false,
-		Cursor:        cursor,
+		Cursor:        s.cursor,
 		Limit:         stellarPageLimit,
 	}
 
@@ -179,7 +198,11 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 	}
 
 	for len(response.Embedded.Records) != 0 {
+		log.Info("len records", "l", len(response.Embedded.Records))
 		for _, record := range response.Embedded.Records {
+			// save cursor
+			s.cursor = record.PagingToken()
+
 			if record.MemoType != "hash" {
 				continue
 			}
@@ -191,13 +214,8 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 			memoAsHex := hex.EncodeToString(bytes)
 
 			// add the transaction memo to the list of known transaction memos
-			s.knownTransactionMemos = append(s.knownTransactionMemos, memoAsHex)
+			s.knownTransactionMemos[memoAsHex] = struct{}{}
 
-			if memoAsHex == txMemoString {
-				return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
-			}
-
-			cursor = record.PagingToken()
 		}
 		// if the amount of records fetched is smaller than the page limit
 		// we can assume we are on the last page and we break to prevent another
@@ -206,8 +224,8 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 			break
 		}
 
-		opRequest.Cursor = cursor
-		log.Info("fetching balance for address with cursor", "cursor", cursor)
+		opRequest.Cursor = s.cursor
+		log.Info("fetching transaction for address with cursor", "cursor", s.cursor)
 		response, err = client.Transactions(opRequest)
 		if err != nil {
 			return errors.Wrap(err, "could not get transactions")
@@ -217,22 +235,24 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 	return nil
 }
 
-func newSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) (*gorpc.Server, error) {
+func newSignerServer(host host.Host, network, secret, brideMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
 	full, err := keypair.ParseFull(secret)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	log.Debug("wallet address", "address", full.Address())
 	server := gorpc.NewServer(host, Protocol)
 
 	signer := SignerService{
-		network:        network,
-		kp:             full,
-		bridgeContract: bridgeContract,
+		network:               network,
+		kp:                    full,
+		bridgeContract:        bridgeContract,
+		brideMasterAddress:    brideMasterAddress,
+		knownTransactionMemos: make(map[string]struct{}),
 	}
 
 	err = server.Register(&signer)
-	return server, err
+	return server, &signer, err
 }
 
 // getNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
