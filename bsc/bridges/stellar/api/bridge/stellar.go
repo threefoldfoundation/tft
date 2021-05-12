@@ -222,7 +222,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				depositedAmount := big.NewInt(int64(parsedAmount))
 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
-				if err != nil {
+				for err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 					select {
 					case <-ctx.Done():
