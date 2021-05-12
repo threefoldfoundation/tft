@@ -40,6 +40,8 @@ func main() {
 
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
+	flag.StringVar(&bridgeCfg.BridgeMasterAddress, "master", "", "master stellar public address")
+
 	flag.Parse()
 
 	//TODO cfg.Validate()
