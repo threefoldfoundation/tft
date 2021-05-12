@@ -64,7 +64,7 @@ func main() {
 
 	log.Debug("Chain ID %+v \n", id)
 
-	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed)
+	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress)
 	if err != nil {
 		panic(err)
 	}

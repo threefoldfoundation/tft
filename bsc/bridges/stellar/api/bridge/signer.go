@@ -18,6 +18,7 @@ import (
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	secio "github.com/libp2p/go-libp2p-secio"
 	libp2ptls "github.com/libp2p/go-libp2p-tls"
+	"github.com/libp2p/go-libp2p/config"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
 )
@@ -43,7 +44,7 @@ func (c *SignerConfig) Valid() error {
 	return nil
 }
 
-func NewHost(ctx context.Context, secret string) (host.Host, routing.PeerRouting, error) {
+func NewHost(ctx context.Context, secret string, filteredID string) (host.Host, routing.PeerRouting, error) {
 	seed, err := strkey.Decode(strkey.VersionByteSeed, secret)
 	if err != nil {
 		return nil, nil, err
@@ -60,15 +61,22 @@ func NewHost(ctx context.Context, secret string) (host.Host, routing.PeerRouting
 		return nil, nil, err
 	}
 
-	return createLibp2pHost(ctx, privK)
+	var filteredPeerID peer.ID
+	if filteredID != "" {
+		filteredPeerID, err = getPeerIDFromStellarAddress(filteredID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return createLibp2pHost(ctx, privK, filteredPeerID)
 }
 
-func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey) (host.Host, routing.PeerRouting, error) {
-
+func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey, filteredID peer.ID) (host.Host, routing.PeerRouting, error) {
 	var idht *dht.IpfsDHT
 	var err error
-	libp2phost, err := libp2p.New(ctx,
-		// Use the keypair we generated
+
+	options := []config.Option{
 		libp2p.Identity(privateKey),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
@@ -101,7 +109,15 @@ func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey) (host.Host
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
 		libp2p.EnableAutoRelay(),
-	)
+	}
+
+	if filteredID != "" {
+		// filter on ID
+		filter := NewGater(filteredID)
+		options = append(options, libp2p.ConnectionGater(filter))
+	}
+
+	libp2phost, err := libp2p.New(ctx, options...)
 	// This connects to public bootstrappers
 	for _, addr := range dht.DefaultBootstrapPeers {
 		pi, _ := peer.AddrInfoFromP2pAddr(addr)
