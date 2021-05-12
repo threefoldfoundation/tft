@@ -224,12 +224,12 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
 				if err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
-					// select {
-					// case <-ctx.Done():
-					// 	return
-					// case <-time.After(10 * time.Second):
-					// 	err = mintFn(ethAddress, depositedAmount, tx.Hash)
-					// }
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(10 * time.Second):
+						err = mintFn(ethAddress, depositedAmount, tx.Hash)
+					}
 				}
 				log.Info("Mint succesfull, saving cursor")
 
