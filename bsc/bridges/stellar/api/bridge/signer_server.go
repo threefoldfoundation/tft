@@ -213,8 +213,11 @@ func (s *SignerService) ScanBridgeAccount() error {
 			}
 			memoAsHex := hex.EncodeToString(bytes)
 
-			// add the transaction memo to the list of known transaction memos
-			s.knownTransactionMemos[memoAsHex] = struct{}{}
+			_, ok := s.knownTransactionMemos[memoAsHex]
+			if !ok {
+				// add the transaction memo to the list of known transaction memos
+				s.knownTransactionMemos[memoAsHex] = struct{}{}
+			}
 
 		}
 		// if the amount of records fetched is smaller than the page limit
