@@ -49,6 +49,7 @@ type BridgeConfig struct {
 	RescanBridgeAccount     bool
 	PersistencyFile         string
 	Follower                bool
+	BridgeMasterAddress     string
 }
 
 // NewBridge creates a new Bridge.
@@ -152,11 +153,13 @@ func (bridge *Bridge) validateTransaction(txID *big.Int) error {
 
 	asset := bridge.wallet.GetAssetCodeAndIssuer()
 
+	totalAmount := 0
 	for _, effect := range effects.Embedded.Records {
-		if effect.GetAccount() != bridge.wallet.keypair.Address() {
-			continue
-		}
-		if effect.GetType() == "account_credited" {
+		// check if the effect account is the bridge master wallet address
+		found := effect.GetAccount() == bridge.config.BridgeMasterAddress
+
+		// if the effect is a deposit, add the amount to the total
+		if found && effect.GetType() == "account_credited" {
 			creditedEffect := effect.(horizoneffects.AccountCredited)
 			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
 				continue
@@ -165,13 +168,21 @@ func (bridge *Bridge) validateTransaction(txID *big.Int) error {
 			if err != nil {
 				continue
 			}
-
-			depositedAmount := big.NewInt(int64(parsedAmount))
-
-			if data.Tokens != depositedAmount {
-				return errors.New("deposited amount is not correct")
-			}
+			totalAmount += int(parsedAmount)
 		}
+	}
+
+	if totalAmount == 0 {
+		return fmt.Errorf("transaction is not valid, we did not find a deposit to the master bridge address %s", bridge.config.BridgeMasterAddress)
+	}
+
+	depositedAmount := big.NewInt(int64(totalAmount))
+	// Subtract the deposit fee
+	amount := &big.Int{}
+	amount = amount.Sub(depositedAmount, bridge.depositFee)
+
+	if data.Tokens.Cmp(amount) > 0 {
+		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
 	}
 
 	return nil
