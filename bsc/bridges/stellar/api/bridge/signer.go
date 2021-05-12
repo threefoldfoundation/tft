@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -147,14 +146,15 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 }
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
-	cases := make([]reflect.SelectCase, 0)
 
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
+	responseChannels := make([]chan response, 0, len(s.peers))
 	for _, addr := range s.peers {
-		respCh := make(chan response)
+		respCh := make(chan response, 1)
+		responseChannels = append(responseChannels, respCh)
 		go func(peerID peer.ID, ch chan response) {
 			defer close(ch)
 			answer, err := s.sign(ctxWithTimeout, peerID, signRequest)
@@ -165,36 +165,39 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 			}
 		}(addr, respCh)
 
-		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(respCh)})
 	}
 
 	var results []SignResponse
-	replies := 0
 
-	remaining := len(cases)
-	for remaining > 0 {
-		log.Info("remaining signers to check", "remaining", remaining)
+	for len(responseChannels) > 0 {
+		receivedFrom := -1
+		for i, responseChannel := range responseChannels {
+			select {
+			case reply := <-responseChannel:
+				receivedFrom = i
+				if reply.err != nil {
+					log.Error("failed to get signature from", "err", reply.err.Error())
 
-		chosen, value, ok := reflect.Select(cases)
-		remaining -= 1
-		// The chosen channel has been closed, so zero out the channel to disable the case
-		cases[chosen].Chan = reflect.ValueOf(nil)
-		if !ok {
-			continue
+				} else {
+					log.Info("got a valid reply from a signer")
+					results = append(results, *reply.answer)
+				}
+				break
+			default: //don't block
+			}
+		}
+		if receivedFrom > 0 {
+			//Remove the channel from the list
+			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
+			responseChannels = responseChannels[:len(responseChannels)-1]
+			//check if we have enough signatures
+			if len(results) == signRequest.RequiredSignatures {
+				break
+			}
+		} else {
+			time.Sleep(time.Millisecond * 100)
 		}
 
-		reply := value.Interface().(response)
-
-		if reply.err != nil {
-			log.Error("failed to get signature from", "err", reply.err.Error())
-			continue
-		}
-
-		log.Info("got a valid reply from a signer")
-		results = append(results, *reply.answer)
-		if len(results) == signRequest.RequiredSignatures || replies == len(s.peers) {
-			break
-		}
 	}
 
 	if len(results) != signRequest.RequiredSignatures {
