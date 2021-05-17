@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -34,13 +35,17 @@ const (
 // stellarWallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
 type stellarWallet struct {
-	keypair        *keypair.Full
-	network        string
+	keypair *keypair.Full
+	network string
+	signerWallet
+}
+
+type signerWallet struct {
 	client         *SignersClient
 	signatureCount int
 }
 
-func newStellarWallet(ctx context.Context, network, seed string, host host.Host, router routing.PeerRouting) (*stellarWallet, error) {
+func newStellarWallet(network, seed string) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(seed)
 
 	if err != nil {
@@ -50,16 +55,19 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 	w := &stellarWallet{
 		keypair: kp,
 		network: network,
-		//client:  client,
 	}
 
-	account, err := w.GetAccountDetails(kp.Address())
+	return w, nil
+}
+
+func (w *stellarWallet) newSignerWallet(ctx context.Context, host host.Host, router routing.PeerRouting) error {
+	account, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var keys []string
 	for _, signer := range account.Signers {
-		if signer.Key == kp.Address() {
+		if signer.Key == w.keypair.Address() {
 			continue
 		}
 		keys = append(keys, signer.Key)
@@ -70,9 +78,9 @@ func newStellarWallet(ctx context.Context, network, seed string, host host.Host,
 
 	w.client, err = NewSignersClient(ctx, host, router, keys)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return w, nil
+	return nil
 }
 
 func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string) error {
@@ -179,15 +187,19 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 // mint handler
 type mint func(ERC20Address, *big.Int, string) error
 
-func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPersistency) error {
+//MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
+// the bridge account on the Stellar network for new transactions and calls the
+// mint function when a deposit is made
+func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
 		if !tx.Successful {
 			return
 		}
+		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
-			log.Error("error while decoding transaction memo:", err.Error())
+			log.Error("error decoding transaction memo", "error", err.Error())
 			return
 		}
 
@@ -222,8 +234,8 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 				depositedAmount := big.NewInt(int64(parsedAmount))
 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
-				if err != nil {
-					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
+				log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
+				for err != nil {
 					if err == errInsufficientDepositAmount {
 						log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", parsedAmount)
 						ops, err := w.getOperationEffect(tx.Hash)
@@ -243,10 +255,17 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 								}
 							}
 						}
+						break
 					}
-					continue
+
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(10 * time.Second):
+						err = mintFn(ethAddress, depositedAmount, tx.Hash)
+					}
 				}
-				log.Info("Mint succesfull, saving cursor now")
+				log.Info("Mint succesfull, saving cursor")
 
 				// save cursor
 				cursor := tx.PagingToken()
@@ -262,11 +281,18 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 
 	// get saved cursor
 	blockHeight, err := persistency.GetHeight()
-	if err != nil {
-		return err
+	for err != nil {
+		log.Warn("Error getting the bridge persistency", "error", err)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(5 * time.Second):
+			continue
+		}
+		blockHeight, err = persistency.GetHeight()
 	}
 
-	return w.StreamBridgeStellarTransactions(context.Background(), blockHeight.StellarCursor, transactionHandler)
+	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
 }
 
 // GetAccountDetails gets account details based an a Stellar address
@@ -293,8 +319,38 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 		ForAccount: w.keypair.Address(),
 		Cursor:     cursor,
 	}
+	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
 
-	return client.StreamTransactions(ctx, opRequest, handler)
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "error", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+
+		}
+		for _, tx := range response.Embedded.Records {
+			handler(tx)
+			opRequest.Cursor = tx.PagingToken()
+		}
+		if len(response.Embedded.Records) == 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(10 * time.Second):
+			}
+		}
+
+	}
+
 }
 
 func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
