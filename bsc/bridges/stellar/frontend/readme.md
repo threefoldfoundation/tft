@@ -20,3 +20,7 @@ Browse to [http://localhost:3000](http://localhost:3000) and connect your wallet
 ## Deployed instances
 
 [testnet](https://bridge.testnet.threefold.io/)
+
+## Development
+
+If you want to run this app in development you can change `.env.development` file to the corresponding contract addresses where you TFT contract is deployed.
