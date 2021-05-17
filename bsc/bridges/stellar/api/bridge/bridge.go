@@ -239,7 +239,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
 			case we := <-withdrawChan:
 				if we.network == BridgeNetwork {
-					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), we.network)
+					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
 					txMap[we.txHash.String()] = we
 				} else {
 					log.Warn("ignoring withdrawal", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)

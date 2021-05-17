@@ -171,6 +171,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 
 	for len(responseChannels) > 0 {
 		receivedFrom := -1
+	responsechannelsLoop:
 		for i, responseChannel := range responseChannels {
 			select {
 			case reply := <-responseChannel:
@@ -179,10 +180,12 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 					log.Error("failed to get signature from", "err", reply.err.Error())
 
 				} else {
-					log.Info("got a valid reply from a signer")
-					results = append(results, *reply.answer)
+					if reply.answer != nil {
+						log.Info("got a valid reply from a signer")
+						results = append(results, *reply.answer)
+					}
 				}
-				break
+				break responsechannelsLoop
 			default: //don't block
 			}
 		}
