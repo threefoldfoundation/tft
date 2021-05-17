@@ -146,42 +146,64 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 }
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
-	ch := make(chan response)
-	defer close(ch)
 
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+
+	responseChannels := make([]chan response, 0, len(s.peers))
 	for _, addr := range s.peers {
-		go func(peerID peer.ID) {
+		respCh := make(chan response, 1)
+		responseChannels = append(responseChannels, respCh)
+		go func(peerID peer.ID, ch chan response) {
+			defer close(ch)
 			answer, err := s.sign(ctxWithTimeout, peerID, signRequest)
 
 			select {
 			case <-ctxWithTimeout.Done():
 			case ch <- response{answer: answer, err: err}:
 			}
-		}(addr)
+		}(addr, respCh)
+
 	}
 
 	var results []SignResponse
-	replies := 0
-loop:
-	for {
-		select {
-		case <-ctxWithTimeout.Done():
-			break loop
-		case reply := <-ch:
-			replies++
-			if reply.err != nil {
-				log.Error("failed to get signature from", "err", reply.err.Error())
-				continue
-			}
 
-			results = append(results, *reply.answer)
-			if len(results) == signRequest.RequiredSignatures || replies == len(s.peers) {
-				break loop
+	for len(responseChannels) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		receivedFrom := -1
+	responsechannelsLoop:
+		for i, responseChannel := range responseChannels {
+			select {
+			case reply := <-responseChannel:
+				receivedFrom = i
+				if reply.err != nil {
+					log.Error("failed to get signature from", "err", reply.err.Error())
+
+				} else {
+					if reply.answer != nil {
+						log.Info("got a valid reply from a signer")
+						results = append(results, *reply.answer)
+					}
+				}
+				break responsechannelsLoop
+			default: //don't block
 			}
 		}
+		if receivedFrom > 0 {
+			//Remove the channel from the list
+			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
+			responseChannels = responseChannels[:len(responseChannels)-1]
+			//check if we have enough signatures
+			if len(results) == signRequest.RequiredSignatures {
+				break
+			}
+		} else {
+			time.Sleep(time.Millisecond * 100)
+		}
+
 	}
 
 	if len(results) != signRequest.RequiredSignatures {
