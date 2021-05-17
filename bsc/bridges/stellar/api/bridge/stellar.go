@@ -175,7 +175,7 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 // mint handler
 type mint func(ERC20Address, *big.Int, string) error
 
-//MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
+// MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
 // mint function when a deposit is made
 func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
@@ -222,17 +222,12 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				depositedAmount := big.NewInt(int64(parsedAmount))
 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
-				for err != nil {
+				if err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(10 * time.Second):
-						err = mintFn(ethAddress, depositedAmount, tx.Hash)
-					}
+					return
 				}
-				log.Info("Mint succesfull, saving cursor")
 
+				log.Info("Mint succesfull, saving cursor")
 				// save cursor
 				cursor := tx.PagingToken()
 				err = persistency.saveStellarCursor(cursor)
