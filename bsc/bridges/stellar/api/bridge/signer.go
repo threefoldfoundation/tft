@@ -170,6 +170,9 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 	var results []SignResponse
 
 	for len(responseChannels) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		receivedFrom := -1
 	responsechannelsLoop:
 		for i, responseChannel := range responseChannels {
