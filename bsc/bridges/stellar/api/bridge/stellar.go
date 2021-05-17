@@ -115,6 +115,7 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		Memo:                 txnbuild.MemoHash(txHash),
 	}
 
+	log.Info("message", "m", message)
 	// if a message is passed, this is a refund operations
 	// attach the memo return with the original transaction hash
 	if message != "" {
@@ -234,8 +235,8 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				depositedAmount := big.NewInt(int64(parsedAmount))
 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
-				log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 				for err != nil {
+					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 					if err == errInsufficientDepositAmount {
 						log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", parsedAmount)
 						ops, err := w.getOperationEffect(tx.Hash)
@@ -255,7 +256,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 								}
 							}
 						}
-						break
+						return
 					}
 
 					select {

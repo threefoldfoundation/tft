@@ -124,7 +124,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 
 	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
-		return
+		return errInsufficientDepositAmount
 	}
 	amount := &big.Int{}
 	amount.Sub(depositedAmount, bridge.depositFee)
