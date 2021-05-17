@@ -109,9 +109,6 @@ func (bridge *Bridge) Close() error {
 func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
-	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
-		return errors.New("Deposited amount is <= Fee")
-	}
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
 	if err != nil {
 		return
@@ -119,6 +116,11 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	if known {
 		log.Info("Skipping known minting transaction", "txID", txID)
 		// we already know this withdrawal address, so ignore the transaction
+		return
+	}
+
+	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
+		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
 		return
 	}
 	amount := &big.Int{}
