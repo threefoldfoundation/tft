@@ -2,7 +2,9 @@
 
 Decentralised application for TFT on Binance Smart Chain (TESTNET).
 
-## Installation
+## Run locally
+
+copy `.env.testnet` to `.env.development` to use the testnet setting or `.env.production` for the production settings.
 
 ```sh
 yarn
@@ -23,4 +25,4 @@ Browse to [http://localhost:3000](http://localhost:3000) and connect your wallet
 
 ## Development
 
-If you want to run this app in development you can change `.env.development` file to the corresponding contract addresses where you TFT contract is deployed.
+If you want to run this app to connect to your own bridge setup in development you can change `.env.development` file to the corresponding contract addresses where you TFT contract is deployed.
