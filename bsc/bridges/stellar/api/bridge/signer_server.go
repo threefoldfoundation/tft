@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,14 +18,14 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon/effects"
+	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )
 
 const (
 	Protocol         = protocol.ID("/p2p/rpc/signer")
-	stellarPageLimit = 200
+	stellarPageLimit = 100
 )
 
 type SignRequest struct {
@@ -119,6 +120,7 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 
 		err = s.checkExistingTransactionHash(txn)
 		if err != nil {
+			log.Error("error while checking transaction hash", "err", err.Error())
 			return err
 		}
 	}
@@ -177,62 +179,29 @@ func (s *SignerService) ScanBridgeAccount() error {
 	if s.bridgeMasterAddress == "" {
 		return errors.New("no master bridge account set, aborting now")
 	}
-	log.Info("scanning bridge account")
-	// If transaction hash does not exist in memory
-	// check horizon
-	client, err := s.getHorizonClient()
+
+	transactionHandler := func(tx hProtocol.Transaction) {
+		if tx.MemoType != "hash" {
+			return
+		}
+
+		bytes, err := base64.StdEncoding.DecodeString(tx.Memo)
+		if err != nil {
+			return
+		}
+		memoAsHex := hex.EncodeToString(bytes)
+
+		_, ok := s.knownTransactionMemos[memoAsHex]
+		if !ok {
+			log.Info("found", "x", memoAsHex)
+			// add the transaction memo to the list of known transaction memos
+			s.knownTransactionMemos[memoAsHex] = struct{}{}
+		}
+	}
+
+	err := s.FetchTransactions(context.Background(), s.cursor, transactionHandler)
 	if err != nil {
 		return err
-	}
-
-	opRequest := horizonclient.TransactionRequest{
-		ForAccount:    s.bridgeMasterAddress,
-		IncludeFailed: false,
-		Cursor:        s.cursor,
-		Limit:         stellarPageLimit,
-	}
-
-	response, err := client.Transactions(opRequest)
-	if err != nil {
-		log.Info("Error getting transactions for stellar account", "error", err)
-	}
-
-	for len(response.Embedded.Records) != 0 {
-		log.Info("len records", "l", len(response.Embedded.Records))
-		for _, record := range response.Embedded.Records {
-			// save cursor
-			s.cursor = record.PagingToken()
-
-			if record.MemoType != "hash" {
-				continue
-			}
-
-			bytes, err := base64.StdEncoding.DecodeString(record.Memo)
-			if err != nil {
-				return err
-			}
-			memoAsHex := hex.EncodeToString(bytes)
-
-			_, ok := s.knownTransactionMemos[memoAsHex]
-			if !ok {
-				// add the transaction memo to the list of known transaction memos
-				s.knownTransactionMemos[memoAsHex] = struct{}{}
-			}
-
-		}
-		// if the amount of records fetched is smaller than the page limit
-		// we can assume we are on the last page and we break to prevent another
-		// call to horizon
-		if len(response.Embedded.Records) < stellarPageLimit {
-			break
-		}
-
-		opRequest.Cursor = s.cursor
-		log.Info("fetching transaction for address with cursor", "cursor", s.cursor)
-		response, err = client.Transactions(opRequest)
-		if err != nil {
-			return errors.Wrap(err, "could not get transactions")
-		}
 	}
 
 	return nil
@@ -282,19 +251,49 @@ func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
 	}
 }
 
-func (s *SignerService) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
+func (s *SignerService) FetchTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) error {
 	client, err := s.getHorizonClient()
 	if err != nil {
-		return effects, err
+		return err
 	}
 
-	effectsReq := horizonclient.EffectRequest{
-		ForTransaction: txHash,
+	opRequest := horizonclient.TransactionRequest{
+		ForAccount:    s.bridgeMasterAddress,
+		IncludeFailed: false,
+		Cursor:        s.cursor,
+		Limit:         stellarPageLimit,
 	}
-	effects, err = client.Effects(effectsReq)
-	if err != nil {
-		return effects, err
+	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
+
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "error", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+
+		}
+		for _, tx := range response.Embedded.Records {
+			handler(tx)
+			s.cursor = tx.PagingToken()
+			opRequest.Cursor = s.cursor
+		}
+		if len(response.Embedded.Records) == 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(10 * time.Second):
+			}
+		}
+
 	}
 
-	return effects, nil
 }
