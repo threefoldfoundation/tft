@@ -408,7 +408,7 @@ func (w WithdrawEvent) BlockHeight() uint64 {
 // SubscribeWithdraw subscribes to new Withdraw events on the given contract. This call blocks
 // and prints out info about any withdraw as it happened
 func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHeight uint64) error {
-	log.Debug("Subscribing to withdraw events", "start height", startHeight)
+	log.Info("Subscribing to withdraw events", "start height", startHeight)
 	sink := make(chan *contract.TokenWithdraw)
 	watchOpts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 	sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
@@ -422,7 +422,6 @@ func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHe
 		case err = <-sub.Err():
 			return err
 		case withdraw := <-sink:
-
 			if withdraw.Raw.Removed {
 				// ignore removed events
 				continue
@@ -484,6 +483,40 @@ func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *c
 			}
 		}
 	}), nil
+}
+
+// FilterWithdraw filters Withdraw events on the given contract. This call blocks
+// and prints out info about any withdraw as it happened
+func (bridge *BridgeContract) FilterWithdraw(wc chan<- WithdrawEvent, startHeight uint64, endHeight uint64) error {
+	log.Info("Filtering to withdraw events", "start height", startHeight)
+	filterOpts := bind.FilterOpts{
+		Start: startHeight,
+		End:   &endHeight,
+	}
+	withdrawEvent, err := bridge.tftContract.filter.FilterWithdraw(&filterOpts, nil)
+	if err != nil {
+		log.Error("filtering withdraw events failed", "err", err)
+		return err
+	}
+
+	for withdrawEvent.Next() {
+		if withdrawEvent.Event == nil {
+			break
+		}
+
+		log.Info("Withdraw event found", "event", withdrawEvent)
+		wc <- WithdrawEvent{
+			receiver:           withdrawEvent.Event.Receiver,
+			amount:             withdrawEvent.Event.Tokens,
+			txHash:             withdrawEvent.Event.Raw.TxHash,
+			blockHash:          withdrawEvent.Event.Raw.BlockHash,
+			blockHeight:        withdrawEvent.Event.Raw.BlockNumber,
+			blockchain_address: withdrawEvent.Event.BlockchainAddress,
+			network:            withdrawEvent.Event.Network,
+			raw:                withdrawEvent.Event.Raw.Data,
+		}
+	}
+	return nil
 }
 
 // TransferFunds transfers funds from one address to another
