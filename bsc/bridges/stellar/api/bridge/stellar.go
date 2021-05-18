@@ -156,6 +156,10 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return err
 	}
 
+	if len(signatures) < w.signatureCount {
+		return fmt.Errorf("received %d signatures, needed %d", len(signatures), w.signatureCount)
+	}
+
 	for _, signature := range signatures {
 		tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
 		if err != nil {
@@ -288,9 +292,8 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		case <-ctx.Done():
 			return nil
 		case <-time.After(5 * time.Second):
-			continue
+			blockHeight, err = persistency.GetHeight()
 		}
-		blockHeight, err = persistency.GetHeight()
 	}
 
 	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)

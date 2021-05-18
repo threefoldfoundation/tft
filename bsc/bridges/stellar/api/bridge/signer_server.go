@@ -69,6 +69,26 @@ func NewSignerServer(host host.Host, network, secret, bridgeMasterAddress string
 	return signer, err
 }
 
+func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
+	full, err := keypair.ParseFull(secret)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Debug("wallet address", "address", full.Address())
+	server := gorpc.NewServer(host, Protocol)
+
+	signer := SignerService{
+		network:               network,
+		kp:                    full,
+		bridgeContract:        bridgeContract,
+		bridgeMasterAddress:   bridgeMasterAddress,
+		knownTransactionMemos: make(map[string]struct{}),
+	}
+
+	err = server.Register(&signer)
+	return server, &signer, err
+}
+
 func (s *SignerService) Sign(ctx context.Context, request SignRequest, response *SignResponse) error {
 	loaded, err := txnbuild.TransactionFromXDR(request.TxnXDR)
 	if err != nil {
@@ -108,28 +128,9 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 	return nil
 }
 
-func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
-	full, err := keypair.ParseFull(secret)
-	if err != nil {
-		return nil, nil, err
-	}
-	log.Debug("wallet address", "address", full.Address())
-	server := gorpc.NewServer(host, Protocol)
-
-	signer := SignerService{
-		network:               network,
-		kp:                    full,
-		bridgeContract:        bridgeContract,
-		bridgeMasterAddress:   bridgeMasterAddress,
-		knownTransactionMemos: make(map[string]struct{}),
-	}
-
-	err = server.Register(&signer)
-	return server, &signer, err
-}
-
 func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Transaction) error {
-	log.Info("address to check", "address", request.Receiver)
+	log.Info("Validating withdrawal request...")
+
 	withdraw, err := s.bridgeContract.tftContract.filter.FilterWithdraw(&bind.FilterOpts{Start: request.Block}, []common.Address{request.Receiver})
 	if err != nil {
 		return err
@@ -139,11 +140,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		return fmt.Errorf("no withdraw event found")
 	}
 
-	log.Info("Withdraw event found", "event", withdraw)
-
-	log.Info("got amount", "amount", withdraw.Event.Tokens.Uint64())
-	log.Info("got receiver", "receiver", withdraw.Event.BlockchainAddress)
-	log.Info("got network", "network", withdraw.Event.Network)
+	log.Info("validating withdrawal", "amount", withdraw.Event.Tokens.Uint64(), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
 
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
@@ -182,7 +179,6 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating refund request...")
 
-	log.Info("number of operations to check", "length", len(txn.Operations()))
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
 		if err != nil {
@@ -219,22 +215,35 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 			}
 		}
 
+		err = s.checkExistingTransactionHash(txn)
+		if err != nil {
+			log.Error("error while checking transaction hash", "err", err.Error())
+			return err
+		}
 	}
 	return nil
 }
+
 func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) error {
 	txMemo, err := txn.Memo().ToXDR()
 	if err != nil {
 		return err
 	}
 
-	// only check transaction with hash memos
-	if txMemo.Type != xdr.MemoTypeMemoHash {
+	var txMemoString string
+
+	switch txMemo.Type {
+	case xdr.MemoTypeMemoHash:
+		hashMemo := txn.Memo().(txnbuild.MemoHash)
+		txMemoString = hex.EncodeToString(hashMemo[:])
+		log.Info("found hash memo", "memo", txMemoString)
+	case xdr.MemoTypeMemoReturn:
+		hashMemo := txn.Memo().(txnbuild.MemoReturn)
+		txMemoString = hex.EncodeToString(hashMemo[:])
+		log.Info("found return memo", "memo", txMemoString)
+	default:
 		return nil
 	}
-
-	hashMemo := txn.Memo().(txnbuild.MemoHash)
-	txMemoString := hex.EncodeToString(hashMemo[:])
 
 	_, ok := s.knownTransactionMemos[txMemoString]
 	if ok {
@@ -263,7 +272,7 @@ func (s *SignerService) ScanBridgeAccount() error {
 	}
 
 	transactionHandler := func(tx hProtocol.Transaction) {
-		if tx.MemoType != "hash" {
+		if tx.MemoType != "hash" && tx.MemoType != "return" {
 			return
 		}
 
@@ -275,7 +284,7 @@ func (s *SignerService) ScanBridgeAccount() error {
 
 		_, ok := s.knownTransactionMemos[memoAsHex]
 		if !ok {
-			log.Info("found", "x", memoAsHex)
+			log.Info("storing memo hash in known transaction storage", "hash", memoAsHex)
 			// add the transaction memo to the list of known transaction memos
 			s.knownTransactionMemos[memoAsHex] = struct{}{}
 		}
