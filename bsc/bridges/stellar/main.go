@@ -90,7 +90,13 @@ func main() {
 	}
 
 	if bridgeCfg.Follower {
-		err = bridge.NewSignerServer(host, bridgeCfg.StellarNetwork, bridgeCfg.StellarSeed, br.GetBridgeContract())
+		signer, err := bridge.NewSignerServer(host, bridgeCfg.StellarNetwork, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress, br.GetBridgeContract())
+		if err != nil {
+			panic(err)
+		}
+
+		// Initially scan bridge account for stellar transactions
+		err = signer.ScanBridgeAccount()
 		if err != nil {
 			panic(err)
 		}
