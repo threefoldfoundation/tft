@@ -193,7 +193,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 			default: //don't block
 			}
 		}
-		if receivedFrom > 0 {
+		if receivedFrom >= 0 {
 			//Remove the channel from the list
 			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
 			responseChannels = responseChannels[:len(responseChannels)-1]
