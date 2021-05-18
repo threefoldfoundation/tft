@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"

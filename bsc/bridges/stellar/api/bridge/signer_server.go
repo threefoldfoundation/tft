@@ -287,11 +287,7 @@ func (s *SignerService) FetchTransactions(ctx context.Context, cursor string, ha
 			opRequest.Cursor = s.cursor
 		}
 		if len(response.Embedded.Records) == 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(10 * time.Second):
-			}
+			return nil
 		}
 
 	}
