@@ -3,7 +3,9 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,13 +18,14 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon/effects"
+	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )
 
 const (
-	Protocol = protocol.ID("/p2p/rpc/signer")
+	Protocol         = protocol.ID("/p2p/rpc/signer")
+	stellarPageLimit = 100
 )
 
 type SignRequest struct {
@@ -40,16 +43,19 @@ type SignResponse struct {
 }
 
 type SignerService struct {
-	network        string
-	kp             *keypair.Full
-	bridgeContract *BridgeContract
+	network               string
+	kp                    *keypair.Full
+	bridgeContract        *BridgeContract
+	knownTransactionMemos map[string]struct{}
+	bridgeMasterAddress   string
+	cursor                string
 }
 
-func NewSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) error {
+func NewSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, addr := range host.Addrs() {
@@ -57,8 +63,8 @@ func NewSignerServer(host host.Host, network, secret string, bridgeContract *Bri
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	_, err = newSignerServer(host, network, secret, bridgeContract)
-	return err
+	_, signer, err := newSignerServer(host, network, secret, bridgeMasterAddress, bridgeContract)
+	return signer, err
 }
 
 func (s *SignerService) Sign(ctx context.Context, request SignRequest, response *SignResponse) error {
@@ -111,6 +117,12 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		if paymentOperation.Amount != xdr.Int64(withdraw.Event.Tokens.Int64()) {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
+
+		err = s.checkExistingTransactionHash(txn)
+		if err != nil {
+			log.Error("error while checking transaction hash", "err", err.Error())
+			return err
+		}
 	}
 
 	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
@@ -128,22 +140,91 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 	return nil
 }
 
-func newSignerServer(host host.Host, network, secret string, bridgeContract *BridgeContract) (*gorpc.Server, error) {
+func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) error {
+	txMemo, err := txn.Memo().ToXDR()
+	if err != nil {
+		return err
+	}
+
+	// only check transaction with hash memos
+	if txMemo.Type != xdr.MemoTypeMemoHash {
+		return nil
+	}
+
+	hashMemo := txn.Memo().(txnbuild.MemoHash)
+	txMemoString := hex.EncodeToString(hashMemo[:])
+
+	_, ok := s.knownTransactionMemos[txMemoString]
+	if ok {
+		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+	}
+
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err = s.ScanBridgeAccount()
+	if err != nil {
+		return err
+	}
+
+	_, ok = s.knownTransactionMemos[txMemoString]
+	if ok {
+		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+	}
+	log.Info("transaction not found")
+
+	return nil
+}
+
+func (s *SignerService) ScanBridgeAccount() error {
+	if s.bridgeMasterAddress == "" {
+		return errors.New("no master bridge account set, aborting now")
+	}
+
+	transactionHandler := func(tx hProtocol.Transaction) {
+		if tx.MemoType != "hash" {
+			return
+		}
+
+		bytes, err := base64.StdEncoding.DecodeString(tx.Memo)
+		if err != nil {
+			return
+		}
+		memoAsHex := hex.EncodeToString(bytes)
+
+		_, ok := s.knownTransactionMemos[memoAsHex]
+		if !ok {
+			log.Info("found", "x", memoAsHex)
+			// add the transaction memo to the list of known transaction memos
+			s.knownTransactionMemos[memoAsHex] = struct{}{}
+		}
+	}
+
+	err := s.FetchTransactions(context.Background(), s.cursor, transactionHandler)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
 	full, err := keypair.ParseFull(secret)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	log.Debug("wallet address", "address", full.Address())
 	server := gorpc.NewServer(host, Protocol)
 
 	signer := SignerService{
-		network:        network,
-		kp:             full,
-		bridgeContract: bridgeContract,
+		network:               network,
+		kp:                    full,
+		bridgeContract:        bridgeContract,
+		bridgeMasterAddress:   bridgeMasterAddress,
+		knownTransactionMemos: make(map[string]struct{}),
 	}
 
 	err = server.Register(&signer)
-	return server, err
+	return server, &signer, err
 }
 
 // getNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
@@ -170,19 +251,45 @@ func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
 	}
 }
 
-func (s *SignerService) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
+func (s *SignerService) FetchTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) error {
 	client, err := s.getHorizonClient()
 	if err != nil {
-		return effects, err
+		return err
 	}
 
-	effectsReq := horizonclient.EffectRequest{
-		ForTransaction: txHash,
+	opRequest := horizonclient.TransactionRequest{
+		ForAccount:    s.bridgeMasterAddress,
+		IncludeFailed: false,
+		Cursor:        s.cursor,
+		Limit:         stellarPageLimit,
 	}
-	effects, err = client.Effects(effectsReq)
-	if err != nil {
-		return effects, err
+	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
+
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "error", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+
+		}
+		for _, tx := range response.Embedded.Records {
+			handler(tx)
+			s.cursor = tx.PagingToken()
+			opRequest.Cursor = s.cursor
+		}
+		if len(response.Embedded.Records) == 0 {
+			return nil
+		}
+
 	}
 
-	return effects, nil
 }

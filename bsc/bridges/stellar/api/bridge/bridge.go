@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -310,7 +309,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					}
 				}
 
-				log.Info("Going to save height")
 				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
 				if err != nil {
 					log.Error("error occured saving blockheight", "error", err)
