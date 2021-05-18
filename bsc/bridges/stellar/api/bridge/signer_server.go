@@ -46,11 +46,11 @@ type SignerService struct {
 	kp                    *keypair.Full
 	bridgeContract        *BridgeContract
 	knownTransactionMemos map[string]struct{}
-	brideMasterAddress    string
+	bridgeMasterAddress   string
 	cursor                string
 }
 
-func NewSignerServer(host host.Host, network, secret, brideMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
+func NewSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
@@ -62,7 +62,7 @@ func NewSignerServer(host host.Host, network, secret, brideMasterAddress string,
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	_, signer, err := newSignerServer(host, network, secret, brideMasterAddress, bridgeContract)
+	_, signer, err := newSignerServer(host, network, secret, bridgeMasterAddress, bridgeContract)
 	return signer, err
 }
 
@@ -174,7 +174,7 @@ func (s *SignerService) checkExistingTransactionHash(txn *txnbuild.Transaction) 
 }
 
 func (s *SignerService) ScanBridgeAccount() error {
-	if s.brideMasterAddress == "" {
+	if s.bridgeMasterAddress == "" {
 		return errors.New("no master bridge account set, aborting now")
 	}
 	log.Info("scanning bridge account")
@@ -186,7 +186,7 @@ func (s *SignerService) ScanBridgeAccount() error {
 	}
 
 	opRequest := horizonclient.TransactionRequest{
-		ForAccount:    s.brideMasterAddress,
+		ForAccount:    s.bridgeMasterAddress,
 		IncludeFailed: false,
 		Cursor:        s.cursor,
 		Limit:         stellarPageLimit,
@@ -238,7 +238,7 @@ func (s *SignerService) ScanBridgeAccount() error {
 	return nil
 }
 
-func newSignerServer(host host.Host, network, secret, brideMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
+func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
 	full, err := keypair.ParseFull(secret)
 	if err != nil {
 		return nil, nil, err
@@ -250,7 +250,7 @@ func newSignerServer(host host.Host, network, secret, brideMasterAddress string,
 		network:               network,
 		kp:                    full,
 		bridgeContract:        bridgeContract,
-		brideMasterAddress:    brideMasterAddress,
+		bridgeMasterAddress:   bridgeMasterAddress,
 		knownTransactionMemos: make(map[string]struct{}),
 	}
 
