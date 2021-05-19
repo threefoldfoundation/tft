@@ -137,8 +137,8 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return errors.Wrap(err, "failed to build transaction")
 	}
 
-	// check if a similar transaction was made before
-	exists, err := w.stellarTransactionStorage.TransactionHashExists(tx)
+	// check if a similar transaction with a memo was made before
+	exists, err := w.stellarTransactionStorage.TransactionWithMemoExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 	}
@@ -203,6 +203,11 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 		return errors.Wrap(err, "error submitting transaction")
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
+
+	w.stellarTransactionStorage.StoreTransactionWithMemo(tx)
+	if err != nil {
+		return errors.Wrap(err, "failed to store transaction with memo")
+	}
 
 	return nil
 }

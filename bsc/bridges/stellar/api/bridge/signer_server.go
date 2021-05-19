@@ -142,7 +142,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionHashExists(txn)
+		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -196,7 +196,7 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionHashExists(txn)
+		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
