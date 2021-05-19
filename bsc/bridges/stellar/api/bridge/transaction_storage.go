@@ -44,9 +44,9 @@ func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transact
 	hashMemo := txn.Memo().(txnbuild.MemoHash)
 	txMemoString := hex.EncodeToString(hashMemo[:])
 
-	_, ok := s.knownTransactionMemos[txMemoString]
-	if ok {
-		return true, nil
+	_, exists = s.knownTransactionMemos[txMemoString]
+	if exists {
+		return
 	}
 
 	// trigger a rescan
@@ -56,11 +56,10 @@ func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transact
 		return
 	}
 
-	_, ok = s.knownTransactionMemos[txMemoString]
-	if ok {
-		return true, nil
+	_, exists = s.knownTransactionMemos[txMemoString]
+	if !exists {
+		log.Info("transaction not found")
 	}
-	log.Info("transaction not found")
 
 	return
 }
