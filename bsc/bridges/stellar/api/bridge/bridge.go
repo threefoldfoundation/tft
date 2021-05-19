@@ -222,6 +222,11 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	// - Monitor the Bridge Stellar account and initiate Minting transactions accordingly
 	// - Monitor the Contract for Withdrawal events and initiate a Withdrawal transaction accordingly
 	if !bridge.config.Follower {
+		// Scan bridge account for outgoing transactions to avoid double withdraws or refunds
+		if err := bridge.wallet.ScanBridgeAccount(); err != nil {
+			panic(err)
+		}
+
 		// Monitor the bridge wallet for incoming transactions
 		// mint transactions on ERC20 if possible
 		go func() {

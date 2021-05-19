@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/effects"
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
@@ -37,6 +36,7 @@ type stellarWallet struct {
 	keypair *keypair.Full
 	network string
 	signerWallet
+	stellarTransactionStorage *StellarTransactionStorage
 }
 
 type signerWallet struct {
@@ -51,9 +51,11 @@ func newStellarWallet(network, seed string) (*stellarWallet, error) {
 		return nil, err
 	}
 
+	stellarTransactionStorage := NewStellarTransactionStorage(network, kp.Address())
 	w := &stellarWallet{
-		keypair: kp,
-		network: network,
+		keypair:                   kp,
+		network:                   network,
+		stellarTransactionStorage: stellarTransactionStorage,
 	}
 
 	return w, nil
@@ -118,6 +120,15 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	if err != nil {
 		return errors.Wrap(err, "failed to build transaction")
 	}
+
+	// check if a similar transaction was made before
+	// if there was, return nil because we don't execute the transaction and this is not an error
+	err = w.stellarTransactionStorage.CheckForExistingTransactionHash(tx)
+	if err != nil {
+		log.Info("Transaction with this hash already executed, skipping now..")
+		return nil
+	}
+
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return errors.Wrap(err, "failed to get horizon client")
@@ -319,7 +330,11 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 
 }
 
-func (w *stellarWallet) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
+func (w *stellarWallet) ScanBridgeAccount() error {
+	return w.stellarTransactionStorage.ScanBridgeAccount()
+}
+
+func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return effects, err
