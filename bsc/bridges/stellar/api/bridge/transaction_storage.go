@@ -47,13 +47,7 @@ func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbui
 		return
 	}
 
-	// check again if memo hash exists now after a rescan
-	exists, err = s.transactionWithMemoExists(txn)
-	if err != nil {
-		return
-	}
-
-	return
+	return s.transactionWithMemoExists(txn)
 }
 
 func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
@@ -63,9 +57,9 @@ func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Tran
 	}
 	log.Info("checking tx with", "memo", memo)
 
-	_, ok := s.knownTransactionWithMemos[memo]
-	if ok {
-		return true, nil
+	_, exists = s.knownTransactionWithMemos[memo]
+	if !exists {
+		log.Info("transaction not found")
 	}
 
 	return
