@@ -23,6 +23,7 @@ const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the tfchain network
 	EthBlockDelay = 3
+	// 50 TFT with a precision of 7 decimals
 	DepositFee    = 500000000
 	BridgeNetwork = "stellar"
 )
@@ -89,7 +90,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		}
 	}
 	var depositFee big.Int
-	depositFee.SetInt64(DepositFee) // 50 TFT with a precision of 7decimals
+	depositFee.SetInt64(DepositFee)
 	bridge := &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
