@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -30,16 +29,16 @@ func NewStellarTransactionStorage(network, addressToScan string) *StellarTransac
 	}
 }
 
-func (s *StellarTransactionStorage) CheckForExistingTransactionHash(txn *txnbuild.Transaction) error {
+func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transaction) (error, bool) {
 	log.Info("checking tx hash")
 	txMemo, err := txn.Memo().ToXDR()
 	if err != nil {
-		return err
+		return err, false
 	}
 
 	// only check transaction with hash memos
 	if txMemo.Type != xdr.MemoTypeMemoHash {
-		return nil
+		return nil, false
 	}
 
 	hashMemo := txn.Memo().(txnbuild.MemoHash)
@@ -47,23 +46,23 @@ func (s *StellarTransactionStorage) CheckForExistingTransactionHash(txn *txnbuil
 
 	_, ok := s.knownTransactionMemos[txMemoString]
 	if ok {
-		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+		return nil, true
 	}
 
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
 	err = s.ScanBridgeAccount()
 	if err != nil {
-		return err
+		return err, false
 	}
 
 	_, ok = s.knownTransactionMemos[txMemoString]
 	if ok {
-		return fmt.Errorf("transaction with memo %s already exists on bridge account %s", txMemoString, txn.SourceAccount().AccountID)
+		return nil, true
 	}
 	log.Info("transaction not found")
 
-	return nil
+	return nil, false
 }
 
 func (s *StellarTransactionStorage) ScanBridgeAccount() error {

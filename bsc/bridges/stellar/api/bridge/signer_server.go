@@ -14,6 +14,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )
@@ -111,10 +112,15 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
-		err = s.stellarTransactionStorage.CheckForExistingTransactionHash(txn)
+		// check if a similar transaction was made before
+		err, exists := s.stellarTransactionStorage.TransactionHashExists(txn)
 		if err != nil {
-			log.Error("error while checking transaction hash", "err", err.Error())
-			return err
+			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+		}
+		// if the transaction exists, return with error
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping now..")
+			return fmt.Errorf("transaction with hash already exists")
 		}
 	}
 

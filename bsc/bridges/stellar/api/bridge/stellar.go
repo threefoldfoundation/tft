@@ -122,9 +122,12 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	}
 
 	// check if a similar transaction was made before
-	// if there was, return nil because we don't execute the transaction and this is not an error
-	err = w.stellarTransactionStorage.CheckForExistingTransactionHash(tx)
+	err, exists := w.stellarTransactionStorage.TransactionHashExists(tx)
 	if err != nil {
+		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+	}
+	// if the transaction exists, return with nil error
+	if exists {
 		log.Info("Transaction with this hash already executed, skipping now..")
 		return nil
 	}
