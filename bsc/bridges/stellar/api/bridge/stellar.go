@@ -122,7 +122,7 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	}
 
 	// check if a similar transaction was made before
-	err, exists := w.stellarTransactionStorage.TransactionHashExists(tx)
+	exists, err := w.stellarTransactionStorage.TransactionHashExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 	}

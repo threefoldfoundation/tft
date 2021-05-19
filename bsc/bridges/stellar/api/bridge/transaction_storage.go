@@ -29,16 +29,16 @@ func NewStellarTransactionStorage(network, addressToScan string) *StellarTransac
 	}
 }
 
-func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transaction) (error, bool) {
+func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	log.Info("checking tx hash")
 	txMemo, err := txn.Memo().ToXDR()
 	if err != nil {
-		return err, false
+		return
 	}
 
 	// only check transaction with hash memos
 	if txMemo.Type != xdr.MemoTypeMemoHash {
-		return nil, false
+		return
 	}
 
 	hashMemo := txn.Memo().(txnbuild.MemoHash)
@@ -46,23 +46,23 @@ func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transact
 
 	_, ok := s.knownTransactionMemos[txMemoString]
 	if ok {
-		return nil, true
+		return true, nil
 	}
 
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
 	err = s.ScanBridgeAccount()
 	if err != nil {
-		return err, false
+		return
 	}
 
 	_, ok = s.knownTransactionMemos[txMemoString]
 	if ok {
-		return nil, true
+		return true, nil
 	}
 	log.Info("transaction not found")
 
-	return nil, false
+	return
 }
 
 func (s *StellarTransactionStorage) ScanBridgeAccount() error {

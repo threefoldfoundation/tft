@@ -113,7 +113,7 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		}
 
 		// check if a similar transaction was made before
-		err, exists := s.stellarTransactionStorage.TransactionHashExists(txn)
+		exists, err := s.stellarTransactionStorage.TransactionHashExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
