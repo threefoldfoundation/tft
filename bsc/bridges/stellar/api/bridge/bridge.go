@@ -310,14 +310,17 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 							continue
 						}
+
+						// only save blockheight when we have a processed a withdrawal
+						log.Info("saving blockheight now")
+						err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
+						if err != nil {
+							log.Error("error occured saving blockheight", "error", err)
+						}
+
 						// forget about our tx
 						delete(txMap, id)
 					}
-				}
-
-				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
-				if err != nil {
-					log.Error("error occured saving blockheight", "error", err)
 				}
 
 				bridge.mut.Unlock()
