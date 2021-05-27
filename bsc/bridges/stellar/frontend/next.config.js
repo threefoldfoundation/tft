@@ -10,6 +10,7 @@ module.exports = {
     TFT_ASSET_ISSUER: process.env.TFT_ASSET_ISSUER,
     CONTRACT_ADDRESS: process.env.CONTRACT_ADDRESS,
     BRIDGE_TFT_ADDRESS: process.env.BRIDGE_TFT_ADDRESS,
-    CHAIN_ID: process.env.CHAIN_ID
+    CHAIN_ID: process.env.CHAIN_ID,
+    ENABLE_DEPOSIT: process.env.ENABLE_DEPOSIT
   }
 }

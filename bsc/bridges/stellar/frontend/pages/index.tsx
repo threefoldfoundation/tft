@@ -19,6 +19,7 @@ import { Withdraw } from '../components/Withdraw'
 
 import { toast, ToastContainer } from 'react-nextjs-toast'
 
+const ENABLE_DEPOSIT = parseInt(process.env.ENABLE_DEPOSIT) === 1 ? true : false
 const CONTRACT_ADDRESS_TESTNET = process.env.CONTRACT_ADDRESS as string
 const STELLAR_ENV = process.env.STELLAR_ENV as string
 import abi from '../tokenabi.json'
@@ -181,10 +182,14 @@ function App() {
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', marginTop: 20 }}>
-              <Button style={{ width: '50%', marginTop: 20, alignSelf: 'center' }} color='primary' variant='outlined' onClick={() => setOpenDepositDialog(true)}>
-                Deposit from Stellar
-              </Button>
-              <DepositDialog address={account} open={openDepositDialog} handleClose={handleCloseDespoitDialog} />
+              {ENABLE_DEPOSIT && (
+                <>
+                  <Button style={{ width: '50%', marginTop: 20, alignSelf: 'center' }} color='primary' variant='outlined' onClick={() => setOpenDepositDialog(true)}>
+                    Deposit from Stellar
+                  </Button>
+                  <DepositDialog address={account} open={openDepositDialog} handleClose={handleCloseDespoitDialog} />
+                </>
+              )}
               <Button style={{ width: '50%', marginTop: 20, alignSelf: 'center' }} color='default' variant='outlined' onClick={() => setOpenWithdrawDialog(true)}>
                 Withdraw to Stellar
               </Button>
