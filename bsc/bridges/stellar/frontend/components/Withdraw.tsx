@@ -21,7 +21,7 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
   // Initialize balance
   useEffect(() => {
     if (balance) {
-      setAmount(parseInt(balance) / 1e7)
+      setAmount(parseInt(balance, 10) / 10e6)
     }
   }, [balance])
 
@@ -64,7 +64,7 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
   const handleAmountChange = (e) => {
     setAmountError('')
     try {
-      const a = parseInt(e.target.value)
+      const a = parseFloat(e.target.value)
       if (isNaN(a)) {
         setAmount(0)
       } else {
@@ -72,6 +72,7 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
       }
     } catch (err) {
       setAmountError(err)
+      setAmount(0)
     }
   }
 
@@ -90,10 +91,10 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
           <FormControl>
           <InputLabel htmlFor="StellarAddress">Stellar Address</InputLabel>
           <Input 
-              value={stellarAddress}
-              onChange={handleStellarAddressChange}
-              id="StellarAddress"
-              aria-describedby="my-helper-text"
+            value={stellarAddress}
+            onChange={handleStellarAddressChange}
+            id="StellarAddress"
+            aria-describedby="my-helper-text"
           />
           <FormHelperText id="my-helper-text">Enter a valid Stellar Address</FormHelperText>
           {stellarAddressError && (
@@ -104,11 +105,11 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
           <FormControl>
           <InputLabel htmlFor="StellarAddress">Amount</InputLabel>
           <Input 
-              value={amount}
-              onChange={handleAmountChange}
-              id="amount"
-              aria-describedby="my-helper-text"
-              type='float'
+            value={amount}
+            onChange={handleAmountChange}
+            id="amount"
+            type='number'
+            inputProps={{step: 0.01}}
           />
           <FormHelperText id="my-helper-text">Enter an amount, balance: {balance / 1e7}</FormHelperText>
           {amountError && (

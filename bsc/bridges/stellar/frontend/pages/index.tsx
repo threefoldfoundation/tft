@@ -119,7 +119,7 @@ function App() {
     Contract.setProvider(library.provider)
     const contract = new Contract(abi, CONTRACT_ADDRESS_TESTNET)
 
-    contract.methods.withdraw(amount*1e7, stellarAddress, STELLAR_ENV).send({ from: account })
+    contract.methods.withdraw(amount*10e6, stellarAddress, STELLAR_ENV).send({ from: account })
       .then(res => {
         toast.notify("Withdrawal success", { type: 'success' })
         contract.methods.balanceOf(account).call({ from: account })

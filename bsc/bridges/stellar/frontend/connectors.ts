@@ -15,7 +15,6 @@ const RPC_URLS: { [chainId: number]: string } = {
 }
 
 const chainID = process.env.CHAIN_ID
-debugger
 export const injected = new InjectedConnector({ supportedChainIds: [parseInt(chainID)] })
 
 export const network = new NetworkConnector({
