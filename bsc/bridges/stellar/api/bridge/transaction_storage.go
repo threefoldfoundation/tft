@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -15,37 +16,27 @@ import (
 )
 
 type StellarTransactionStorage struct {
-	network               string
-	addressToScan         string
-	knownTransactionMemos map[string]struct{}
-	stellarCursor         string
+	network                   string
+	addressToScan             string
+	knownTransactionWithMemos map[string]struct{}
+	stellarCursor             string
 }
 
 func NewStellarTransactionStorage(network, addressToScan string) *StellarTransactionStorage {
 	return &StellarTransactionStorage{
-		network:               network,
-		addressToScan:         addressToScan,
-		knownTransactionMemos: make(map[string]struct{}),
+		network:                   network,
+		addressToScan:             addressToScan,
+		knownTransactionWithMemos: make(map[string]struct{}),
 	}
 }
 
-func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	log.Info("checking tx hash")
-	txMemo, err := txn.Memo().ToXDR()
+func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
+	return s.transactionWithMemoExists(txn)
+}
+
+func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
+	exists, err = s.transactionWithMemoExists(txn)
 	if err != nil {
-		return
-	}
-
-	// only check transaction with hash memos
-	if txMemo.Type != xdr.MemoTypeMemoHash {
-		return
-	}
-
-	hashMemo := txn.Memo().(txnbuild.MemoHash)
-	txMemoString := hex.EncodeToString(hashMemo[:])
-
-	_, exists = s.knownTransactionMemos[txMemoString]
-	if exists {
 		return
 	}
 
@@ -56,7 +47,17 @@ func (s *StellarTransactionStorage) TransactionHashExists(txn *txnbuild.Transact
 		return
 	}
 
-	_, exists = s.knownTransactionMemos[txMemoString]
+	return s.transactionWithMemoExists(txn)
+}
+
+func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
+	memo, err := s.memoToString(txn)
+	if err != nil {
+		return
+	}
+	log.Info("checking tx with", "memo", memo)
+
+	_, exists = s.knownTransactionWithMemos[memo]
 	if !exists {
 		log.Info("transaction not found")
 	}
@@ -68,6 +69,7 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 	if s.addressToScan == "" {
 		return errors.New("no master bridge account set, aborting now")
 	}
+	log.Info("scanning account ", "account", s.addressToScan)
 
 	transactionHandler := func(tx hProtocol.Transaction) {
 		if tx.MemoType != "hash" && tx.MemoType != "return" {
@@ -80,11 +82,11 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 		}
 		memoAsHex := hex.EncodeToString(bytes)
 
-		_, ok := s.knownTransactionMemos[memoAsHex]
+		_, ok := s.knownTransactionWithMemos[memoAsHex]
 		if !ok {
 			log.Info("storing memo hash in known transaction storage", "hash", memoAsHex)
 			// add the transaction memo to the list of known transaction memos
-			s.knownTransactionMemos[memoAsHex] = struct{}{}
+			s.knownTransactionWithMemos[memoAsHex] = struct{}{}
 		}
 	}
 
@@ -137,6 +139,43 @@ func (s *StellarTransactionStorage) FetchTransactions(ctx context.Context, curso
 
 	}
 
+}
+
+func (s *StellarTransactionStorage) StoreTransactionWithMemo(txn *txnbuild.Transaction) error {
+	memo, err := s.memoToString(txn)
+	if err != nil {
+		return err
+	}
+
+	_, ok := s.knownTransactionWithMemos[memo]
+	if !ok {
+		log.Info("storing memo hash in known transaction storage", "hash", memo)
+		// add the transaction memo to the list of known transaction memos
+		s.knownTransactionWithMemos[memo] = struct{}{}
+		return nil
+	}
+
+	return fmt.Errorf("transaction with memo already exists")
+}
+
+func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txMemoString string, err error) {
+	txMemo, err := txn.Memo().ToXDR()
+	if err != nil {
+		return "", err
+	}
+
+	switch txMemo.Type {
+	case xdr.MemoTypeMemoHash:
+		hashMemo := txn.Memo().(txnbuild.MemoHash)
+		txMemoString = hex.EncodeToString(hashMemo[:])
+	case xdr.MemoTypeMemoReturn:
+		hashMemo := txn.Memo().(txnbuild.MemoReturn)
+		txMemoString = hex.EncodeToString(hashMemo[:])
+	default:
+		return "", fmt.Errorf("transaction hash type not supported")
+	}
+
+	return
 }
 
 // GetHorizonClient gets the horizon client based on the transaction storage's network

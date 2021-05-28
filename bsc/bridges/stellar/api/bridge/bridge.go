@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -16,10 +17,14 @@ import (
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 )
 
+var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
+
 const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the tfchain network
 	EthBlockDelay = 3
+	// 50 TFT with a precision of 7 decimals
+	DepositFee    = 500000000
 	BridgeNetwork = "stellar"
 )
 
@@ -85,7 +90,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		}
 	}
 	var depositFee big.Int
-	depositFee.SetInt64(500000000) // 50 TFT with a precision of 7decimals
+	depositFee.SetInt64(DepositFee)
 	bridge := &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
@@ -120,7 +125,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 
 	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
-		return
+		return errInsufficientDepositAmount
 	}
 	amount := &big.Int{}
 	amount.Sub(depositedAmount, bridge.depositFee)
@@ -305,7 +310,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 						hash := we.TxHash()
 						log.Info("Create a withdraw tx", "ethTx", hash)
 
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash)
+						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "")
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 							continue

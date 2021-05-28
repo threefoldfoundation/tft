@@ -12,8 +12,10 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
@@ -29,6 +31,7 @@ type SignRequest struct {
 	RequiredSignatures int
 	Receiver           common.Address
 	Block              uint64
+	Message            string
 }
 
 type SignResponse struct {
@@ -72,7 +75,37 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		return fmt.Errorf("provided transaction is of wrong type")
 	}
 
-	log.Info("address to check", "address", request.Receiver)
+	if request.Block != 0 {
+		err := s.validateWithdrawal(request, txn)
+		if err != nil {
+			return err
+		}
+	} else if request.Message != "" {
+		// If the signrequest has a message attached we know it's a refund transaction
+		err := s.validateRefundTransaction(request, txn)
+		if err != nil {
+			return err
+		}
+	}
+
+	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
+	if err != nil {
+		return err
+	}
+
+	signatures := txn.Signatures()
+	if len(signatures) != 1 {
+		return fmt.Errorf("invalid number of signatures on the transaction")
+	}
+
+	response.Address = s.kp.Address()
+	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
+	return nil
+}
+
+func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Transaction) error {
+	log.Info("Validating withdrawal request...")
+
 	withdraw, err := s.bridgeContract.tftContract.filter.FilterWithdraw(&bind.FilterOpts{Start: request.Block}, []common.Address{request.Receiver})
 	if err != nil {
 		return err
@@ -82,11 +115,7 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		return fmt.Errorf("no withdraw event found")
 	}
 
-	log.Info("Withdraw event found", "event", withdraw)
-
-	log.Info("got amount", "amount", withdraw.Event.Tokens.Uint64())
-	log.Info("got receiver", "receiver", withdraw.Event.BlockchainAddress)
-	log.Info("got network", "network", withdraw.Event.Network)
+	log.Info("validating withdrawal", "amount", withdraw.Event.Tokens.Uint64(), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
 
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
@@ -113,7 +142,7 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionHashExists(txn)
+		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -124,18 +153,59 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 		}
 	}
 
-	txn, err = txn.Sign(s.getNetworkPassPhrase(), s.kp)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	signatures := txn.Signatures()
-	if len(signatures) != 1 {
-		return fmt.Errorf("invalid number of signatures on the transaction")
-	}
+func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnbuild.Transaction) error {
+	log.Info("Validating refund request...")
 
-	response.Address = s.kp.Address()
-	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
+	for _, op := range txn.Operations() {
+		opXDR, err := op.BuildXDR()
+		if err != nil {
+			return fmt.Errorf("failed to build operation xdr")
+		}
+
+		if opXDR.Body.Type != xdr.OperationTypePayment {
+			continue
+		}
+
+		paymentOperation, ok := opXDR.Body.GetPaymentOp()
+		if !ok {
+			return fmt.Errorf("failed to get payment operation")
+		}
+
+		destinationAccount := paymentOperation.Destination.ToAccountId()
+
+		txnEffectsFromMessage, err := s.getTransactionEffects(request.Message)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve transaction from message")
+		}
+
+		// Check if the source transaction actually was sent from the account that we are trying to credit
+		// This way we can infer that it is indeed a refund transaction
+		for _, effect := range txnEffectsFromMessage.Embedded.Records {
+			if effect.GetType() == "account_debited" {
+				if destinationAccount.Address() != effect.GetAccount() {
+					return fmt.Errorf("destination is not correct, got %s, need user wallet %s", destinationAccount.Address(), effect.GetAccount())
+				}
+
+				if paymentOperation.Amount > DepositFee {
+					return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %d but we received %d", DepositFee, paymentOperation.Amount)
+				}
+			}
+		}
+
+		// check if a similar transaction was made before
+		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		if err != nil {
+			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+		}
+		// if the transaction exists, return with error
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping now..")
+			return fmt.Errorf("transaction with hash already exists")
+		}
+	}
 	return nil
 }
 
@@ -173,5 +243,34 @@ func (s *SignerService) getNetworkPassPhrase() string {
 		return network.PublicNetworkPassphrase
 	default:
 		return network.TestNetworkPassphrase
+	}
+}
+
+func (s *SignerService) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
+	client, err := s.getHorizonClient()
+	if err != nil {
+		return effects, err
+	}
+
+	effectsReq := horizonclient.EffectRequest{
+		ForTransaction: txHash,
+	}
+	effects, err = client.Effects(effectsReq)
+	if err != nil {
+		return effects, err
+	}
+
+	return effects, nil
+}
+
+// GetHorizonClient gets the horizon client based on the transaction storage's network
+func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
+	switch s.network {
+	case "testnet":
+		return horizonclient.DefaultTestNetClient, nil
+	case "production":
+		return horizonclient.DefaultPublicNetClient, nil
+	default:
+		return nil, errors.New("network is not supported")
 	}
 }
