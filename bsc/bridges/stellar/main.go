@@ -42,6 +42,8 @@ func main() {
 
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
+	flag.StringVar(&bridgeCfg.BridgeMasterAddress, "master", "", "master stellar public address")
+
 	flag.Parse()
 
 	//TODO cfg.Validate()
@@ -64,7 +66,7 @@ func main() {
 
 	log.Debug("Chain ID %+v \n", id)
 
-	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed)
+	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress)
 	if err != nil {
 		panic(err)
 	}
@@ -90,7 +92,13 @@ func main() {
 	}
 
 	if bridgeCfg.Follower {
-		err = bridge.NewSignerServer(host, &bridgeCfg.StellarConfig, br.GetBridgeContract())
+		signer, err := bridge.NewSignerServer(host, bridgeCfg.StellarConfig, bridgeCfg.BridgeMasterAddress, br.GetBridgeContract())
+		if err != nil {
+			panic(err)
+		}
+
+		// Initially scan bridge account for stellar transactions
+		err = signer.ScanBridgeAccount()
 		if err != nil {
 			panic(err)
 		}

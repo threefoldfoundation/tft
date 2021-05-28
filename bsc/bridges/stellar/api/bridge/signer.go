@@ -18,6 +18,7 @@ import (
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	secio "github.com/libp2p/go-libp2p-secio"
 	libp2ptls "github.com/libp2p/go-libp2p-tls"
+	"github.com/libp2p/go-libp2p/config"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
 )
@@ -45,7 +46,7 @@ func (c *SignerConfig) Valid() error {
 	return nil
 }
 
-func NewHost(ctx context.Context, secret string) (host.Host, routing.PeerRouting, error) {
+func NewHost(ctx context.Context, secret string, filteredID string) (host.Host, routing.PeerRouting, error) {
 	seed, err := strkey.Decode(strkey.VersionByteSeed, secret)
 	if err != nil {
 		return nil, nil, err
@@ -62,15 +63,22 @@ func NewHost(ctx context.Context, secret string) (host.Host, routing.PeerRouting
 		return nil, nil, err
 	}
 
-	return createLibp2pHost(ctx, privK)
+	var filteredPeerID peer.ID
+	if filteredID != "" {
+		filteredPeerID, err = getPeerIDFromStellarAddress(filteredID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return createLibp2pHost(ctx, privK, filteredPeerID)
 }
 
-func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey) (host.Host, routing.PeerRouting, error) {
-
+func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey, filteredID peer.ID) (host.Host, routing.PeerRouting, error) {
 	var idht *dht.IpfsDHT
 	var err error
-	libp2phost, err := libp2p.New(ctx,
-		// Use the keypair we generated
+
+	options := []config.Option{
 		libp2p.Identity(privateKey),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
@@ -103,7 +111,15 @@ func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey) (host.Host
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
 		libp2p.EnableAutoRelay(),
-	)
+	}
+
+	if filteredID != "" {
+		// filter on ID
+		filter := NewGater(filteredID)
+		options = append(options, libp2p.ConnectionGater(filter))
+	}
+
+	libp2phost, err := libp2p.New(ctx, options...)
 	// This connects to public bootstrappers
 	for _, addr := range dht.DefaultBootstrapPeers {
 		pi, _ := peer.AddrInfoFromP2pAddr(addr)
@@ -148,43 +164,64 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 }
 
 func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
-	ch := make(chan response)
-	defer close(ch)
 
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+
+	responseChannels := make([]chan response, 0, len(s.peers))
 	for _, addr := range s.peers {
-		go func(peerID peer.ID) {
+		respCh := make(chan response, 1)
+		responseChannels = append(responseChannels, respCh)
+		go func(peerID peer.ID, ch chan response) {
+			defer close(ch)
 			answer, err := s.sign(ctxWithTimeout, peerID, signRequest)
 
 			select {
 			case <-ctxWithTimeout.Done():
-			default:
-				ch <- response{answer: answer, err: err}
+			case ch <- response{answer: answer, err: err}:
 			}
-		}(addr)
+		}(addr, respCh)
+
 	}
 
 	var results []SignResponse
-	replies := 0
-loop:
-	for {
-		select {
-		case <-ctxWithTimeout.Done():
-			break loop
-		case reply := <-ch:
-			replies++
-			if reply.err != nil {
-				log.Error("failed to get signature from", "err", reply.err.Error())
-				continue
-			}
 
-			results = append(results, *reply.answer)
-			if len(results) == signRequest.RequiredSignatures || replies == len(s.peers) {
-				break loop
+	for len(responseChannels) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		receivedFrom := -1
+	responsechannelsLoop:
+		for i, responseChannel := range responseChannels {
+			select {
+			case reply := <-responseChannel:
+				receivedFrom = i
+				if reply.err != nil {
+					log.Error("failed to get signature from", "err", reply.err.Error())
+
+				} else {
+					if reply.answer != nil {
+						log.Info("got a valid reply from a signer")
+						results = append(results, *reply.answer)
+					}
+				}
+				break responsechannelsLoop
+			default: //don't block
 			}
 		}
+		if receivedFrom >= 0 {
+			//Remove the channel from the list
+			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
+			responseChannels = responseChannels[:len(responseChannels)-1]
+			//check if we have enough signatures
+			if len(results) == signRequest.RequiredSignatures {
+				break
+			}
+		} else {
+			time.Sleep(time.Millisecond * 100)
+		}
+
 	}
 
 	if len(results) != signRequest.RequiredSignatures {
@@ -195,7 +232,6 @@ loop:
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRequest) (*SignResponse, error) {
-	// if len(s.host.Peerstore().Addrs(id)) == 0 {}
 	if err := connectToPeer(ctx, s.host, s.router, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
 	}
@@ -209,7 +245,6 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRe
 }
 
 func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
-
 	versionbyte, pubkeydata, err := strkey.DecodeAny(address)
 	if err != nil {
 		return
@@ -228,7 +263,6 @@ func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
 }
 
 func connectToPeer(ctx context.Context, p2phost host.Host, hostRouting routing.PeerRouting, peerID peer.ID) (err error) {
-
 	findPeerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	peeraddrInfo, err := hostRouting.FindPeer(findPeerCtx, peerID)

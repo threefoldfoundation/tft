@@ -8,10 +8,13 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/stellar/go/amount"
+	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 )
 
 var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
@@ -50,6 +53,7 @@ type BridgeConfig struct {
 	RescanBridgeAccount     bool
 	PersistencyFile         string
 	Follower                bool
+	BridgeMasterAddress     string
 	StellarConfig
 }
 
@@ -75,14 +79,14 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		return nil, err
 	}
 
-	var wallet *stellarWallet
-	// Only create the stellar wallet if the bridge is a master bridge
-	if !config.Follower {
-		wallet, err = newStellarWallet(ctx, &config.StellarConfig, host, router)
-		if err != nil {
-			return nil, err
-		}
+	wallet, err := newStellarWallet(ctx, &config.StellarConfig, host, router)
+	if err != nil {
+		return nil, err
+	}
 
+	// Only create the stellar signer wallet if the bridge is a master bridge
+	if !config.Follower {
+		wallet.newSignerWallet(ctx, host, router)
 		log.Info(fmt.Sprintf("Stellar bridge account %s loaded on Stellar network %s", wallet.keypair.Address(), config.StellarNetwork))
 	}
 
@@ -96,7 +100,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		}
 	}
 	var depositFee big.Int
-	depositFee.SetInt64(DepositFee) // 50 TFT with a precision of 7decimals
+	depositFee.SetInt64(DepositFee)
 	bridge := &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
@@ -119,9 +123,6 @@ func (bridge *Bridge) Close() error {
 func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
-	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
-		return errInsufficientDepositAmount
-	}
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
 	if err != nil {
 		return
@@ -131,9 +132,76 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		// we already know this withdrawal address, so ignore the transaction
 		return
 	}
+
+	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
+		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
+		return errInsufficientDepositAmount
+	}
 	amount := &big.Int{}
 	amount.Sub(depositedAmount, bridge.depositFee)
 	return bridge.bridgeContract.Mint(receiver, amount, txID)
+}
+
+// validateTransaction validates a transaction before it will be confirmed
+func (bridge *Bridge) validateTransaction(txID *big.Int) error {
+	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
+	if err != nil {
+		log.Error("failed to fetch transaction from ms contract")
+		return err
+	}
+
+	var data struct {
+		Receiver common.Address
+		Tokens   *big.Int
+		Txid     string
+	}
+	err = bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(&data, tx.Data[4:])
+	if err != nil {
+		log.Error("failed to unpack token mint", "err", err)
+		return err
+	}
+
+	effects, err := bridge.wallet.getTransactionEffects(data.Txid)
+	if err != nil {
+		log.Error("error while fetching transaction effects:", err.Error())
+		return err
+	}
+
+	asset := bridge.wallet.GetAssetCodeAndIssuer()
+
+	totalAmount := 0
+	for _, effect := range effects.Embedded.Records {
+		// check if the effect account is the bridge master wallet address
+		found := effect.GetAccount() == bridge.config.BridgeMasterAddress
+
+		// if the effect is a deposit, add the amount to the total
+		if found && effect.GetType() == "account_credited" {
+			creditedEffect := effect.(horizoneffects.AccountCredited)
+			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
+				continue
+			}
+			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
+			if err != nil {
+				continue
+			}
+			totalAmount += int(parsedAmount)
+		}
+	}
+
+	if totalAmount == 0 {
+		return fmt.Errorf("transaction is not valid, we did not find a deposit to the master bridge address %s", bridge.config.BridgeMasterAddress)
+	}
+
+	depositedAmount := big.NewInt(int64(totalAmount))
+	// Subtract the deposit fee
+	amount := &big.Int{}
+	amount = amount.Sub(depositedAmount, bridge.depositFee)
+
+	if data.Tokens.Cmp(amount) > 0 {
+		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
+	}
+
+	return nil
 }
 
 // GetClient returns bridgecontract lightclient
@@ -169,9 +237,18 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	// - Monitor the Bridge Stellar account and initiate Minting transactions accordingly
 	// - Monitor the Contract for Withdrawal events and initiate a Withdrawal transaction accordingly
 	if !bridge.config.Follower {
+		// Scan bridge account for outgoing transactions to avoid double withdraws or refunds
+		if err := bridge.wallet.ScanBridgeAccount(); err != nil {
+			panic(err)
+		}
+
 		// Monitor the bridge wallet for incoming transactions
 		// mint transactions on ERC20 if possible
-		go bridge.wallet.MonitorBridgeAndMint(bridge.mint, bridge.blockPersistency)
+		go func() {
+			if err := bridge.wallet.MonitorBridgeAccountAndMint(ctx, bridge.mint, bridge.blockPersistency); err != nil {
+				panic(err)
+			}
+		}()
 
 		height, err := bridge.blockPersistency.GetHeight()
 		if err != nil {
@@ -181,6 +258,23 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		if height.LastHeight > EthBlockDelay {
 			lastHeight = height.LastHeight - EthBlockDelay
 		}
+
+		// Sync up any withdrawals made if the blockheight is manually set
+		// to a previous value
+		status, err := bridge.bridgeContract.lc.GetStatus()
+		if err != nil {
+			return err
+		}
+
+		if lastHeight < status.CurrentBlock {
+			// todo filter logs
+			go func() {
+				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, status.CurrentBlock); err != nil {
+					panic(err)
+				}
+			}()
+		}
+
 		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, lastHeight)
 	} else {
 		go bridge.bridgeContract.SubscribeSubmission(submissionChan)
@@ -191,9 +285,10 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		for {
 			select {
 			// Remember new withdraws
+			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
 			case we := <-withdrawChan:
 				if we.network == BridgeNetwork {
-					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), we.network)
+					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
 					txMap[we.txHash.String()] = we
 				} else {
 					log.Warn("ignoring withdrawal", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
@@ -201,9 +296,16 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			// If we get a new head, check every withdraw we have to see if it has matured
 			case submission := <-submissionChan:
 				log.Info("Submission Event seen", "txid", submission.TransactionId())
-				err := bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
+
+				err := bridge.validateTransaction(submission.TransactionId())
 				if err != nil {
-					log.Error("error occured during confirming transaction")
+					log.Error("error while validation transaction", "err", err)
+				} else {
+					log.Info("transaction validated, confirming now..")
+					err = bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
+					if err != nil {
+						log.Error("error occured during confirming transaction")
+					}
 				}
 			case head := <-heads:
 				bridge.mut.Lock()
@@ -218,18 +320,22 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 						hash := we.TxHash()
 						log.Info("Create a withdraw tx", "ethTx", hash)
 
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.network, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "", true)
+						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "", true)
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
+							continue
 						}
+
+						// only save blockheight when we have a processed a withdrawal
+						log.Info("saving blockheight now")
+						err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
+						if err != nil {
+							log.Error("error occured saving blockheight", "error", err)
+						}
+
 						// forget about our tx
 						delete(txMap, id)
 					}
-				}
-
-				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
-				if err != nil {
-					log.Error("error occured saving blockheight", "error", err)
 				}
 
 				bridge.mut.Unlock()

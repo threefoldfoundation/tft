@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -34,10 +35,15 @@ const (
 // stellarWallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
 type stellarWallet struct {
-	keypair        *keypair.Full
+	keypair                   *keypair.Full
+	config                    *StellarConfig
+	stellarTransactionStorage *StellarTransactionStorage
+	signerWallet
+}
+
+type signerWallet struct {
 	client         *SignersClient
 	signatureCount int
-	config         *StellarConfig
 }
 
 func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host, router routing.PeerRouting) (*stellarWallet, error) {
@@ -47,19 +53,24 @@ func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host
 		return nil, err
 	}
 
+	stellarTransactionStorage := NewStellarTransactionStorage(config.StellarNetwork, kp.Address())
 	w := &stellarWallet{
-		keypair: kp,
-		config:  config,
-		//client:  client,
+		keypair:                   kp,
+		config:                    config,
+		stellarTransactionStorage: stellarTransactionStorage,
 	}
 
-	account, err := w.GetAccountDetails(kp.Address())
+	return w, nil
+}
+
+func (w *stellarWallet) newSignerWallet(ctx context.Context, host host.Host, router routing.PeerRouting) error {
+	account, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var keys []string
 	for _, signer := range account.Signers {
-		if signer.Key == kp.Address() {
+		if signer.Key == w.keypair.Address() {
 			continue
 		}
 		keys = append(keys, signer.Key)
@@ -70,12 +81,12 @@ func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host
 
 	w.client, err = NewSignersClient(ctx, host, router, keys)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return w, nil
+	return nil
 }
 
-func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, network string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
+func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
@@ -192,28 +203,39 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 		return errors.Wrap(err, "failed to build transaction")
 	}
 
+	// check if a similar transaction with a memo was made before
+	exists, err := w.stellarTransactionStorage.TransactionWithMemoExists(tx)
+	if err != nil {
+		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+	}
+	// if the transaction exists, return with nil error
+	if exists {
+		log.Info("Transaction with this hash already executed, skipping now..")
+		return nil
+	}
+
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return errors.Wrap(err, "failed to get horizon client")
 	}
 
-	txnXDR, err := tx.Base64()
-	if err != nil {
-		return errors.Wrap(err, "failed to serialize transaction")
-	}
-
-	signReq.TxnXDR = txnXDR
-
-	signatures, err := w.client.Sign(ctx, signReq)
-	if err != nil {
-		return err
-	}
-
-	for _, signature := range signatures {
-		tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
+	// Only try to request signatures if there are signatures required
+	if w.signatureCount > 0 {
+		signatures, err := w.client.Sign(ctx, signReq)
 		if err != nil {
-			log.Error("Failed to add signature", "err", err.Error())
 			return err
+		}
+
+		if len(signatures) < w.signatureCount {
+			return fmt.Errorf("received %d signatures, needed %d", len(signatures), w.signatureCount)
+		}
+
+		for _, signature := range signatures {
+			tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
+			if err != nil {
+				log.Error("Failed to add signature", "err", err.Error())
+				return err
+			}
 		}
 	}
 
@@ -235,21 +257,30 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
 
+	w.stellarTransactionStorage.StoreTransactionWithMemo(tx)
+	if err != nil {
+		return errors.Wrap(err, "failed to store transaction with memo")
+	}
+
 	return nil
 }
 
 // mint handler
 type mint func(ERC20Address, *big.Int, string) error
 
-func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPersistency) error {
+//MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
+// the bridge account on the Stellar network for new transactions and calls the
+// mint function when a deposit is made
+func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
 		if !tx.Successful {
 			return
 		}
+		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
-			log.Error("error while decoding transaction memo:", err.Error())
+			log.Error("error decoding transaction memo", "error", err.Error())
 			return
 		}
 
@@ -284,7 +315,7 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 				depositedAmount := big.NewInt(int64(parsedAmount))
 
 				err = mintFn(ethAddress, depositedAmount, tx.Hash)
-				if err != nil {
+				for err != nil {
 					log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 					if err == errInsufficientDepositAmount {
 						log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", parsedAmount)
@@ -305,8 +336,15 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 								}
 							}
 						}
+						return
 					}
-					continue
+
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(10 * time.Second):
+						err = mintFn(ethAddress, depositedAmount, tx.Hash)
+					}
 				}
 				if w.config.StellarFeeWallet != "" {
 					log.Info("Trying to transfer the fees generated to the fee wallet", "address", w.config.StellarFeeWallet)
@@ -332,11 +370,17 @@ func (w *stellarWallet) MonitorBridgeAndMint(mintFn mint, persistency *ChainPers
 
 	// get saved cursor
 	blockHeight, err := persistency.GetHeight()
-	if err != nil {
-		return err
+	for err != nil {
+		log.Warn("Error getting the bridge persistency", "error", err)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(5 * time.Second):
+			blockHeight, err = persistency.GetHeight()
+		}
 	}
 
-	return w.StreamBridgeStellarTransactions(context.Background(), blockHeight.StellarCursor, transactionHandler)
+	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
 }
 
 // GetAccountDetails gets account details based an a Stellar address
@@ -363,8 +407,42 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 		ForAccount: w.keypair.Address(),
 		Cursor:     cursor,
 	}
+	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
 
-	return client.StreamTransactions(ctx, opRequest, handler)
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "error", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+
+		}
+		for _, tx := range response.Embedded.Records {
+			handler(tx)
+			opRequest.Cursor = tx.PagingToken()
+		}
+		if len(response.Embedded.Records) == 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(10 * time.Second):
+			}
+		}
+
+	}
+
+}
+
+func (w *stellarWallet) ScanBridgeAccount() error {
+	return w.stellarTransactionStorage.ScanBridgeAccount()
 }
 
 func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {

@@ -52,6 +52,8 @@ spec:
             value: {{ .Values.eth_network }}
           - name: ETH_CLIENT_URL
             value: {{ .Values.eth_client_url }}
+          - name: BRIDGE_MASTER_ADDRESS
+            value: {{ .Values.bridge_master_address }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--account", "$(ACCOUNT_JSON)",
@@ -60,6 +62,7 @@ spec:
             "--ethnetwork", "$(ETH_NETWORK)",
             "--contract", "$(CONTRACT_ADDRESS)",
             "--mscontract", "$(MS_CONTRACT_ADDRESS)",
+            "--master", "$(BRIDGE_MASTER_ADDRESS)",
             {{ if .Values.is_follower }}
             "--follower",
             {{ end }}
