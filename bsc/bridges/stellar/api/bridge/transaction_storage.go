@@ -52,7 +52,7 @@ func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbui
 
 func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	memo, err := s.memoToString(txn)
-	if err != nil {
+	if err != nil || memo == "" {
 		return
 	}
 	log.Info("checking tx with", "memo", memo)
@@ -159,6 +159,12 @@ func (s *StellarTransactionStorage) StoreTransactionWithMemo(txn *txnbuild.Trans
 }
 
 func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txMemoString string, err error) {
+	memo := txn.Memo()
+
+	if memo == nil {
+		return "", nil
+	}
+
 	txMemo, err := txn.Memo().ToXDR()
 	if err != nil {
 		return "", err

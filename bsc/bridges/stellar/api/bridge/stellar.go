@@ -221,6 +221,12 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 
 	// Only try to request signatures if there are signatures required
 	if w.signatureCount > 0 {
+		xdr, err := tx.Base64()
+		if err != nil {
+			return errors.Wrap(err, "failed to serialize transaction")
+		}
+		signReq.TxnXDR = xdr
+
 		signatures, err := w.client.Sign(ctx, signReq)
 		if err != nil {
 			return err
