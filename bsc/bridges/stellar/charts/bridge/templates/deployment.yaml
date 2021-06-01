@@ -54,6 +54,8 @@ spec:
             value: {{ .Values.eth_client_url }}
           - name: BRIDGE_MASTER_ADDRESS
             value: {{ .Values.bridge_master_address }}
+          - name: STELLAR_FEE_WALLET
+            value: {{ .Values.stellar_fee_wallet }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--account", "$(ACCOUNT_JSON)",
@@ -66,6 +68,7 @@ spec:
             {{ if .Values.is_follower }}
             "--follower",
             {{ end }}
+            "--feewallet", "$(STELLAR_FEE_WALLET)"
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

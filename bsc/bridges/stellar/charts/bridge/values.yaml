@@ -65,6 +65,7 @@ eth_network: "smart-chain-testnet"
 contract_address: "0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f"
 ms_contract_address: "0xF363303d4A93e3dC2F019f13D0764b7aAf825F4E"
 bridge_master_address: "GC7DYJUME4ZDWI5ZWAKT6RN2KKV6Q2CQIDSGG3B2PVRVD73VT22RADL3"
+stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
 is_follower: true
 
 resources: {}
