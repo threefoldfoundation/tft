@@ -146,7 +146,9 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		acc := paymentOperation.Destination.ToAccountId()
 
 		if acc.Address() == s.config.StellarFeeWallet {
-			log.Info("skipping stellar fee wallet payment for now")
+			if int64(paymentOperation.Amount) != WithdrawFee {
+				return errors.New("The withdraw fee is incorrect")
+			}
 			continue
 		}
 
