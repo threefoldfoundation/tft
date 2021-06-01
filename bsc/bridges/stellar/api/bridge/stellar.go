@@ -176,7 +176,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 	if includeWithdrawFee {
 		feePaymentOP := txnbuild.Payment{
 			Destination: w.config.StellarFeeWallet,
-			Amount:      big.NewRat(int64(WithdrawFee), stellarPrecision).FloatString(stellarPrecisionDigits),
+			Amount:      big.NewRat(WithdrawFee, stellarPrecision).FloatString(stellarPrecisionDigits),
 			Asset: txnbuild.CreditAsset{
 				Code:   asset[0],
 				Issuer: asset[1],

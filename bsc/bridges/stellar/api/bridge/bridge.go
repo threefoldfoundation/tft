@@ -26,7 +26,7 @@ const (
 	// Depositing from Stellar to smart chain fee
 	DepositFee = 50 * stellarPrecision
 	// Withdrawing from smartchain to Stellar fee
-	WithdrawFee   = 1 * stellarPrecision
+	WithdrawFee   = int64(1 * stellarPrecision)
 	BridgeNetwork = "stellar"
 )
 
@@ -143,7 +143,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 }
 
 // validateTransaction validates a transaction before it will be confirmed
-func (bridge *Bridge) validateTransaction(txID *big.Int) error {
+func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
 	if err != nil {
 		log.Error("failed to fetch transaction from ms contract")
@@ -297,9 +297,9 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			case submission := <-submissionChan:
 				log.Info("Submission Event seen", "txid", submission.TransactionId())
 
-				err := bridge.validateTransaction(submission.TransactionId())
+				err := bridge.validateMintTransaction(submission.TransactionId())
 				if err != nil {
-					log.Error("error while validation transaction", "err", err)
+					log.Error("error while validation minttransaction", "err", err)
 				} else {
 					log.Info("transaction validated, confirming now..")
 					err = bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
@@ -317,15 +317,11 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				for _, id := range ids {
 					we := txMap[id]
 					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
-						hash := we.TxHash()
-						log.Info("Create a withdraw tx", "ethTx", hash)
-
-						err := bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, we.amount.Uint64(), we.receiver, we.blockHeight, hash, "", true)
+						err := bridge.withdraw(ctx, we)
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 							continue
 						}
-
 						// only save blockheight when we have a processed a withdrawal
 						log.Info("saving blockheight now")
 						err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
@@ -346,4 +342,20 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	}()
 
 	return nil
+}
+
+func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error) {
+	hash := we.TxHash()
+	log.Info("Creating a withdraw tx", "ethTx", hash)
+	amount := we.amount.Uint64()
+	if amount == 0 {
+		log.Error("Can not withdraw an amount of 0", "ethTx", hash)
+		return
+	}
+	amount -= uint64(WithdrawFee)
+	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", true)
+	if err != nil {
+		log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
+	}
+	return
 }
