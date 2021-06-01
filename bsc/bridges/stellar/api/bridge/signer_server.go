@@ -122,8 +122,12 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		return fmt.Errorf("no withdraw event found")
 	}
 
-	log.Info("validating withdrawal", "amount", withdraw.Event.Tokens.Uint64(), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
-
+	amount := withdraw.Event.Tokens.Uint64()
+	log.Info("validating withdrawal", "amount", amount, "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
+	amount -= uint64(WithdrawFee)
+	if len(txn.Operations()) != 2 {
+		return fmt.Errorf("A withdraw tx needs to contain 2 payment operations")
+	}
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
 		if err != nil {
@@ -136,7 +140,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("blabla")
+			return fmt.Errorf("Transaction contains non payment operations")
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
@@ -150,7 +154,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 			return fmt.Errorf("destination is not correct, got %s, need %s", acc.Address(), withdraw.Event.BlockchainAddress)
 		}
 
-		if paymentOperation.Amount != xdr.Int64(withdraw.Event.Tokens.Int64()) {
+		if int64(paymentOperation.Amount) != int64(amount) {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
