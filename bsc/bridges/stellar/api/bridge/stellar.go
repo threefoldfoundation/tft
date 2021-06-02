@@ -129,7 +129,7 @@ func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string
 }
 
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
-// only an amount needs to be specified
+// only an amount and hash needs to be specified
 func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash common.Hash) error {
 	feeWalletAddress := w.keypair.Address()
 	if w.config.StellarFeeWallet != "" {
@@ -357,12 +357,11 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				if w.config.StellarFeeWallet != "" {
 					log.Info("Trying to transfer the fees generated to the fee wallet", "address", w.config.StellarFeeWallet)
 
+					// convert tx hash string to bytes
 					parsedMessage, err := hex.DecodeString(tx.Hash)
 					if err != nil {
 						return
 					}
-
-					// convert tx hash string to bytes
 					var memo [32]byte
 					copy(memo[:], parsedMessage)
 
