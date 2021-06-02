@@ -79,14 +79,14 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		return nil, err
 	}
 
-	wallet, err := newStellarWallet(ctx, &config.StellarConfig, host, router)
+	wallet, err := newStellarWallet(ctx, &config.StellarConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// Only create the stellar signer wallet if the bridge is a master bridge
 	if !config.Follower {
-		wallet.newSignerWallet(ctx, host, router)
+		wallet.newSignerClient(ctx, host, router)
 		log.Info(fmt.Sprintf("Stellar bridge account %s loaded on Stellar network %s", wallet.keypair.Address(), config.StellarNetwork))
 	}
 

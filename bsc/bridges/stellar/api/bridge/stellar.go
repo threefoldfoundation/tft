@@ -46,7 +46,7 @@ type signerWallet struct {
 	signatureCount int
 }
 
-func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host, router routing.PeerRouting) (*stellarWallet, error) {
+func newStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
@@ -63,7 +63,7 @@ func newStellarWallet(ctx context.Context, config *StellarConfig, host host.Host
 	return w, nil
 }
 
-func (w *stellarWallet) newSignerWallet(ctx context.Context, host host.Host, router routing.PeerRouting) error {
+func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting) error {
 	account, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
 		return err
