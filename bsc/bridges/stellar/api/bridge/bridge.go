@@ -345,6 +345,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 }
 
 func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error) {
+	// if a withdraw was made to the bridge fee wallet or the bridge address, soak the funds and return
+	if we.blockchain_address == bridge.config.StellarFeeWallet || we.blockchain_address == bridge.wallet.keypair.Address() {
+		log.Warn("Received a withdrawal with destination which is either the fee wallet or the bridge wallet, skipping...")
+		return nil
+	}
+
 	hash := we.TxHash()
 	log.Info("Creating a withdraw tx", "ethTx", hash)
 	amount := we.amount.Uint64()
