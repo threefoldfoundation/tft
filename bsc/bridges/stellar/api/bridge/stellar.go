@@ -130,7 +130,7 @@ func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string
 
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
 // only an amount needs to be specified
-func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64) error {
+func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash common.Hash) error {
 	feeWalletAddress := w.keypair.Address()
 	if w.config.StellarFeeWallet != "" {
 		feeWalletAddress = w.config.StellarFeeWallet
@@ -140,6 +140,8 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 	if err != nil {
 		return errors.Wrap(err, "failed to generate payment operation")
 	}
+
+	txnBuild.Memo = txnbuild.MemoHash(txHash)
 
 	signReq := SignRequest{
 		RequiredSignatures: w.signatureCount,
@@ -354,7 +356,17 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 				}
 				if w.config.StellarFeeWallet != "" {
 					log.Info("Trying to transfer the fees generated to the fee wallet", "address", w.config.StellarFeeWallet)
-					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee)
+
+					parsedMessage, err := hex.DecodeString(tx.Hash)
+					if err != nil {
+						return
+					}
+
+					// convert tx hash string to bytes
+					var memo [32]byte
+					copy(memo[:], parsedMessage)
+
+					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
 					if err != nil {
 						log.Error("error while to send fees to the fee wallet", "err", err.Error())
 					}

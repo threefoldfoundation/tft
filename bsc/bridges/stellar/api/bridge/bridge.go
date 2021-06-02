@@ -348,10 +348,22 @@ func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error
 	hash := we.TxHash()
 	log.Info("Creating a withdraw tx", "ethTx", hash)
 	amount := we.amount.Uint64()
+
 	if amount == 0 {
 		log.Error("Can not withdraw an amount of 0", "ethTx", hash)
 		return
 	}
+
+	if amount <= uint64(WithdrawFee) {
+		log.Warn("Withdrawn amount is less than the withdraw fee, sending the amount to the fee wallet", "amount", amount)
+		err = bridge.wallet.CreateAndSubmitFeepayment(ctx, amount, hash)
+		if err != nil {
+			log.Error(fmt.Sprintf("failed to create fee payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
+			return err
+		}
+		return nil
+	}
+
 	amount -= uint64(WithdrawFee)
 	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", true)
 	if err != nil {
