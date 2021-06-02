@@ -126,7 +126,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 	log.Info("validating withdrawal", "amount", amount, "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
 	amount -= uint64(WithdrawFee)
 	if len(txn.Operations()) != 2 {
-		return fmt.Errorf("A withdraw tx needs to contain 2 payment operations")
+		return fmt.Errorf("a withdraw tx needs to contain 2 payment operations")
 	}
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
@@ -140,14 +140,14 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("Transaction contains non payment operations")
+			return fmt.Errorf("transaction contains non payment operations")
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
 
 		if acc.Address() == s.config.StellarFeeWallet {
 			if int64(paymentOperation.Amount) != WithdrawFee {
-				return errors.New("The withdraw fee is incorrect")
+				return errors.New("the withdraw fee is incorrect")
 			}
 			continue
 		}
@@ -246,7 +246,7 @@ func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.T
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("blabla")
+			return fmt.Errorf("transaction contains non payment operations")
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
