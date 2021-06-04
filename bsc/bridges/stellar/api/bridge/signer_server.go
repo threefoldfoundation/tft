@@ -15,7 +15,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
+	"github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
@@ -42,13 +42,13 @@ type SignResponse struct {
 }
 
 type SignerService struct {
-	network                   string
 	kp                        *keypair.Full
 	bridgeContract            *BridgeContract
+	config                    *StellarConfig
 	stellarTransactionStorage *StellarTransactionStorage
 }
 
-func NewSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
+func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
@@ -60,8 +60,8 @@ func NewSignerServer(host host.Host, network, secret, bridgeMasterAddress string
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	_, signer, err := newSignerServer(host, network, secret, bridgeMasterAddress, bridgeContract)
-	return signer, err
+	_, signerService, err := newSignerServer(host, config, bridgeMasterAddress, bridgeContract)
+	return signerService, err
 }
 
 func (s *SignerService) Sign(ctx context.Context, request SignRequest, response *SignResponse) error {
@@ -83,6 +83,13 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 	} else if request.Message != "" {
 		// If the signrequest has a message attached we know it's a refund transaction
 		err := s.validateRefundTransaction(request, txn)
+		if err != nil {
+			return err
+		}
+	} else {
+		// If the signrequest is not a withdrawal request and a refund request
+		// then it's most likely a transfer to fee wallet transaction
+		err := s.validateFeeTransfer(request, txn)
 		if err != nil {
 			return err
 		}
@@ -115,8 +122,12 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		return fmt.Errorf("no withdraw event found")
 	}
 
-	log.Info("validating withdrawal", "amount", withdraw.Event.Tokens.Uint64(), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
-
+	amount := withdraw.Event.Tokens.Uint64()
+	log.Info("validating withdrawal", "amount", amount, "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
+	amount -= uint64(WithdrawFee)
+	if len(txn.Operations()) != 2 {
+		return fmt.Errorf("a withdraw tx needs to contain 2 payment operations")
+	}
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
 		if err != nil {
@@ -129,15 +140,23 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("blabla")
+			return fmt.Errorf("transaction contains non payment operations")
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
+
+		if acc.Address() == s.config.StellarFeeWallet {
+			if int64(paymentOperation.Amount) != WithdrawFee {
+				return errors.New("the withdraw fee is incorrect")
+			}
+			continue
+		}
+
 		if acc.Address() != withdraw.Event.BlockchainAddress {
 			return fmt.Errorf("destination is not correct, got %s, need %s", acc.Address(), withdraw.Event.BlockchainAddress)
 		}
 
-		if paymentOperation.Amount != xdr.Int64(withdraw.Event.Tokens.Int64()) {
+		if int64(paymentOperation.Amount) != int64(amount) {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
@@ -190,7 +209,7 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 				}
 
 				if paymentOperation.Amount > DepositFee {
-					return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %d but we received %d", DepositFee, paymentOperation.Amount)
+					return fmt.Errorf("amount is not correct, we expected a refund transaction with an amount less than %f but we received %d", DepositFee, paymentOperation.Amount)
 				}
 			}
 		}
@@ -213,21 +232,46 @@ func (s *SignerService) ScanBridgeAccount() error {
 	return s.stellarTransactionStorage.ScanBridgeAccount()
 }
 
-func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
-	full, err := keypair.ParseFull(secret)
+func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.Transaction) error {
+	log.Info("Validating fee transfer request...")
+	for _, op := range txn.Operations() {
+		opXDR, err := op.BuildXDR()
+		if err != nil {
+			return fmt.Errorf("failed to build operation xdr")
+		}
+
+		if opXDR.Body.Type != xdr.OperationTypePayment {
+			continue
+		}
+
+		paymentOperation, ok := opXDR.Body.GetPaymentOp()
+		if !ok {
+			return fmt.Errorf("transaction contains non payment operations")
+		}
+
+		acc := paymentOperation.Destination.ToAccountId()
+		if acc.Address() != s.config.StellarFeeWallet {
+			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.config.StellarFeeWallet)
+		}
+	}
+	return nil
+}
+
+func newSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress string, bridgeContract *BridgeContract) (*gorpc.Server, *SignerService, error) {
+	full, err := keypair.ParseFull(config.StellarSeed)
 	if err != nil {
 		return nil, nil, err
 	}
 	log.Debug("wallet address", "address", full.Address())
 	server := gorpc.NewServer(host, Protocol)
 
-	stellarTransactionStorage := NewStellarTransactionStorage(network, bridgeMasterAddress)
+	stellarTransactionStorage := NewStellarTransactionStorage(config.StellarNetwork, bridgeMasterAddress)
 
 	signer := SignerService{
-		network:                   network,
 		kp:                        full,
 		bridgeContract:            bridgeContract,
 		stellarTransactionStorage: stellarTransactionStorage,
+		config:                    &config,
 	}
 
 	err = server.Register(&signer)
@@ -236,7 +280,7 @@ func newSignerServer(host host.Host, network, secret, bridgeMasterAddress string
 
 // getNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
 func (s *SignerService) getNetworkPassPhrase() string {
-	switch s.network {
+	switch s.config.StellarNetwork {
 	case "testnet":
 		return network.TestNetworkPassphrase
 	case "production":
@@ -246,7 +290,19 @@ func (s *SignerService) getNetworkPassPhrase() string {
 	}
 }
 
-func (s *SignerService) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
+// GetHorizonClient gets the horizon client based on the wallet's network
+func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
+	switch s.config.StellarNetwork {
+	case "testnet":
+		return horizonclient.DefaultTestNetClient, nil
+	case "production":
+		return horizonclient.DefaultPublicNetClient, nil
+	default:
+		return nil, errors.New("network is not supported")
+	}
+}
+
+func (s *SignerService) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
 	client, err := s.getHorizonClient()
 	if err != nil {
 		return effects, err
@@ -261,16 +317,4 @@ func (s *SignerService) getTransactionEffects(txHash string) (effects horizoneff
 	}
 
 	return effects, nil
-}
-
-// GetHorizonClient gets the horizon client based on the transaction storage's network
-func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
-	switch s.network {
-	case "testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "production":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
 }
