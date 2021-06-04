@@ -253,6 +253,27 @@ func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.T
 		if acc.Address() != s.config.StellarFeeWallet {
 			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.config.StellarFeeWallet)
 		}
+
+		// check if a similar transaction was made before
+		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		if err != nil {
+			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+		}
+		// if the transaction exists, return with error
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping now..")
+			return fmt.Errorf("transaction with hash already exists")
+		}
+
+		switch int64(paymentOperation.Amount) {
+		case int64(DepositFee):
+			return nil
+		case WithdrawFee:
+			return nil
+		default:
+			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, int64(DepositFee), WithdrawFee)
+		}
+
 	}
 	return nil
 }
