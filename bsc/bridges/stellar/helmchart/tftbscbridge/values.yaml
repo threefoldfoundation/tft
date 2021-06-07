@@ -83,7 +83,6 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  create: true
   size: 10 # GB
   hostPath: ""
 
