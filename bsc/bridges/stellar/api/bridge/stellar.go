@@ -338,8 +338,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 								if paymentOpation.To == w.keypair.Address() {
 									log.Warn("Calling refund")
 									err := w.CreateAndSubmitRefund(context.Background(), paymentOpation.From, uint64(parsedAmount), tx.Hash, true)
-									if err != nil {
+									for err != nil {
 										log.Error("error while trying to refund user", "err", err.Error())
+										select {
+										case <-ctx.Done():
+											return
+										case <-time.After(10 * time.Second):
+											err = w.CreateAndSubmitRefund(context.Background(), paymentOpation.From, uint64(parsedAmount), tx.Hash, true)
+										}
 									}
 								}
 							}
@@ -366,8 +372,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 					copy(memo[:], parsedMessage)
 
 					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
-					if err != nil {
+					for err != nil {
 						log.Error("error while to send fees to the fee wallet", "err", err.Error())
+						select {
+						case <-ctx.Done():
+							return
+						case <-time.After(10 * time.Second):
+							err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
+						}
 					}
 				}
 
