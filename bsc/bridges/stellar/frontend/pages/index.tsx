@@ -57,7 +57,7 @@ function getLibrary(provider: any): Web3Provider {
   return library
 }
 
-export default function() {
+export default function app() {
   return (
     <Web3ReactProvider getLibrary={getLibrary}>
       <App />
