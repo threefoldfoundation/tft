@@ -45,7 +45,7 @@ type SignerService struct {
 	kp                        *keypair.Full
 	bridgeContract            *BridgeContract
 	config                    *StellarConfig
-	stellarTransactionStorage *StellarTransactionStorage
+	StellarTransactionStorage *StellarTransactionStorage
 }
 
 func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress string, bridgeContract *BridgeContract) (*SignerService, error) {
@@ -161,7 +161,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		exists, err := s.StellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -227,7 +227,7 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		exists, err := s.StellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -238,10 +238,6 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 		}
 	}
 	return nil
-}
-
-func (s *SignerService) ScanBridgeAccount() error {
-	return s.stellarTransactionStorage.ScanBridgeAccount()
 }
 
 func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.Transaction) error {
@@ -267,7 +263,7 @@ func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.T
 		}
 
 		// check if a similar transaction was made before
-		exists, err := s.stellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		exists, err := s.StellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -303,7 +299,7 @@ func newSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 	signer := SignerService{
 		kp:                        full,
 		bridgeContract:            bridgeContract,
-		stellarTransactionStorage: stellarTransactionStorage,
+		StellarTransactionStorage: stellarTransactionStorage,
 		config:                    &config,
 	}
 

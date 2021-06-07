@@ -98,7 +98,7 @@ func main() {
 		}
 
 		// Initially scan bridge account for stellar transactions
-		err = signer.ScanBridgeAccount()
+		err = signer.StellarTransactionStorage.ScanBridgeAccount()
 		if err != nil {
 			panic(err)
 		}
