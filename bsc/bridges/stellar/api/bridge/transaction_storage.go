@@ -55,7 +55,7 @@ func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Tran
 	if err != nil || memo == "" {
 		return
 	}
-	log.Info("checking tx with", "memo", memo)
+	log.Info("checking if transaction exists", "memo", memo)
 
 	_, exists = s.knownTransactionWithMemos[memo]
 	if !exists {
