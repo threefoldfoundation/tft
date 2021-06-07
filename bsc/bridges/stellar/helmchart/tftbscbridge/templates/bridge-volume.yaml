@@ -1,3 +1,4 @@
+{{- if .Values.serviceAccount.create -}}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -13,3 +14,4 @@ spec:
     - ReadWriteOnce
   hostPath:
     path: {{ .Values.volume.hostPath }}
+{{- end }}

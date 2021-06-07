@@ -5,7 +5,6 @@ metadata:
     backupType: {{ .Values.threefoldVdc.backup | quote }}
   name: tftbscbridge-volume-claim-{{ .Release.Name }}
 spec:
-  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:
