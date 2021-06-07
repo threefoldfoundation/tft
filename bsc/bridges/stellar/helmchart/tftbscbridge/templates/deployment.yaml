@@ -56,6 +56,8 @@ spec:
             value: {{ .Values.bridge_master_address }}
           - name: STELLAR_FEE_WALLET
             value: {{ .Values.stellar_fee_wallet }}
+          - name: STELLAR_NETWORK
+            value: {{ .Values.network }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--account", "$(ACCOUNT_JSON)",
@@ -65,8 +67,9 @@ spec:
             "--contract", "$(CONTRACT_ADDRESS)",
             "--mscontract", "$(MS_CONTRACT_ADDRESS)",
             "--master", "$(BRIDGE_MASTER_ADDRESS)",
+            "--network","$(STELLAR_NETWORK)",
             {{ if .Values.is_follower }}
-            "--follower",
+            "--follower=true",
             {{ end }}
             "--feewallet", "$(STELLAR_FEE_WALLET)"
           ]
