@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bridge.fullname" . }}
+  name: {{ include "tftbscbridge.fullname" . }}
   labels:
-    {{- include "bridge.labels" . | nindent 4 }}
+    {{- include "tftbscbridge.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "bridge.selectorLabels" . | nindent 6 }}
+      {{- include "tftbscbridge.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,13 +18,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "bridge.selectorLabels" . | nindent 8 }}
+        {{- include "tftbscbridge.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "bridge.serviceAccountName" . }}
+      serviceAccountName: {{ include "tftbscbridge.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -75,15 +75,15 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/eth-bridge
-            - name: bridge-storage-{{ .Release.Name }}
+            - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage
       volumes:
-        - name: bridge-storage-{{ .Release.Name }}
+        - name: tftbscbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
-            claimName: bridge-volume-claim-{{ .Release.Name }}
+            claimName: tftbscbridge-volume-claim-{{ .Release.Name }}
         - name: config-volume
           configMap:
-            name: {{ template "bridge.fullname" . }}
+            name: {{ template "tftbscbridge.fullname" . }}
             items:
               - key: account_json
                 path: account_json

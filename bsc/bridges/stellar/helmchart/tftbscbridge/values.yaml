@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: dylanverstraete/eth-bridge
-  pullPolicy: Always
-  tag: "latest"
+  repository: tftstellarbscbridge
+  pullPolicy: IfNotPresent
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -24,10 +24,12 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -38,7 +40,8 @@ securityContext: {}
 global:
   ingress:
     enabled: false
-    annotations: {}
+    annotations:
+      {}
       # kubernetes.io/ingress.class: nginx
       # kubernetes.io/tls-acme: "true"
     hosts:
@@ -50,13 +53,13 @@ global:
     #      - chart-example.local
 
 # should be provided on startup
-stellar_secret: ''
-network: 'testnet'
+stellar_secret: ""
+network: "testnet"
 
 # json content for the account json file
 account_json: |-
 
-account_password: 'test123'
+account_password: "test123"
 # mainnet bsc: https://bsc-dataseed.binance.org/
 # testnet bsc: https://data-seed-prebsc-1-s1.binance.org:8545/
 eth_client_url: "https://data-seed-prebsc-1-s1.binance.org:8545/"
@@ -68,7 +71,8 @@ bridge_master_address: "GC7DYJUME4ZDWI5ZWAKT6RN2KKV6Q2CQIDSGG3B2PVRVD73VT22RADL3
 stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
 is_follower: true
 
-resources: {}
+resources:
+  {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -89,7 +93,7 @@ autoscaling:
 
 volume:
   size: 10 # GB
-  hostPath: ''
+  hostPath: ""
 
 nodeSelector: {}
 
@@ -98,4 +102,4 @@ tolerations: []
 affinity: {}
 
 threefoldVdc:
-  backup: ''
+  backup: ""

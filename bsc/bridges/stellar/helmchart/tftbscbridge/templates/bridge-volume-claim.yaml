@@ -3,7 +3,7 @@ kind: PersistentVolumeClaim
 metadata:
   labels:
     backupType: {{ .Values.threefoldVdc.backup | quote }}
-  name: bridge-volume-claim-{{ .Release.Name }}
+  name: tftbscbridge-volume-claim-{{ .Release.Name }}
 spec:
   storageClassName: local-path
   accessModes:

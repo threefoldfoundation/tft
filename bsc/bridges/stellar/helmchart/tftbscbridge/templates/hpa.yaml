@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2beta1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "bridge.fullname" . }}
+  name: {{ include "tftbscbridge.fullname" . }}
   labels:
-    {{- include "bridge.labels" . | nindent 4 }}
+    {{- include "tftbscbridge.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "bridge.fullname" . }}
+    name: {{ include "tftbscbridge.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
