@@ -195,6 +195,14 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 
 		destinationAccount := paymentOperation.Destination.ToAccountId()
 
+		// Skip the fee wallet transaction
+		if destinationAccount.Address() == s.config.StellarFeeWallet {
+			if paymentOperation.Amount != xdr.Int64(WithdrawFee) {
+				return fmt.Errorf("fee payment operation should be %d, but got %d", WithdrawFee, paymentOperation.Amount)
+			}
+			continue
+		}
+
 		txnEffectsFromMessage, err := s.getTransactionEffects(request.Message)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve transaction from message")
@@ -204,7 +212,11 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 		// This way we can infer that it is indeed a refund transaction
 		for _, effect := range txnEffectsFromMessage.Embedded.Records {
 			if effect.GetType() == "account_debited" {
-				if destinationAccount.Address() != effect.GetAccount() {
+				if effect.GetAccount() == s.config.StellarFeeWallet {
+					continue
+				}
+
+				if effect.GetAccount() != destinationAccount.Address() {
 					return fmt.Errorf("destination is not correct, got %s, need user wallet %s", destinationAccount.Address(), effect.GetAccount())
 				}
 
