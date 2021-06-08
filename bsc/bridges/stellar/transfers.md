@@ -24,6 +24,13 @@ base64.b64encode(b).decode("utf-8")
 'ZeSR17mF935gyFEFg0oDMv8wAs4='
 ```
 
-### Fee
+### Fees
 
-To cover the costs of the bridge ( like the multisig interactions with the Binance chain), a fee of 50 TFT is charged. Make sure the amount received on the bridge's Stellar address is larger than 50 TFT.
+- From Stellar to BSC:
+
+   To cover the costs of the bridge ( like the multisig interactions with the Binance chain), a fee of 50 TFT is charged. Make sure the  amount received on the bridge's Stellar address is larger than 50 TFT.
+
+
+- From BSC to Stellar:
+
+   a Fee of 1 TFT is charged
