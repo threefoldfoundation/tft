@@ -33,4 +33,4 @@ base64.b64encode(b).decode("utf-8")
 
 - From BSC to Stellar:
 
-   a Fee of 1 TFT is charged
+   a fee of 1 TFT is deducted from the withdrawn amount
