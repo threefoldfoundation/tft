@@ -1,4 +1,8 @@
-# Contract addresses on BSC
+# Addresses
+
+Bridge Stellar address: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
+
+## Contract addresses on BSC
 
 Proxy contract address: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
 
