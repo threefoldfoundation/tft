@@ -280,23 +280,23 @@ func (w *stellarWallet) refundTransaction(ctx context.Context, totalAmount uint6
 	}
 	for _, op := range ops.Embedded.Records {
 		if op.GetType() == "payment" {
-			paymentOpation := op.(operations.Payment)
+			paymentOperation := op.(operations.Payment)
 
-			if paymentOpation.To == w.keypair.Address() {
+			if paymentOperation.To == w.keypair.Address() {
 				amount := totalAmount - uint64(WithdrawFee)
 				if amount == 0 {
 					return
 				}
 				log.Warn("Calling refund")
 
-				err := w.CreateAndSubmitRefund(ctx, paymentOpation.From, amount, tx.Hash, true)
+				err := w.CreateAndSubmitRefund(ctx, paymentOperation.From, amount, tx.Hash, true)
 				for err != nil {
 					log.Error("error while trying to refund user", "err", err.Error(), "amount", amount)
 					select {
 					case <-ctx.Done():
 						return
 					case <-time.After(10 * time.Second):
-						err = w.CreateAndSubmitRefund(ctx, paymentOpation.From, amount, tx.Hash, true)
+						err = w.CreateAndSubmitRefund(ctx, paymentOperation.From, amount, tx.Hash, true)
 					}
 				}
 			}
