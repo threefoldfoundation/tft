@@ -9,6 +9,7 @@ import styles from './Withdraw.module.scss'
 const TFT_ASSET = 'TFT'
 const STELLAR_HORIZON_URL = process.env.STELLAR_HORIZON_URL
 const TFT_ASSET_ISSUER = process.env.TFT_ASSET_ISSUER
+const BRIDGE_TFT_ADDRESS = process.env.BRIDGE_TFT_ADDRESS
 const server = new stellar.Server(STELLAR_HORIZON_URL)
 
 export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
@@ -28,6 +29,11 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
   const submit = async () => {
     if (stellarAddress === '') {
       setStellarAddressError('Address not valid')
+      return
+    }
+
+    if (stellarAddress === BRIDGE_TFT_ADDRESS) {
+      setStellarAddressError('Cannot withdraw to bridge account, use your personal wallet address')
       return
     }
 
