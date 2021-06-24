@@ -33,14 +33,12 @@ service:
   type: ClusterIP
   port: 80
 
-global:
-  ingress:
-    certresolver: le
-
 ingress:
   enabled: true
   annotations:
-    kubernetes.io/ingress.class: traefik
+    {}
+    #kubernetes.io/ingress.class: traefik
+    #traefik.ingress.kubernetes.io/router.tls.certresolver: le
   hosts:
     - host: host.local
       paths:
