@@ -367,7 +367,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 
 					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
 					if err != nil {
-						log.Error("error while to send fees to the fee wallet", "err", err.Error())
+						log.Error("error while sending fee to the fee wallet", "err", err.Error())
 					}
 				}
 
