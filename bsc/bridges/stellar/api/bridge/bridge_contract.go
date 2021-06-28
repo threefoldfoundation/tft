@@ -488,7 +488,7 @@ func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *c
 // FilterWithdraw filters Withdraw events on the given contract. This call blocks
 // and prints out info about any withdraw as it happened
 func (bridge *BridgeContract) FilterWithdraw(wc chan<- WithdrawEvent, startHeight uint64, endHeight uint64) error {
-	log.Info("Filtering to withdraw events", "start height", startHeight)
+	log.Info("Filtering to withdraw events", "start height", startHeight, "end height", endHeight)
 	filterOpts := bind.FilterOpts{
 		Start: startHeight,
 		End:   &endHeight,
