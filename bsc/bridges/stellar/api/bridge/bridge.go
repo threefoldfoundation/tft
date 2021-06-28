@@ -304,7 +304,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					log.Info("transaction validated, confirming now..")
 					err = bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
 					if err != nil {
-						log.Error("error occured during confirming transaction")
+						log.Error("error occured during confirming transaction", "err", err)
 					}
 				}
 			case head := <-heads:
