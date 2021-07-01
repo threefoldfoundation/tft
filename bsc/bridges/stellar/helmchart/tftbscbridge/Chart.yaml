@@ -1,6 +1,6 @@
 apiVersion: v2
 name: tftbscbridge
-description: A Helm chart the tft stellar-bsc bridge
+description: Helm chart the tft stellar-bsc bridge
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+version: 0.1.1
+appVersion: "1.0.2-b1"
