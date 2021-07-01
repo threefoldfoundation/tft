@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
+	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/stellar"
 )
 
 const (
@@ -414,44 +415,31 @@ func (w *stellarWallet) GetAccountDetails(address string) (account hProtocol.Acc
 	return account, nil
 }
 
-func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) error {
+func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) (err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
-		return err
+		return
 	}
 
-	opRequest := horizonclient.TransactionRequest{
-		ForAccount: w.keypair.Address(),
-		Cursor:     cursor,
-	}
-	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
+	log.Info("Start watching stellar account transactions", "horizon", client.HorizonURL, "account", w.keypair.Address(), "cursor", cursor)
 
 	for {
 		if ctx.Err() != nil {
-			return nil
+			return
 		}
 
-		response, err := client.Transactions(opRequest)
-		if err != nil {
-			log.Info("Error getting transactions for stellar account", "error", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(5 * time.Second):
-				continue
-			}
-
-		}
-		for _, tx := range response.Embedded.Records {
+		internalHandler := func(tx hProtocol.Transaction) {
 			handler(tx)
-			opRequest.Cursor = tx.PagingToken()
+			cursor = tx.PagingToken()
 		}
-		if len(response.Embedded.Records) == 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(10 * time.Second):
-			}
+		err = stellar.FetchTransactions(ctx, client, w.keypair.Address(), cursor, internalHandler)
+		if err != nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Second):
 		}
 
 	}
@@ -465,18 +453,14 @@ func (w *stellarWallet) ScanBridgeAccount() error {
 func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
-		return effects, err
+		return
 	}
 
 	effectsReq := horizonclient.EffectRequest{
 		ForTransaction: txHash,
 	}
 	effects, err = client.Effects(effectsReq)
-	if err != nil {
-		return effects, err
-	}
-
-	return effects, nil
+	return
 }
 
 func (w *stellarWallet) getOperationEffect(txHash string) (ops operations.OperationsPage, err error) {
@@ -498,14 +482,7 @@ func (w *stellarWallet) getOperationEffect(txHash string) (ops operations.Operat
 
 // GetHorizonClient gets the horizon client based on the wallet's network
 func (w *stellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
-	switch w.config.StellarNetwork {
-	case "testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "production":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
+	return stellar.GetHorizonClient(w.config.StellarNetwork)
 }
 
 // GetNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network

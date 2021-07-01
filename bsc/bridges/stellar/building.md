@@ -27,7 +27,6 @@ Create a folder `packagedcharts` or empty it if it already exists.
 Depending on which charts are updated execute the following commands in the `packagedcharts folder:
 
 ```sh
-
 helm package ./../helmchart/tftbscbridge
 helm package ./../frontend/helm/bsc-bridge-ui
 ```
