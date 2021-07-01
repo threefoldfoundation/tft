@@ -3,7 +3,7 @@ package stellar
 import (
 	"context"
 	"errors"
-	"strings"
+	"net/http"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -42,7 +42,8 @@ func FetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 		response, err := client.Transactions(opRequest)
 		if err != nil {
 			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "pagelimit", opRequest.Limit, "error", err)
-			if strings.Contains(err.Error(), "Timeout") || strings.Contains(err.Error(), "Service Unavailable") {
+			horizonError, ok := err.(*horizonclient.Error)
+			if ok && (horizonError.Response.StatusCode == http.StatusGatewayTimeout || horizonError.Response.StatusCode == http.StatusServiceUnavailable) {
 				timeouts++
 				if timeouts == 1 {
 					opRequest.Limit = 5
@@ -73,7 +74,6 @@ func FetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 		}
 
 		if len(response.Embedded.Records) == 0 {
-			log.Info("Done fetching transactions")
 			return nil
 		}
 
