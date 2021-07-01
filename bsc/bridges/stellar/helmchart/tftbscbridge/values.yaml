@@ -83,8 +83,11 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  size: 10 # GB
-  hostPath: ""
+  size: 10 # GB Set to at least 35 for production
+  storageClassName: local-path
+  persistentVolume:
+    create: true
+    hostPath: ""
 
 nodeSelector: {}
 
