@@ -3,6 +3,7 @@ package stellar
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -25,7 +26,7 @@ func GetHorizonClient(network string) (*horizonclient.Client, error) {
 }
 
 func FetchTransactions(ctx context.Context, client *horizonclient.Client, address string, cursor string, handler func(op horizon.Transaction)) error {
-
+	timeouts := 0
 	opRequest := horizonclient.TransactionRequest{
 		ForAccount:    address,
 		IncludeFailed: false,
@@ -41,6 +42,17 @@ func FetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 		response, err := client.Transactions(opRequest)
 		if err != nil {
 			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "error", err)
+			if strings.Contains(err.Error(), "Timeout") {
+				timeouts++
+				if timeouts == 1 {
+					opRequest.Limit = 5
+				} else if timeouts > 1 {
+					opRequest.Limit = 1
+				}
+
+				log.Info("Request timed out, lowering pagelimit", "pagelimit", opRequest.Limit)
+			}
+
 			select {
 			case <-ctx.Done():
 				return nil
