@@ -41,8 +41,8 @@ func FetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 
 		response, err := client.Transactions(opRequest)
 		if err != nil {
-			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "error", err)
-			if strings.Contains(err.Error(), "Timeout") {
+			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "pagelimit", opRequest.Limit, "error", err)
+			if strings.Contains(err.Error(), "Timeout") || strings.Contains(err.Error(), "Service Unavailable") {
 				timeouts++
 				if timeouts == 1 {
 					opRequest.Limit = 5
@@ -65,7 +65,15 @@ func FetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 			handler(tx)
 			opRequest.Cursor = tx.PagingToken()
 		}
+
+		if timeouts > 0 {
+			log.Info("Fetching transaction succeeded, resetting page limit and timeouts")
+			opRequest.Limit = stellarPageLimit
+			timeouts = 0
+		}
+
 		if len(response.Embedded.Records) == 0 {
+			log.Info("Done fetching transactions")
 			return nil
 		}
 
