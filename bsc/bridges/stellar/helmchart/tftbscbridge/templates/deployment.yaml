@@ -83,7 +83,7 @@ spec:
       volumes:
         - name: tftbscbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
-            claimName: tftbscbridge-volume-claim-{{ .Release.Name }}
+            claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} ftbscbridge-volume-claim-{{ .Release.Name }} {{ end }}
         - name: config-volume
           configMap:
             name: {{ template "tftbscbridge.fullname" . }}

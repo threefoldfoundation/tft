@@ -84,6 +84,7 @@ autoscaling:
 
 volume:
   size: 10 # GB Set to at least 35 for production
+  existingpersistentVolumeClaim: ""
   storageClassName: local-path
   persistentVolume:
     create: true
