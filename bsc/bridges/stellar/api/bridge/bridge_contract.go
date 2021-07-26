@@ -584,6 +584,10 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	}
 
 	if !ownerExists {
+		for _, owner := range owners {
+			log.Info("Multisig contract owner", "owner", owner)
+		}
+		log.Error("Not an owner of the multisig contract", "account", accountAddress)
 		return errNotOwner
 	}
 
