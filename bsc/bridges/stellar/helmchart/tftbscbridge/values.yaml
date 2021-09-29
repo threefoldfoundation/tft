@@ -83,7 +83,7 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  size: 10 # GB Set to at least 35 for production
+  size: 10Gi # Set to at least 70 for production
   existingpersistentVolumeClaim: ""
   storageClassName: local-path
   persistentVolume:
