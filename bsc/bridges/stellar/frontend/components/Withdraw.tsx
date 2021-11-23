@@ -123,6 +123,8 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
           )}
           </FormControl>
 
+          <span style={{ marginTop: '1em', color: 'grey' }}>Withdraw fee is 1 TFT</span>
+
           <Button 
             color='primary'
             variant="contained"
