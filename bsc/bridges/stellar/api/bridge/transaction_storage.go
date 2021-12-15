@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stellar/go/clients/horizonclient"
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
+	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/stellar"
 )
 
 type StellarTransactionStorage struct {
@@ -88,6 +88,7 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 			// add the transaction memo to the list of known transaction memos
 			s.knownTransactionWithMemos[memoAsHex] = struct{}{}
 		}
+		s.stellarCursor = tx.PagingToken()
 	}
 
 	err := s.FetchTransactions(context.Background(), s.stellarCursor, transactionHandler)
@@ -104,40 +105,8 @@ func (s *StellarTransactionStorage) FetchTransactions(ctx context.Context, curso
 		return err
 	}
 
-	opRequest := horizonclient.TransactionRequest{
-		ForAccount:    s.addressToScan,
-		IncludeFailed: false,
-		Cursor:        s.stellarCursor,
-		Limit:         stellarPageLimit,
-	}
-	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", opRequest.ForAccount, "cursor", opRequest.Cursor)
-
-	for {
-		if ctx.Err() != nil {
-			return nil
-		}
-
-		response, err := client.Transactions(opRequest)
-		if err != nil {
-			log.Info("Error getting transactions for stellar account", "error", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(5 * time.Second):
-				continue
-			}
-
-		}
-		for _, tx := range response.Embedded.Records {
-			handler(tx)
-			s.stellarCursor = tx.PagingToken()
-			opRequest.Cursor = s.stellarCursor
-		}
-		if len(response.Embedded.Records) == 0 {
-			return nil
-		}
-
-	}
+	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", s.addressToScan, "cursor", s.stellarCursor)
+	return stellar.FetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, handler)
 
 }
 
@@ -186,12 +155,5 @@ func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txM
 
 // GetHorizonClient gets the horizon client based on the transaction storage's network
 func (s *StellarTransactionStorage) getHorizonClient() (*horizonclient.Client, error) {
-	switch s.network {
-	case "testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "production":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
+	return stellar.GetHorizonClient(s.network)
 }

@@ -288,10 +288,10 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
 			case we := <-withdrawChan:
 				if we.network == BridgeNetwork {
-					log.Info("Remembering withdraw event for", "txHash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
+					log.Info("Remembering withdraw event", "txHash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
 					txMap[we.txHash.String()] = we
 				} else {
-					log.Warn("ignoring withdrawal", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
+					log.Warn("Ignoring withdrawal, invalid target network", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
 				}
 			// If we get a new head, check every withdraw we have to see if it has matured
 			case submission := <-submissionChan:
@@ -304,7 +304,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					log.Info("transaction validated, confirming now..")
 					err = bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
 					if err != nil {
-						log.Error("error occured during confirming transaction")
+						log.Error("error occured during confirming transaction", "err", err)
 					}
 				}
 			case head := <-heads:
@@ -317,6 +317,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				for _, id := range ids {
 					we := txMap[id]
 					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
+						log.Info("Starting withdrawal", "txHash", we.TxHash())
 						err := bridge.withdraw(ctx, we)
 						if err != nil {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))

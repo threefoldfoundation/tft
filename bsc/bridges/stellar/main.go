@@ -34,7 +34,7 @@ func main() {
 	flag.StringVar(&bridgeCfg.AccountPass, "password", "", "ethereum account password")
 
 	flag.StringVar(&bridgeCfg.StellarSeed, "secret", "", "stellar secret")
-	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network url")
+	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
 	// Fee wallet address where fees are held
 	flag.StringVar(&bridgeCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 

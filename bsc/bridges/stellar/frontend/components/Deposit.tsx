@@ -52,6 +52,7 @@ export default function DepositDialog({ open, handleClose, address }) {
                 <span><b>Enter the following information manually:</b></span>
                 <span style={{ marginTop: 20 }}>Destination: <b>{BRIDGE_TFT_ADDRESS}</b></span>
                 <span>Memo: <b>{parsedAddress}</b></span>
+                <span><b>Deposit fee is 50 TFT</b></span>
               </DialogContentText>
               <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
                 <h4>

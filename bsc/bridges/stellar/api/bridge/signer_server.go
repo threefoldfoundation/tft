@@ -23,7 +23,6 @@ import (
 
 const (
 	Protocol         = protocol.ID("/p2p/rpc/signer")
-	stellarPageLimit = 100
 )
 
 type SignRequest struct {

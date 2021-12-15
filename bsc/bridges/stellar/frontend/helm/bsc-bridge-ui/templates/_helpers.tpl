@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "bridge-ui.name" -}}
+{{- define "bsc-bridge-ui.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "bridge-ui.fullname" -}}
+{{- define "bsc-bridge-ui.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "bridge-ui.chart" -}}
+{{- define "bsc-bridge-ui.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "bridge-ui.labels" -}}
-helm.sh/chart: {{ include "bridge-ui.chart" . }}
-{{ include "bridge-ui.selectorLabels" . }}
+{{- define "bsc-bridge-ui.labels" -}}
+helm.sh/chart: {{ include "bsc-bridge-ui.chart" . }}
+{{ include "bsc-bridge-ui.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,17 +45,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "bridge-ui.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "bridge-ui.name" . }}
+{{- define "bsc-bridge-ui.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "bsc-bridge-ui.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "bridge-ui.serviceAccountName" -}}
+{{- define "bsc-bridge-ui.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "bridge-ui.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "bsc-bridge-ui.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

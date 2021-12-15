@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bsc-bridge-ui
+description: Frontend for the TFT Stellar BSC bridge
+type: application
+version: 1.0.1
+appVersion: "v1.0.4"

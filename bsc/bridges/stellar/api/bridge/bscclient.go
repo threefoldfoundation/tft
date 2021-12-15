@@ -105,6 +105,7 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 
 	// separate saved data per network
 	datadir := filepath.Join(lccfg.DataDir, lccfg.NetworkName)
+	
 
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{

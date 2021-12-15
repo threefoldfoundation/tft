@@ -1,13 +1,17 @@
+{{- if not .Values.volume.existingpersistentVolumeClaim -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  {{- if .Values.threefoldVdc.backup }}
   labels:
     backupType: {{ .Values.threefoldVdc.backup | quote }}
+  {{- end }}
   name: tftbscbridge-volume-claim-{{ .Release.Name }}
 spec:
-  storageClassName: local-path
+  storageClassName: {{ .Values.volume.storageClassName }}
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: {{ .Values.volume.size }}
+{{- end }}

@@ -53,9 +53,9 @@ eth_client_url: "https://data-seed-prebsc-1-s1.binance.org:8545/"
 # smart-chain-testnet or smart-chain-mainnet
 eth_network: "smart-chain-testnet"
 # production: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
-contract_address: "0x88F7656273d5D3Afc3EF3Db3911c15606F74b46f"
+contract_address: "0x4DFe8A53cD9dbA17038cAaDB4cd6743160dAf049"
 # production: 0xa4E8d413004d46f367D4F09D6BD4EcBccfE51D33
-ms_contract_address: "0xF363303d4A93e3dC2F019f13D0764b7aAf825F4E"
+ms_contract_address: "0x0586d6afA50fA3b47FB51a34b906Ec8Fab5ACE0D"
 # production: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
 bridge_master_address: "GC7DYJUME4ZDWI5ZWAKT6RN2KKV6Q2CQIDSGG3B2PVRVD73VT22RADL3"
 # production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
@@ -83,8 +83,12 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  size: 10 # GB
-  hostPath: ""
+  size: 10Gi # Set to at least 70 for production
+  existingpersistentVolumeClaim: ""
+  storageClassName: local-path
+  persistentVolume:
+    create: true
+    hostPath: ""
 
 nodeSelector: {}
 
