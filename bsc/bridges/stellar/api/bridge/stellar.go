@@ -290,10 +290,18 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
 			log.Error("error decoding transaction memo", "error", err.Error())
+			err = w.submitRefund(ctx, tx)
+			if err != nil {
+				log.Error("error while trying to refund a transaction with invalid memo", "hash", tx.Hash, "error", err.Error())
+			}
 			return
 		}
 
 		if len(data) != 20 {
+			err = w.submitRefund(ctx, tx)
+			if err != nil {
+				log.Error("error while trying to refund a transaction with invalid memo", "hash", tx.Hash, "error", err.Error())
+			}
 			return
 		}
 		var ethAddress ERC20Address
@@ -448,6 +456,43 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 
 func (w *stellarWallet) ScanBridgeAccount() error {
 	return w.stellarTransactionStorage.ScanBridgeAccount()
+}
+
+// internal function that calculates how much is needed to be refunded to the user and does the refund transaction
+func (w *stellarWallet) submitRefund(ctx context.Context, tx hProtocol.Transaction) error {
+	effects, err := w.getTransactionEffects(tx.Hash)
+	if err != nil {
+		log.Error("error while fetching transaction effects:", err.Error())
+		return err
+	}
+
+	asset := w.GetAssetCodeAndIssuer()
+
+	var depositedAmount *big.Int
+	for _, effect := range effects.Embedded.Records {
+		if effect.GetAccount() != w.keypair.Address() {
+			continue
+		}
+		if effect.GetType() == "account_credited" {
+			creditedEffect := effect.(horizoneffects.AccountCredited)
+			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
+				continue
+			}
+			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
+			if err != nil {
+				continue
+			}
+
+			depositedAmount = big.NewInt(int64(parsedAmount))
+		}
+	}
+
+	if depositedAmount == nil {
+		return nil
+	}
+
+	log.Warn("refunding transaction with", "hash", tx.Hash, "account", tx.Account, "amount", depositedAmount.Uint64())
+	return w.CreateAndSubmitRefund(ctx, tx.Account, depositedAmount.Uint64(), tx.Hash, false)
 }
 
 func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
