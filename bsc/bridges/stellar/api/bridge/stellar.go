@@ -274,33 +274,17 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	return nil
 }
 
-func (w *stellarWallet) refundTransaction(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
-	ops, err := w.getOperationEffect(tx.Hash)
-	if err != nil {
-		return
-	}
-	for _, op := range ops.Embedded.Records {
-		if op.GetType() == "payment" {
-			paymentOperation := op.(operations.Payment)
+func (w *stellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
+	log.Warn("Calling refund")
 
-			if paymentOperation.To == w.keypair.Address() {
-				amount := totalAmount - uint64(WithdrawFee)
-				if amount == 0 {
-					return
-				}
-				log.Warn("Calling refund")
-
-				err := w.CreateAndSubmitRefund(ctx, paymentOperation.From, amount, tx.Hash, true)
-				for err != nil {
-					log.Error("error while trying to refund user", "err", err.Error(), "amount", amount)
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(10 * time.Second):
-						err = w.CreateAndSubmitRefund(ctx, paymentOperation.From, amount, tx.Hash, true)
-					}
-				}
-			}
+	err := w.CreateAndSubmitRefund(ctx, tx.Account, totalAmount, tx.Hash, true)
+	for err != nil {
+		log.Error("error while trying to refund user", "err", err.Error(), "amount", totalAmount)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Second):
+			err = w.CreateAndSubmitRefund(ctx, tx.Account, totalAmount, tx.Hash, true)
 		}
 	}
 
@@ -349,20 +333,27 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		if totalAmount == 0 {
 			return
 		}
+
+		if totalAmount < DepositFee {
+			log.Error("user deposited less than the depositfee, calling refund", "error", err.Error())
+			w.refundDeposit(ctx, uint64(totalAmount), tx)
+			return
+		}
+
 		log.Info("deposited amount", "a", totalAmount)
 		depositedAmount := big.NewInt(totalAmount)
 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
 			log.Error("error decoding transaction memo, calling refund", "error", err.Error())
-			w.refundTransaction(ctx, uint64(totalAmount), tx)
+			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}
 
 		// if the user sent an invalid memo, return the funds
 		if len(data) != 20 {
 			log.Error("length of parsed memo is less than 20, caling refund")
-			w.refundTransaction(ctx, uint64(totalAmount), tx)
+			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}
 
@@ -374,7 +365,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
 			if err == errInsufficientDepositAmount {
 				log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", totalAmount)
-				w.refundTransaction(ctx, uint64(totalAmount), tx)
+				w.refundDeposit(ctx, uint64(totalAmount), tx)
 				return
 			}
 
