@@ -20,6 +20,10 @@ In the `frontend` folder execute
 docker build -t bsc-bridge-ui:$(git describe --abbrev=0 --tags | sed 's/^v//') . --no-cache
 ```
 
+## Remarks for building the docker images
+
+On an Apple Silicon chip, add `--platform linux/amd64`
+
 ## Publishing the helm charts
 
 Create a folder `packagedcharts` or empty it if it already exists.
