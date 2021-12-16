@@ -200,6 +200,8 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 	return txnBuild, nil
 }
 
+// submitTransaction gathers signatures from cosigners if required and submits the transaction to the Stellar network
+// If there already is a transaction with the same memo hash, no new transaction is created and submitted.
 func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq SignRequest) error {
 	tx, err := txnbuild.NewTransaction(txn)
 	if err != nil {
@@ -275,16 +277,21 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 }
 
 func (w *stellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
+	if totalAmount <= uint64(WithdrawFee) {
+		log.Warn("Deposited amount is smaller than the withdraw fee, not refunding", "tx", tx.Hash)
+		return
+	}
+	amount := totalAmount - uint64(WithdrawFee)
 	log.Warn("Calling refund")
 
-	err := w.CreateAndSubmitRefund(ctx, tx.Account, totalAmount, tx.Hash, true)
+	err := w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
 	for err != nil {
 		log.Error("error while trying to refund user", "err", err.Error(), "amount", totalAmount)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(10 * time.Second):
-			err = w.CreateAndSubmitRefund(ctx, tx.Account, totalAmount, tx.Hash, true)
+			err = w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
 		}
 	}
 
