@@ -341,8 +341,8 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			return
 		}
 
-		if totalAmount < DepositFee {
-			log.Error("user deposited less than the depositfee, calling refund", "error", err.Error())
+		if totalAmount <= DepositFee {
+			log.Warn("Deposited amount is less than the depositfee, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}
@@ -352,14 +352,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 
 		data, err := base64.StdEncoding.DecodeString(tx.Memo)
 		if err != nil {
-			log.Error("error decoding transaction memo, calling refund", "error", err.Error())
+			log.Warn("error decoding transaction memo, refunding", "error", err.Error())
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}
 
 		// if the user sent an invalid memo, return the funds
 		if len(data) != 20 {
-			log.Error("length of parsed memo is less than 20, caling refund")
+			log.Warn("length of parsed memo is less than 20, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}

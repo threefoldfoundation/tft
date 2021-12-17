@@ -13,7 +13,7 @@ import (
 
 const stellarPageLimit = 100
 
-// GetHorizonClient gets the horizon client based on the wallet's network
+// GetHorizonClient gets an horizon client for a specific network
 func GetHorizonClient(network string) (*horizonclient.Client, error) {
 	switch network {
 	case "testnet":
