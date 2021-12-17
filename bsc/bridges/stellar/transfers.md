@@ -33,3 +33,7 @@ base64.b64encode(b).decode("utf-8")
 - From BSC to Stellar:
 
    a fee of 1 TFT is deducted from the withdrawn amount
+
+## Refunds
+
+When the supplied memo text of a deposit transaction can not be decoded to a valid BSC address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge  more expensive.
