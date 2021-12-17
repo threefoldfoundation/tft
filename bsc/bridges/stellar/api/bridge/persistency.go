@@ -15,10 +15,11 @@ type ChainPersistency struct {
 	location string
 }
 
-func initPersist(location string) (*ChainPersistency, error) {
+//newChainPersistency creates new ChainPersistency object and returns a reference to it.
+func newChainPersistency(location string) *ChainPersistency {
 	return &ChainPersistency{
 		location: location,
-	}, nil
+	}
 }
 
 func (b *ChainPersistency) saveHeight(height uint64) error {

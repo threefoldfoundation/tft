@@ -67,21 +67,18 @@ type StellarConfig struct {
 }
 
 // NewBridge creates a new Bridge.
-func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router routing.PeerRouting) (*Bridge, error) {
+func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
 
 	contract, err := NewBridgeContract(config)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	blockPersistency, err := initPersist(config.PersistencyFile)
-	if err != nil {
-		return nil, err
-	}
+	blockPersistency := newChainPersistency(config.PersistencyFile)
 
 	wallet, err := newStellarWallet(ctx, &config.StellarConfig)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Only create the stellar signer wallet if the bridge is a master bridge
@@ -91,17 +88,17 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 	}
 
 	if config.RescanBridgeAccount {
-		// saving the cursor to 1 will trigger the bridge stellar account
+		// setting the cursor to 0 will trigger the bridge
 		// to scan for every transaction ever made on the bridge account
 		// and mint accordingly
 		err = blockPersistency.saveStellarCursor("0")
 		if err != nil {
-			return nil, err
+			return
 		}
 	}
 	var depositFee big.Int
 	depositFee.SetInt64(DepositFee)
-	bridge := &Bridge{
+	bridge = &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
 		wallet:           wallet,
@@ -109,7 +106,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		depositFee:       &depositFee,
 	}
 
-	return bridge, nil
+	return
 }
 
 // Close bridge
