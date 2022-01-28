@@ -71,7 +71,8 @@ spec:
             {{ if .Values.is_follower }}
             "--follower=true",
             {{ end }}
-            "--feewallet", "$(STELLAR_FEE_WALLET)"
+            "--feewallet", "$(STELLAR_FEE_WALLET)",
+            "--persistency /storage/node.json"
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
