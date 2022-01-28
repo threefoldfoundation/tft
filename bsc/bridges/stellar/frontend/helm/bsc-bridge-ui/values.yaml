@@ -33,6 +33,10 @@ service:
   type: ClusterIP
   port: 80
 
+global:
+  ingress:
+    certresolver: le
+
 ingress:
   enabled: true
   annotations:
