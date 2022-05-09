@@ -694,7 +694,7 @@ func (bridge *BridgeContract) isMintTxID(txID string) (bool, error) {
 }
 
 func (bridge *BridgeContract) getSignerFunc() bind.SignerFn {
-	return func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	return func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 		accountAddress, err := bridge.lc.AccountAddress()
 		if err != nil {
 			return nil, err

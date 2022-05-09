@@ -20,7 +20,6 @@ var (
 	_ = big.NewInt
 	_ = strings.NewReader
 	_ = ethereum.NotFound
-	_ = abi.U256
 	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
@@ -138,7 +137,7 @@ func bindToken(address common.Address, caller bind.ContractCaller, transactor bi
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Token *TokenRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Token *TokenRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Token.Contract.TokenCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -157,7 +156,7 @@ func (_Token *TokenRaw) Transact(opts *bind.TransactOpts, method string, params 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Token *TokenCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Token *TokenCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Token.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -176,12 +175,17 @@ func (_Token *TokenTransactorRaw) Transact(opts *bind.TransactOpts, method strin
 //
 // Solidity: function MAX_OWNER_COUNT() view returns(uint256)
 func (_Token *TokenCaller) MAXOWNERCOUNT(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "MAX_OWNER_COUNT")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "MAX_OWNER_COUNT")
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
 }
 
 // MAXOWNERCOUNT is a free data retrieval call binding the contract method 0xd74f8edd.
@@ -202,12 +206,17 @@ func (_Token *TokenCallerSession) MAXOWNERCOUNT() (*big.Int, error) {
 //
 // Solidity: function confirmations(uint256 , address ) view returns(bool)
 func (_Token *TokenCaller) Confirmations(opts *bind.CallOpts, arg0 *big.Int, arg1 common.Address) (bool, error) {
-	var (
-		ret0 = new(bool)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "confirmations", arg0, arg1)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "confirmations", arg0, arg1)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
 }
 
 // Confirmations is a free data retrieval call binding the contract method 0x3411c81c.
@@ -228,12 +237,17 @@ func (_Token *TokenCallerSession) Confirmations(arg0 *big.Int, arg1 common.Addre
 //
 // Solidity: function getConfirmationCount(uint256 transactionId) view returns(uint256 count)
 func (_Token *TokenCaller) GetConfirmationCount(opts *bind.CallOpts, transactionId *big.Int) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "getConfirmationCount", transactionId)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "getConfirmationCount", transactionId)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
 }
 
 // GetConfirmationCount is a free data retrieval call binding the contract method 0x8b51d13f.
@@ -254,12 +268,17 @@ func (_Token *TokenCallerSession) GetConfirmationCount(transactionId *big.Int) (
 //
 // Solidity: function getConfirmations(uint256 transactionId) view returns(address[] _confirmations)
 func (_Token *TokenCaller) GetConfirmations(opts *bind.CallOpts, transactionId *big.Int) ([]common.Address, error) {
-	var (
-		ret0 = new([]common.Address)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "getConfirmations", transactionId)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "getConfirmations", transactionId)
+
+	if err != nil {
+		return *new([]common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]common.Address)).(*[]common.Address)
+
+	return out0, err
+
 }
 
 // GetConfirmations is a free data retrieval call binding the contract method 0xb5dc40c3.
@@ -280,12 +299,17 @@ func (_Token *TokenCallerSession) GetConfirmations(transactionId *big.Int) ([]co
 //
 // Solidity: function getOwners() view returns(address[])
 func (_Token *TokenCaller) GetOwners(opts *bind.CallOpts) ([]common.Address, error) {
-	var (
-		ret0 = new([]common.Address)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "getOwners")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "getOwners")
+
+	if err != nil {
+		return *new([]common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]common.Address)).(*[]common.Address)
+
+	return out0, err
+
 }
 
 // GetOwners is a free data retrieval call binding the contract method 0xa0e67e2b.
@@ -306,12 +330,17 @@ func (_Token *TokenCallerSession) GetOwners() ([]common.Address, error) {
 //
 // Solidity: function getTransactionCount(bool pending, bool executed) view returns(uint256 count)
 func (_Token *TokenCaller) GetTransactionCount(opts *bind.CallOpts, pending bool, executed bool) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "getTransactionCount", pending, executed)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "getTransactionCount", pending, executed)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
 }
 
 // GetTransactionCount is a free data retrieval call binding the contract method 0x54741525.
@@ -332,12 +361,17 @@ func (_Token *TokenCallerSession) GetTransactionCount(pending bool, executed boo
 //
 // Solidity: function getTransactionIds(uint256 from, uint256 to, bool pending, bool executed) view returns(uint256[] _transactionIds)
 func (_Token *TokenCaller) GetTransactionIds(opts *bind.CallOpts, from *big.Int, to *big.Int, pending bool, executed bool) ([]*big.Int, error) {
-	var (
-		ret0 = new([]*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "getTransactionIds", from, to, pending, executed)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "getTransactionIds", from, to, pending, executed)
+
+	if err != nil {
+		return *new([]*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]*big.Int)).(*[]*big.Int)
+
+	return out0, err
+
 }
 
 // GetTransactionIds is a free data retrieval call binding the contract method 0xa8abe69a.
@@ -358,12 +392,17 @@ func (_Token *TokenCallerSession) GetTransactionIds(from *big.Int, to *big.Int, 
 //
 // Solidity: function isConfirmed(uint256 transactionId) view returns(bool)
 func (_Token *TokenCaller) IsConfirmed(opts *bind.CallOpts, transactionId *big.Int) (bool, error) {
-	var (
-		ret0 = new(bool)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "isConfirmed", transactionId)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "isConfirmed", transactionId)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
 }
 
 // IsConfirmed is a free data retrieval call binding the contract method 0x784547a7.
@@ -384,12 +423,17 @@ func (_Token *TokenCallerSession) IsConfirmed(transactionId *big.Int) (bool, err
 //
 // Solidity: function isOwner(address ) view returns(bool)
 func (_Token *TokenCaller) IsOwner(opts *bind.CallOpts, arg0 common.Address) (bool, error) {
-	var (
-		ret0 = new(bool)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "isOwner", arg0)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "isOwner", arg0)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
 }
 
 // IsOwner is a free data retrieval call binding the contract method 0x2f54bf6e.
@@ -410,12 +454,17 @@ func (_Token *TokenCallerSession) IsOwner(arg0 common.Address) (bool, error) {
 //
 // Solidity: function owners(uint256 ) view returns(address)
 func (_Token *TokenCaller) Owners(opts *bind.CallOpts, arg0 *big.Int) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "owners", arg0)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "owners", arg0)
+
+	if err != nil {
+		return *new(common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+
+	return out0, err
+
 }
 
 // Owners is a free data retrieval call binding the contract method 0x025e7c27.
@@ -436,12 +485,17 @@ func (_Token *TokenCallerSession) Owners(arg0 *big.Int) (common.Address, error) 
 //
 // Solidity: function required() view returns(uint256)
 func (_Token *TokenCaller) Required(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "required")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "required")
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
 }
 
 // Required is a free data retrieval call binding the contract method 0xdc8452cd.
@@ -462,12 +516,17 @@ func (_Token *TokenCallerSession) Required() (*big.Int, error) {
 //
 // Solidity: function transactionCount() view returns(uint256)
 func (_Token *TokenCaller) TransactionCount(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "transactionCount")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "transactionCount")
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
 }
 
 // TransactionCount is a free data retrieval call binding the contract method 0xb77bf600.
@@ -493,15 +552,26 @@ func (_Token *TokenCaller) Transactions(opts *bind.CallOpts, arg0 *big.Int) (str
 	Data        []byte
 	Executed    bool
 }, error) {
-	ret := new(struct {
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "transactions", arg0)
+
+	outstruct := new(struct {
 		Destination common.Address
 		Value       *big.Int
 		Data        []byte
 		Executed    bool
 	})
-	out := ret
-	err := _Token.contract.Call(opts, out, "transactions", arg0)
-	return *ret, err
+	if err != nil {
+		return *outstruct, err
+	}
+
+	outstruct.Destination = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	outstruct.Value = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Data = *abi.ConvertType(out[2], new([]byte)).(*[]byte)
+	outstruct.Executed = *abi.ConvertType(out[3], new(bool)).(*bool)
+
+	return *outstruct, err
+
 }
 
 // Transactions is a free data retrieval call binding the contract method 0x9ace38c2.
@@ -866,6 +936,7 @@ func (_Token *TokenFilterer) ParseConfirmation(log types.Log) (*TokenConfirmatio
 	if err := _Token.contract.UnpackLog(event, "Confirmation", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1010,6 +1081,7 @@ func (_Token *TokenFilterer) ParseDeposit(log types.Log) (*TokenDeposit, error) 
 	if err := _Token.contract.UnpackLog(event, "Deposit", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1153,6 +1225,7 @@ func (_Token *TokenFilterer) ParseExecution(log types.Log) (*TokenExecution, err
 	if err := _Token.contract.UnpackLog(event, "Execution", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1296,6 +1369,7 @@ func (_Token *TokenFilterer) ParseExecutionFailure(log types.Log) (*TokenExecuti
 	if err := _Token.contract.UnpackLog(event, "ExecutionFailure", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1439,6 +1513,7 @@ func (_Token *TokenFilterer) ParseOwnerAddition(log types.Log) (*TokenOwnerAddit
 	if err := _Token.contract.UnpackLog(event, "OwnerAddition", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1582,6 +1657,7 @@ func (_Token *TokenFilterer) ParseOwnerRemoval(log types.Log) (*TokenOwnerRemova
 	if err := _Token.contract.UnpackLog(event, "OwnerRemoval", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1715,6 +1791,7 @@ func (_Token *TokenFilterer) ParseRequirementChange(log types.Log) (*TokenRequir
 	if err := _Token.contract.UnpackLog(event, "RequirementChange", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -1867,6 +1944,7 @@ func (_Token *TokenFilterer) ParseRevocation(log types.Log) (*TokenRevocation, e
 	if err := _Token.contract.UnpackLog(event, "Revocation", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }
 
@@ -2010,5 +2088,6 @@ func (_Token *TokenFilterer) ParseSubmission(log types.Log) (*TokenSubmission, e
 	if err := _Token.contract.UnpackLog(event, "Submission", log); err != nil {
 		return nil, err
 	}
+	event.Raw = log
 	return event, nil
 }

@@ -23,7 +23,9 @@ func InitializeKeystore(datadir string, accountJSON string, accountPass string) 
 		// Import the account
 		acc, err = ks.Import(blob, accountPass, accountPass)
 		if err != nil {
-			return nil, err
+			if err != keystore.ErrAccountAlreadyExists {
+				return nil, err
+			}
 		}
 
 	} else {

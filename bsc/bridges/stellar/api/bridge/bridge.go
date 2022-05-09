@@ -139,6 +139,12 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	return bridge.bridgeContract.Mint(receiver, amount, txID)
 }
 
+type Data struct {
+	Receiver common.Address
+	Tokens   *big.Int
+	Txid     string
+}
+
 // validateTransaction validates a transaction before it will be confirmed
 func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
@@ -152,9 +158,13 @@ func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 		Tokens   *big.Int
 		Txid     string
 	}
-	err = bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(&data, tx.Data[4:])
+	res, err := bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(tx.Data[4:])
 	if err != nil {
 		log.Error("failed to unpack token mint", "err", err)
+		return err
+	}
+	data, ok := res[0].(Data)
+	if !ok {
 		return err
 	}
 

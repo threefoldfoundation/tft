@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 
@@ -20,10 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -105,7 +105,6 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 
 	// separate saved data per network
 	datadir := filepath.Join(lccfg.DataDir, lccfg.NetworkName)
-	
 
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
@@ -117,8 +116,9 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 			NoDiscovery:    false,
 			DiscoveryV5:    true,
 			ListenAddr:     fmt.Sprintf(":%d", lccfg.Port),
-			MaxPeers:       50,
+			MaxPeers:       30,
 			BootstrapNodes: lccfg.BootstrapNodes,
+			TrustedNodes:   lccfg.BootstrapNodes,
 		},
 		NoUSB: true,
 	})
@@ -126,45 +126,57 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 		return nil, err
 	}
 
-	// Assemble the Ethereum light client protocol
-	var lesc *les.LightEthereum
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		cfg := eth.DefaultConfig
-		cfg.Ethash.DatasetDir = filepath.Join(datadir, "ethash")
-		cfg.SyncMode = downloader.LightSync
-		cfg.NetworkId = lccfg.NetworkID
-		cfg.Genesis = lccfg.GenesisBlock
-		var err error
-		lesc, err = les.New(ctx, &cfg)
-		return lesc, err
-	}); err != nil {
+	// // Assemble the Ethereum light client protocol
+	// var lesc *les.LightEthereum
+	lesc, err := les.New(stack, &ethconfig.Config{
+		NetworkId: lccfg.NetworkID,
+		Genesis:   lccfg.GenesisBlock,
+		SyncMode:  downloader.LightSync,
+		Ethash: ethash.Config{
+			CacheDir: filepath.Join(datadir, "ethash"),
+		},
+	})
+
+	if err != nil {
 		return nil, err
 	}
 
-	stats := "" // Todo: should this stay in here?
-	// Assemble the ethstats monitoring and reporting service'
-	if stats != "" {
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			var serv *les.LightEthereum
-			ctx.Service(&serv)
-			return ethstats.New(stats, nil, serv)
-		}); err != nil {
-			return nil, err
-		}
-	}
+	// if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	// 	cfg := eth.New()
+	// 	cfg.Ethash.DatasetDir = filepath.Join(datadir, "ethash")
+	// 	cfg.SyncMode = downloader.LightSync
+	// 	cfg.NetworkId = lccfg.NetworkID
+	// 	cfg.Genesis = lccfg.GenesisBlock
+	// 	var err error
+	// 	lesc, err = les.New(ctx, &cfg)
+	// 	return lesc, err
+	// }); err != nil {
+	// 	return nil, err
+	// }
+
+	// stats := "" // Todo: should this stay in here?
+	// // Assemble the ethstats monitoring and reporting service'
+	// if stats != "" {
+	// 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	// 		var serv *les.LightEthereum
+	// 		ctx.Service(&serv)
+	// 		return ethstats.New(stats, nil, serv)
+	// 	}); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	// Boot up the client and ensure it connects to bootnodes
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
-
 	// add bootnodes
 	addPeers(stack, lccfg.BootstrapNodes)
 
 	// Attach to the client and retrieve any interesting metadata
 	api, err := stack.Attach()
 	if err != nil {
-		stack.Stop()
+		stack.Close()
 		return nil, err
 	}
 
@@ -182,7 +194,7 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 
 // Close terminates the Ethereum connection and tears down the stack.
 func (lc *LightClient) Close() error {
-	return lc.stack.Stop()
+	return lc.stack.Close()
 }
 
 // FetchTransaction fetches a transaction from a remote peer using its block hash and tx index (within that block).
@@ -196,7 +208,7 @@ func (lc *LightClient) FetchTransaction(ctx context.Context, blockHash common.Ha
 	blockHeight := block.Header().Number.Uint64()
 	if blockHeight > chainHeight {
 		return nil, 0, fmt.Errorf(
-			"Tx %q is in block %d while the current chain height is only %d",
+			"tx %q is in block %d while the current chain height is only %d",
 			txHash.String(), blockHeight, chainHeight)
 	}
 	tx := block.Transaction(txHash)
@@ -283,7 +295,7 @@ func IsNoPeerErr(err error) bool {
 func (lc *LightClient) GetStatus() (*ERC20SyncStatus, error) {
 	downloader := lc.lesc.Downloader()
 	if downloader == nil {
-		return nil, errors.New("Downloader is not available")
+		return nil, errors.New("downloader is not available")
 	}
 	syncStatus := downloader.Progress()
 

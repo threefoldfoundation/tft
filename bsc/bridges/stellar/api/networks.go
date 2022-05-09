@@ -25,7 +25,7 @@ type NetworkConfiguration struct {
 //GetBootnodes returns the bootnodes for the specific network as  slice of *discv5.Node
 // The default bootnodes can be overridden by passing a non nil or empty bootnodes parameter
 func (config NetworkConfiguration) GetBootnodes(bootnodes []string) ([]*enode.Node, error) {
-	if bootnodes == nil || len(bootnodes) == 0 {
+	if bootnodes == nil {
 		bootnodes = config.bootnodes
 	}
 	var nodes []*enode.Node
@@ -99,7 +99,7 @@ func GetEthNetworkConfiguration(networkname string) (networkconfig NetworkConfig
 	fmt.Println(networkname)
 	networkconfig, found := ethNetworkConfigurations[networkname]
 	if !found {
-		err = fmt.Errorf("Network %s not supported", networkname)
+		err = fmt.Errorf("network %s not supported", networkname)
 	}
 	return
 }
