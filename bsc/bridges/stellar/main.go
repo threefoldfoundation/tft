@@ -22,7 +22,7 @@ func main() {
 	var ethClientUrl string
 	var bridgeCfg bridge.BridgeConfig
 	flag.StringVar(&ethClientUrl, "eth", "https://data-seed-prebsc-1-s1.binance.org:8545", "eth client url")
-	flag.Uint16Var(&bridgeCfg.EthPort, "port", 23111, "eth port")
+	flag.Uint16Var(&bridgeCfg.EthPort, "port", 30331, "eth port")
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
