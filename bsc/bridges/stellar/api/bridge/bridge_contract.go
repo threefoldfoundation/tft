@@ -99,7 +99,11 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 
-	bootstrapNodes, err := networkConfig.GetBootnodes(bridgeConfig.Bootnodes)
+	bootstrapNodes, err := networkConfig.GetBootnodes()
+	if err != nil {
+		return nil, err
+	}
+	staticNodes, err := networkConfig.GetStaticNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +111,7 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 		Port:           bridgeConfig.EthPort,
 		DataDir:        bridgeConfig.Datadir,
 		BootstrapNodes: bootstrapNodes,
+		StaticNodes:    staticNodes,
 		NetworkName:    networkConfig.NetworkName,
 		NetworkID:      networkConfig.NetworkID,
 		GenesisBlock:   networkConfig.GenesisBlock,

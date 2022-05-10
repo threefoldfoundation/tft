@@ -43,7 +43,6 @@ type Bridge struct {
 
 type BridgeConfig struct {
 	EthNetworkName          string
-	Bootnodes               []string
 	ContractAddress         string
 	MultisigContractAddress string
 	EthPort                 uint16

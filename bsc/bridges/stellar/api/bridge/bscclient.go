@@ -58,6 +58,7 @@ type LightClientConfig struct {
 	DataDir string
 
 	BootstrapNodes []*enode.Node
+	StaticNodes    []*enode.Node
 	NetworkName    string
 	NetworkID      uint64
 	GenesisBlock   *core.Genesis
@@ -105,7 +106,6 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 
 	// separate saved data per network
 	datadir := filepath.Join(lccfg.DataDir, lccfg.NetworkName)
-	
 
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
@@ -119,6 +119,7 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 			ListenAddr:     fmt.Sprintf(":%d", lccfg.Port),
 			MaxPeers:       50,
 			BootstrapNodes: lccfg.BootstrapNodes,
+			StaticNodes:    lccfg.StaticNodes,
 		},
 		NoUSB: true,
 	})
