@@ -87,8 +87,8 @@ github.com/benbjohnson/clock v1.0.2/go.mod h1:bGMdMPoPVvcYyt1gHDf4J2KE153Yf9BuiU
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0 h1:HWo1m869IqiPhD389kmkxeTalrjNbbJTC8LXupb+sl0=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
-github.com/binance-chain/bsc v1.1.10 h1:cBcImsMbssvsLd+ddPcG8mmZxvGTPW1YGN2XArlCJgU=
-github.com/binance-chain/bsc v1.1.10/go.mod h1:uxtwKoKv01tka8JwS5NJdjUzoKsKN+o36s7rkrqqdo0=
+github.com/binance-chain/bsc v1.1.9 h1:1tEgNo4oqPQZYqH6COOiw8OmNJYTOCaM6eUJPRSg23Q=
+github.com/binance-chain/bsc v1.1.9/go.mod h1:uxtwKoKv01tka8JwS5NJdjUzoKsKN+o36s7rkrqqdo0=
 github.com/bmizerany/pat v0.0.0-20170815010413-6226ea591a40/go.mod h1:8rLXio+WjiTceGBHIoTvn60HIbs7Hm7bcHjyrSqYB9c=
 github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx27Ps=
 github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBTaaSFSlLx/70C2HPIMNZpVV8+vt/A+FMnYP11g=

@@ -12,16 +12,13 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	var ethClientUrl string
 	var bridgeCfg bridge.BridgeConfig
-	flag.StringVar(&ethClientUrl, "eth", "https://data-seed-prebsc-1-s1.binance.org:8545", "eth client url")
 	flag.Uint16Var(&bridgeCfg.EthPort, "port", 30311, "eth port")
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
@@ -50,21 +47,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	client, err := ethclient.Dial(ethClientUrl)
-	if err != nil {
-		panic(err)
-	}
-
-	timeout, timeoutCancel := context.WithTimeout(ctx, time.Second*15)
-	defer timeoutCancel()
-
-	id, err := client.ChainID(timeout)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Debug("Chain ID %+v \n", id)
 
 	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress)
 	if err != nil {

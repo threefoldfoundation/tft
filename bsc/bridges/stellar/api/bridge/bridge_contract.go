@@ -103,10 +103,15 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 	if err != nil {
 		return nil, err
 	}
+	staticNodes, err := networkConfig.GetStaticNodes()
+	if err != nil {
+		return nil, err
+	}
 	lc, err := NewLightClient(LightClientConfig{
 		Port:           bridgeConfig.EthPort,
 		DataDir:        bridgeConfig.Datadir,
 		BootstrapNodes: bootstrapNodes,
+		StaticNodes:    staticNodes,
 		NetworkName:    networkConfig.NetworkName,
 		NetworkID:      networkConfig.NetworkID,
 		GenesisBlock:   networkConfig.GenesisBlock,

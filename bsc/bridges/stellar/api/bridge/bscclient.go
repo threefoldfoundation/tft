@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/light"
@@ -58,6 +57,7 @@ type LightClientConfig struct {
 	DataDir string
 
 	BootstrapNodes []*enode.Node
+	StaticNodes    []*enode.Node
 	NetworkName    string
 	NetworkID      uint64
 	GenesisBlock   *core.Genesis
@@ -108,7 +108,6 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
-		Name:    "chain",
 		Version: params.VersionWithMeta,
 		DataDir: datadir,
 		P2P: p2p.Config{
@@ -116,9 +115,9 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 			NoDiscovery:    false,
 			DiscoveryV5:    true,
 			ListenAddr:     fmt.Sprintf(":%d", lccfg.Port),
-			MaxPeers:       30,
+			MaxPeers:       50,
 			BootstrapNodes: lccfg.BootstrapNodes,
-			TrustedNodes:   lccfg.BootstrapNodes,
+			StaticNodes:    lccfg.StaticNodes,
 		},
 		NoUSB: true,
 	})
@@ -127,44 +126,15 @@ func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
 	}
 
 	// // Assemble the Ethereum light client protocol
-	// var lesc *les.LightEthereum
 	lesc, err := les.New(stack, &ethconfig.Config{
-		NetworkId: lccfg.NetworkID,
-		Genesis:   lccfg.GenesisBlock,
-		SyncMode:  downloader.LightSync,
-		Ethash: ethash.Config{
-			CacheDir: filepath.Join(datadir, "ethash"),
-		},
+		NetworkId:  lccfg.NetworkID,
+		Genesis:    lccfg.GenesisBlock,
+		SyncMode:   downloader.LightSync,
+		LightPeers: 50,
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
-	// if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-	// 	cfg := eth.New()
-	// 	cfg.Ethash.DatasetDir = filepath.Join(datadir, "ethash")
-	// 	cfg.SyncMode = downloader.LightSync
-	// 	cfg.NetworkId = lccfg.NetworkID
-	// 	cfg.Genesis = lccfg.GenesisBlock
-	// 	var err error
-	// 	lesc, err = les.New(ctx, &cfg)
-	// 	return lesc, err
-	// }); err != nil {
-	// 	return nil, err
-	// }
-
-	// stats := "" // Todo: should this stay in here?
-	// // Assemble the ethstats monitoring and reporting service'
-	// if stats != "" {
-	// 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-	// 		var serv *les.LightEthereum
-	// 		ctx.Service(&serv)
-	// 		return ethstats.New(stats, nil, serv)
-	// 	}); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
 
 	// Boot up the client and ensure it connects to bootnodes
 	if err := stack.Start(); err != nil {
