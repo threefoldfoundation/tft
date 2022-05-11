@@ -50,6 +50,7 @@ type BridgeConfig struct {
 	AccountPass             string
 	Datadir                 string
 	RescanBridgeAccount     bool
+	RescanFromHeight        int64
 	PersistencyFile         string
 	Follower                bool
 	BridgeMasterAddress     string
@@ -255,13 +256,19 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			}
 		}()
 
-		height, err := bridge.blockPersistency.GetHeight()
-		if err != nil {
-			return err
-		}
 		var lastHeight uint64
-		if height.LastHeight > EthBlockDelay {
-			lastHeight = height.LastHeight - EthBlockDelay
+		// If the user provides a height to rescan from, use that
+		// Otherwise use the saved height in the persistency file
+		if bridge.config.RescanFromHeight > 0 {
+			lastHeight = uint64(bridge.config.RescanFromHeight) - EthBlockDelay
+		} else {
+			height, err := bridge.blockPersistency.GetHeight()
+			if err != nil {
+				return err
+			}
+			if height.LastHeight > EthBlockDelay {
+				lastHeight = height.LastHeight - EthBlockDelay
+			}
 		}
 
 		// Sync up any withdrawals made if the blockheight is manually set
@@ -313,11 +320,18 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					}
 				}
 			case head := <-heads:
-				log.Info("new head", "head", head.Number)
 				bridge.mut.Lock()
 				ids := make([]string, 0, len(txMap))
 				for id := range txMap {
 					ids = append(ids, id)
+				}
+
+				if len(ids) == 0 {
+					log.Info("head processed, saving blockheight now", "head", head.Number)
+					err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
+					if err != nil {
+						log.Error("error occured saving blockheight", "error", err)
+					}
 				}
 
 				for _, id := range ids {
