@@ -81,6 +81,15 @@ spec:
               mountPath: /etc/eth-bridge
             - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage
+        - name: lightnode
+          image: dylanverstraete/bnbchain
+          imagePullPolicy: IfNotPresent
+          args: [
+            "--syncmode=light"
+          ]
+          volumeMounts:
+            - name: tftbscbridge-storage-{{ .Release.Name }}
+              mountPath: /root/.ethereum
       volumes:
         - name: tftbscbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
