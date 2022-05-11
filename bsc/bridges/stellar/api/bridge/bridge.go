@@ -43,10 +43,9 @@ type Bridge struct {
 
 type BridgeConfig struct {
 	EthNetworkName          string
-	Bootnodes               []string
+	EthUrl                  string
 	ContractAddress         string
 	MultisigContractAddress string
-	EthPort                 uint16
 	AccountJSON             string
 	AccountPass             string
 	Datadir                 string
@@ -113,8 +112,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 func (bridge *Bridge) Close() error {
 	bridge.mut.Lock()
 	defer bridge.mut.Unlock()
-	err := bridge.bridgeContract.Close()
-	return err
+	return nil
 }
 
 func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
@@ -268,21 +266,21 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 		// Sync up any withdrawals made if the blockheight is manually set
 		// to a previous value
-		status, err := bridge.bridgeContract.lc.GetStatus()
+		currentBlock, err := bridge.bridgeContract.lc.BlockNumber(ctx)
 		if err != nil {
 			return err
 		}
 
-		if lastHeight < status.CurrentBlock {
+		if lastHeight < currentBlock {
 			// todo filter logs
 			go func() {
-				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, status.CurrentBlock); err != nil {
+				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, currentBlock); err != nil {
 					panic(err)
 				}
 			}()
 		}
 
-		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, lastHeight)
+		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
 	} else {
 		go bridge.bridgeContract.SubscribeSubmission(submissionChan)
 	}
@@ -315,6 +313,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					}
 				}
 			case head := <-heads:
+				log.Info("new head", "head", head.Number)
 				bridge.mut.Lock()
 				ids := make([]string, 0, len(txMap))
 				for id := range txMap {
@@ -379,7 +378,8 @@ func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error
 	}
 
 	amount -= uint64(WithdrawFee)
-	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", true)
+	includeWithdrawFee := bridge.wallet.config.StellarFeeWallet != ""
+	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", includeWithdrawFee)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 	}

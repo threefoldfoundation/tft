@@ -18,4 +18,4 @@ require (
 	github.com/stellar/go v0.0.0-20210331095526-7b139512d880
 )
 
-replace github.com/ethereum/go-ethereum v1.10.17 => github.com/binance-chain/bsc v1.1.9
+replace github.com/ethereum/go-ethereum v1.10.17 => github.com/binance-chain/bsc v1.1.7

@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -78,7 +77,6 @@ func (bridge *BridgeContract) GetContractAdress() common.Address {
 
 // NewBridgeContract creates a new wrapper for an allready deployed contract
 func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
-	fmt.Printf("bridge is Follower %v", bridgeConfig.Follower)
 	// load correct network config
 	networkConfig, err := tfeth.GetEthNetworkConfiguration(bridgeConfig.EthNetworkName)
 	if err != nil {
@@ -99,22 +97,11 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 
-	bootstrapNodes, err := networkConfig.GetBootnodes(bridgeConfig.Bootnodes)
-	if err != nil {
-		return nil, err
-	}
-	staticNodes, err := networkConfig.GetStaticNodes()
-	if err != nil {
-		return nil, err
-	}
 	lc, err := NewLightClient(LightClientConfig{
-		Port:           bridgeConfig.EthPort,
-		DataDir:        bridgeConfig.Datadir,
-		BootstrapNodes: bootstrapNodes,
-		StaticNodes:    staticNodes,
-		NetworkName:    networkConfig.NetworkName,
-		NetworkID:      networkConfig.NetworkID,
-		GenesisBlock:   networkConfig.GenesisBlock,
+		DataDir:     bridgeConfig.Datadir,
+		NetworkName: networkConfig.NetworkName,
+		EthUrl:      bridgeConfig.EthUrl,
+		NetworkID:   networkConfig.NetworkID,
 	})
 	if err != nil {
 		return nil, err
@@ -205,11 +192,6 @@ func createMultisigContract(networkConfig tfeth.NetworkConfiguration, client *et
 	}, nil
 }
 
-// Close terminates the Ethereum connection and tears down the stack.
-func (bridge *BridgeContract) Close() error {
-	return bridge.lc.Close()
-}
-
 // AccountAddress returns the account address of the bridge contract
 func (bridge *BridgeContract) AccountAddress() (common.Address, error) {
 	return bridge.lc.AccountAddress()
@@ -267,17 +249,7 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 		log.Error("Failed to subscribe to head events", "err", err)
 	}
 	defer sub.Unsubscribe()
-	// channel so we can update the internal state from the heads
-	// update := make(chan *types.Header)
-	// go func() {
-	// 	for head := range update {
-	// 		// old heads should be ignored during a chain sync after some downtime
-	// 		if err := bridge.Refresh(head); err != nil {
-	// 			log.Warn("Failed to update state", "block", head.Number, "err", err)
-	// 		}
-	// 		log.Debug("Internal stats updated", "block", head.Number, "account balance", bridge.balance, "gas price", bridge.price, "nonce", bridge.nonce)
-	// 	}
-	// }()
+
 	for head := range heads {
 		ch <- head
 		select {
@@ -343,6 +315,7 @@ func (c SubmissionEvent) TransactionId() *big.Int {
 
 // SubscribeSubmission subscribes to new submission event on the given multisig contract.
 func (bridge *BridgeContract) SubscribeSubmission(submitChan chan<- SubmissionEvent) error {
+	log.Debug("Subscribing multisig contract transaction submission channel")
 	sink := make(chan *mscontract.TokenSubmission)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 	sub, err := bridge.multisigContract.filter.WatchSubmission(opts, sink, nil)
