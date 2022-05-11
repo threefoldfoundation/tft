@@ -326,14 +326,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					ids = append(ids, id)
 				}
 
-				if len(ids) == 0 {
-					log.Info("head processed, saving blockheight now", "head", head.Number)
-					err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
-					if err != nil {
-						log.Error("error occured saving blockheight", "error", err)
-					}
-				}
-
 				for _, id := range ids {
 					we := txMap[id]
 					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
@@ -343,12 +335,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 							continue
 						}
-						// only save blockheight when we have a processed a withdrawal
-						log.Info("saving blockheight now")
-						err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
-						if err != nil {
-							log.Error("error occured saving blockheight", "error", err)
-						}
 
 						// forget about our tx
 						delete(txMap, id)
@@ -356,6 +342,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				}
 
 				bridge.mut.Unlock()
+
+				log.Info("head processed, saving blockheight now", "head", head.Number)
+				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
+				if err != nil {
+					log.Error("error occured saving blockheight", "error", err)
+				}
 			case <-ctx.Done():
 				return
 			}
