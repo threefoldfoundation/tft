@@ -39,18 +39,19 @@ type Bridge struct {
 	mut              sync.Mutex
 	config           *BridgeConfig
 	depositFee       *big.Int
+	synced           bool
 }
 
 type BridgeConfig struct {
 	EthNetworkName          string
-	Bootnodes               []string
+	EthUrl                  string
 	ContractAddress         string
 	MultisigContractAddress string
-	EthPort                 uint16
 	AccountJSON             string
 	AccountPass             string
 	Datadir                 string
 	RescanBridgeAccount     bool
+	RescanFromHeight        int64
 	PersistencyFile         string
 	Follower                bool
 	BridgeMasterAddress     string
@@ -112,12 +113,15 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 // Close bridge
 func (bridge *Bridge) Close() error {
 	bridge.mut.Lock()
+	bridge.bridgeContract.lc.Close()
 	defer bridge.mut.Unlock()
-	err := bridge.bridgeContract.Close()
-	return err
+	return nil
 }
 
 func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
+	if !bridge.synced {
+		return errors.New("bridge is not synced, retry later")
+	}
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
@@ -139,6 +143,12 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	return bridge.bridgeContract.Mint(receiver, amount, txID)
 }
 
+type Data struct {
+	Receiver common.Address
+	Tokens   *big.Int
+	Txid     string
+}
+
 // validateTransaction validates a transaction before it will be confirmed
 func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
@@ -152,9 +162,14 @@ func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 		Tokens   *big.Int
 		Txid     string
 	}
-	err = bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(&data, tx.Data[4:])
+	res, err := bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(tx.Data[4:])
 	if err != nil {
 		log.Error("failed to unpack token mint", "err", err)
+		return err
+	}
+	// TODO, SEE IF THIS WORKS IN A MULTISIG SETUP, MIGHT NOT WORK DUE TO API CHANGES
+	data, ok := res[0].(Data)
+	if !ok {
 		return err
 	}
 
@@ -247,32 +262,42 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			}
 		}()
 
-		height, err := bridge.blockPersistency.GetHeight()
-		if err != nil {
-			return err
-		}
-		var lastHeight uint64
-		if height.LastHeight > EthBlockDelay {
-			lastHeight = height.LastHeight - EthBlockDelay
-		}
-
 		// Sync up any withdrawals made if the blockheight is manually set
 		// to a previous value
-		status, err := bridge.bridgeContract.lc.GetStatus()
+		currentBlock, err := bridge.bridgeContract.lc.BlockNumber(ctx)
 		if err != nil {
 			return err
 		}
 
-		if lastHeight < status.CurrentBlock {
+		var lastHeight uint64
+		// If the user provides a height to rescan from, use that
+		// Otherwise use the saved height in the persistency file
+		if bridge.config.RescanFromHeight > 0 {
+			lastHeight = uint64(bridge.config.RescanFromHeight) - EthBlockDelay
+		} else {
+			height, err := bridge.blockPersistency.GetHeight()
+			if err != nil {
+				return err
+			}
+			// if the saved height is 0, just use current block
+			if height.LastHeight == 0 {
+				lastHeight = currentBlock
+			}
+			if height.LastHeight > EthBlockDelay {
+				lastHeight = height.LastHeight - EthBlockDelay
+			}
+		}
+
+		if lastHeight < currentBlock {
 			// todo filter logs
 			go func() {
-				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, status.CurrentBlock); err != nil {
+				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, currentBlock); err != nil {
 					panic(err)
 				}
 			}()
 		}
 
-		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, lastHeight)
+		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
 	} else {
 		go bridge.bridgeContract.SubscribeSubmission(submissionChan)
 	}
@@ -306,32 +331,44 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				}
 			case head := <-heads:
 				bridge.mut.Lock()
-				ids := make([]string, 0, len(txMap))
-				for id := range txMap {
-					ids = append(ids, id)
+
+				progress, err := bridge.bridgeContract.lc.SyncProgress(ctx)
+				if err != nil {
+					log.Error(fmt.Sprintf("failed to get sync progress %s", err.Error()))
+				}
+				if progress == nil {
+					bridge.synced = true
 				}
 
-				for _, id := range ids {
-					we := txMap[id]
-					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
-						log.Info("Starting withdrawal", "txHash", we.TxHash())
-						err := bridge.withdraw(ctx, we)
-						if err != nil {
-							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
-							continue
-						}
-						// only save blockheight when we have a processed a withdrawal
-						log.Info("saving blockheight now")
-						err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
-						if err != nil {
-							log.Error("error occured saving blockheight", "error", err)
-						}
+				log.Info("found new head", "head", head.Number, "synced", bridge.synced)
 
-						// forget about our tx
-						delete(txMap, id)
+				if bridge.synced {
+					ids := make([]string, 0, len(txMap))
+					for id := range txMap {
+						ids = append(ids, id)
 					}
+
+					for _, id := range ids {
+						we := txMap[id]
+						if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
+							log.Info("Starting withdrawal", "txHash", we.TxHash())
+							err := bridge.withdraw(ctx, we)
+							if err != nil {
+								log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
+								continue
+							}
+
+							// forget about our tx
+							delete(txMap, id)
+						}
+					}
+
 				}
 
+				err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
+				if err != nil {
+					log.Error("error occured saving blockheight", "error", err)
+				}
 				bridge.mut.Unlock()
 			case <-ctx.Done():
 				return
@@ -369,7 +406,8 @@ func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error
 	}
 
 	amount -= uint64(WithdrawFee)
-	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", true)
+	includeWithdrawFee := bridge.wallet.config.StellarFeeWallet != ""
+	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", includeWithdrawFee)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
 	}

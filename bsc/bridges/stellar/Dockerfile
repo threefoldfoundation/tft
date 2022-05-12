@@ -5,7 +5,6 @@ RUN go build -ldflags '-w -s -extldflags "-static"'
 
 FROM alpine:3.13.5
 COPY --from=BUILDER /go/src/github.com/threefoldfoundation/tft/bsc/bridges/stellar/stellar /
-COPY genesis/ /genesis/
 RUN mkdir /storage
 VOLUME /storage
 ENTRYPOINT [ "/stellar" ]

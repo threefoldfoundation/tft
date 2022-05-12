@@ -12,18 +12,15 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	var ethClientUrl string
 	var bridgeCfg bridge.BridgeConfig
-	flag.StringVar(&ethClientUrl, "eth", "https://data-seed-prebsc-1-s1.binance.org:8545", "eth client url")
-	flag.Uint16Var(&bridgeCfg.EthPort, "port", 23111, "eth port")
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
+	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8576", "ethereum rpc url")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
 
@@ -39,6 +36,7 @@ func main() {
 	flag.StringVar(&bridgeCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
+	flag.Int64Var(&bridgeCfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")
 
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
@@ -48,23 +46,10 @@ func main() {
 
 	//TODO cfg.Validate()
 
+	log.Info("connection url provided: ", "url", bridgeCfg.EthUrl)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	client, err := ethclient.Dial(ethClientUrl)
-	if err != nil {
-		panic(err)
-	}
-
-	timeout, timeoutCancel := context.WithTimeout(ctx, time.Second*15)
-	defer timeoutCancel()
-
-	id, err := client.ChainID(timeout)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Debug("Chain ID %+v \n", id)
 
 	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress)
 	if err != nil {

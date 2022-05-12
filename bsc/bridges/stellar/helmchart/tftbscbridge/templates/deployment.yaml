@@ -28,6 +28,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
+        {{ if .Values.enable_bridge }}
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -50,35 +51,53 @@ spec:
             value: {{ .Values.ms_contract_address }}
           - name: ETH_NETWORK
             value: {{ .Values.eth_network }}
-          - name: ETH_CLIENT_URL
-            value: {{ .Values.eth_client_url }}
           - name: BRIDGE_MASTER_ADDRESS
             value: {{ .Values.bridge_master_address }}
           - name: STELLAR_FEE_WALLET
             value: {{ .Values.stellar_fee_wallet }}
           - name: STELLAR_NETWORK
             value: {{ .Values.network }}
+          - name: ETH_URL
+            value: {{ .Values.eth_url }}
+          - name: RESCAN_HEIGHT
+            value: {{ .Values.rescan_height | quote }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--account", "$(ACCOUNT_JSON)",
             "--password", "$(ACCOUNT_PASSWORD)",
-            "--eth", "$(ETH_CLIENT_URL)",
             "--ethnetwork", "$(ETH_NETWORK)",
             "--contract", "$(CONTRACT_ADDRESS)",
             "--mscontract", "$(MS_CONTRACT_ADDRESS)",
             "--master", "$(BRIDGE_MASTER_ADDRESS)",
             "--network","$(STELLAR_NETWORK)",
+            "--ethurl", "$(ETH_URL)",
             {{ if .Values.is_follower }}
             "--follower=true",
             {{ end }}
             "--feewallet", "$(STELLAR_FEE_WALLET)",
-            "--persistency", "/storage/node.json"
+            "--persistency", "/storage/node.json",
+            "--rescanHeight", "$(RESCAN_HEIGHT)"
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config-volume
               mountPath: /etc/eth-bridge
+            - name: tftbscbridge-storage-{{ .Release.Name }}
+              mountPath: /storage
+        {{ end }}
+        - name: lightnode
+          image: dylanverstraete/bnbchain-main:1.1.10
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ws
+              containerPort: 8546
+              protocol: TCP
+          args: [
+            "--syncmode=light",
+            "--ws"
+          ]
+          volumeMounts:
             - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage
       volumes:

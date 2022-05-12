@@ -19,7 +19,6 @@ import (
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/stellar"
@@ -28,6 +27,7 @@ import (
 const (
 	TFTMainnet = "TFT:GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47"
 	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
+	// TFTTest = "TFTXXX:GCRO7FLIU4LKELZBLGWOTQ7T64OKSU4O4OWATLHV3BFSVQZMJWWKRE5A"
 
 	stellarPrecision       = 1e7
 	stellarPrecisionDigits = 7
@@ -494,23 +494,6 @@ func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneff
 	}
 	effects, err = client.Effects(effectsReq)
 	return
-}
-
-func (w *stellarWallet) getOperationEffect(txHash string) (ops operations.OperationsPage, err error) {
-	client, err := w.GetHorizonClient()
-	if err != nil {
-		return ops, err
-	}
-
-	opsRequest := horizonclient.OperationRequest{
-		ForTransaction: txHash,
-	}
-	ops, err = client.Operations(opsRequest)
-	if err != nil {
-		return ops, err
-	}
-
-	return ops, nil
 }
 
 // GetHorizonClient gets the horizon client based on the wallet's network

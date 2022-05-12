@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: tftstellarbscbridge
-  pullPolicy: IfNotPresent
-  tag: ""
+  repository: dylanverstraete/stellarbridge
+  pullPolicy: Always
+  tag: "1.0.1"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -39,28 +39,34 @@ securityContext:
 global:
 
 # should be provided on startup
-stellar_secret: ""
+stellar_secret: "SDPYTGXR5AVMRC7RPGHICR33A76QUAJPJA344DM3TIATZ6PUBMGPVWE4"
 # testnet or production
 network: "testnet"
 
 # json content for the account json file
 account_json: |-
-
 account_password: "test123"
-# mainnet bsc: https://bsc-dataseed.binance.org/
-# testnet bsc: https://data-seed-prebsc-1-s1.binance.org:8545/
-eth_client_url: "https://data-seed-prebsc-1-s1.binance.org:8545/"
 # smart-chain-testnet or smart-chain-mainnet
 eth_network: "smart-chain-testnet"
 # production: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
-contract_address: "0x4DFe8A53cD9dbA17038cAaDB4cd6743160dAf049"
+contract_address: "0xa5900c87f25851A4ABaD0c2bFFf3ad3Ee852BC80"
 # production: 0xa4E8d413004d46f367D4F09D6BD4EcBccfE51D33
-ms_contract_address: "0x0586d6afA50fA3b47FB51a34b906Ec8Fab5ACE0D"
+ms_contract_address: "0x6B5507633eBa86E202b1385d47415d6e2c51937D"
 # production: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
-bridge_master_address: "GC7DYJUME4ZDWI5ZWAKT6RN2KKV6Q2CQIDSGG3B2PVRVD73VT22RADL3"
+bridge_master_address: "GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V"
 # production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
-stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
-is_follower: true
+# stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
+is_follower: false
+eth_url: "/storage/geth.ipc" 
+
+# Rescan from a certain blockheight
+# If set to 0, it will just take the current blockheight from the lightnode
+rescan_height: 100
+
+# If enabled, the bridge daemon will also start
+# It's recommended to delete the pod (helm uninstall)
+# before setting this to true and redeploying
+enable_bridge: true
 
 resources:
   {}
@@ -83,12 +89,9 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  size: 10Gi # Set to at least 70 for production
-  existingpersistentVolumeClaim: ""
-  storageClassName: local-path
+  existingpersistentVolumeClaim: "pvc-bridge-local"
   persistentVolume:
-    create: true
-    hostPath: ""
+    create: false
 
 nodeSelector: {}
 
