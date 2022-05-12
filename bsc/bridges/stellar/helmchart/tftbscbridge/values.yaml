@@ -6,8 +6,8 @@ replicaCount: 1
 
 image:
   repository: dylanverstraete/stellarbridge
-  pullPolicy: IfNotPresent
-  tag: ""
+  pullPolicy: Always
+  tag: "1.0.1"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -39,17 +39,13 @@ securityContext:
 global:
 
 # should be provided on startup
-stellar_secret: ""
+stellar_secret: "SDPYTGXR5AVMRC7RPGHICR33A76QUAJPJA344DM3TIATZ6PUBMGPVWE4"
 # testnet or production
 network: "testnet"
 
 # json content for the account json file
 account_json: |-
-
 account_password: "test123"
-# mainnet bsc: https://bsc-dataseed.binance.org/
-# testnet bsc: https://data-seed-prebsc-1-s1.binance.org:8545/
-eth_client_url: "/storage/root/.ethereum/geth.ipc"
 # smart-chain-testnet or smart-chain-mainnet
 eth_network: "smart-chain-testnet"
 # production: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
@@ -61,6 +57,7 @@ bridge_master_address: "GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V
 # production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
 # stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
 is_follower: false
+eth_url: "/storage/geth.ipc" 
 
 resources:
   {}
@@ -83,12 +80,9 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  size: 10Gi # Set to at least 70 for production
-  existingpersistentVolumeClaim: ""
-  storageClassName: local-path
+  existingpersistentVolumeClaim: "pvc-bridge-local"
   persistentVolume:
-    create: true
-    hostPath: "/tmp/test"
+    create: false
 
 nodeSelector: {}
 

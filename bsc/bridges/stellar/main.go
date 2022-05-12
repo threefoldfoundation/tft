@@ -20,7 +20,7 @@ func main() {
 
 	var bridgeCfg bridge.BridgeConfig
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
-	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "", "ethereum rpc url")
+	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8576", "ethereum rpc url")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
 
@@ -45,6 +45,8 @@ func main() {
 	flag.Parse()
 
 	//TODO cfg.Validate()
+
+	log.Info("connection url provided: ", "url", bridgeCfg.EthUrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

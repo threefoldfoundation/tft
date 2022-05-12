@@ -112,6 +112,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 // Close bridge
 func (bridge *Bridge) Close() error {
 	bridge.mut.Lock()
+	bridge.bridgeContract.lc.Close()
 	defer bridge.mut.Unlock()
 	return nil
 }
@@ -226,6 +227,8 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 	go bridge.bridgeContract.Loop(heads)
 
+	synced := false
+
 	// subscribing to these events is not needed for operational purposes, but might be nice to get some info
 	go bridge.bridgeContract.SubscribeTransfers()
 	go bridge.bridgeContract.SubscribeMint()
@@ -256,6 +259,13 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			}
 		}()
 
+		// Sync up any withdrawals made if the blockheight is manually set
+		// to a previous value
+		currentBlock, err := bridge.bridgeContract.lc.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+
 		var lastHeight uint64
 		// If the user provides a height to rescan from, use that
 		// Otherwise use the saved height in the persistency file
@@ -266,16 +276,13 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			// if the saved height is 0, just use current block
+			if height.LastHeight == 0 {
+				lastHeight = currentBlock
+			}
 			if height.LastHeight > EthBlockDelay {
 				lastHeight = height.LastHeight - EthBlockDelay
 			}
-		}
-
-		// Sync up any withdrawals made if the blockheight is manually set
-		// to a previous value
-		currentBlock, err := bridge.bridgeContract.lc.BlockNumber(ctx)
-		if err != nil {
-			return err
 		}
 
 		if lastHeight < currentBlock {
@@ -321,33 +328,45 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				}
 			case head := <-heads:
 				bridge.mut.Lock()
-				ids := make([]string, 0, len(txMap))
-				for id := range txMap {
-					ids = append(ids, id)
+
+				progress, err := bridge.bridgeContract.lc.SyncProgress(ctx)
+				if err != nil {
+					log.Error(fmt.Sprintf("failed to get sync progress %s", err.Error()))
 				}
 
-				for _, id := range ids {
-					we := txMap[id]
-					if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
-						log.Info("Starting withdrawal", "txHash", we.TxHash())
-						err := bridge.withdraw(ctx, we)
-						if err != nil {
-							log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
-							continue
-						}
+				if head.Number.Uint64() == progress.HighestBlock {
+					synced = true
+				}
+				log.Info("found new head", "head", head.Number, "synced", synced)
 
-						// forget about our tx
-						delete(txMap, id)
+				if synced {
+					ids := make([]string, 0, len(txMap))
+					for id := range txMap {
+						ids = append(ids, id)
 					}
+
+					for _, id := range ids {
+						we := txMap[id]
+						if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
+							log.Info("Starting withdrawal", "txHash", we.TxHash())
+							err := bridge.withdraw(ctx, we)
+							if err != nil {
+								log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
+								continue
+							}
+
+							// forget about our tx
+							delete(txMap, id)
+						}
+					}
+
 				}
 
-				bridge.mut.Unlock()
-
-				log.Info("head processed, saving blockheight now", "head", head.Number)
-				err := bridge.blockPersistency.saveHeight(head.Number.Uint64())
+				err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
 				if err != nil {
 					log.Error("error occured saving blockheight", "error", err)
 				}
+				bridge.mut.Unlock()
 			case <-ctx.Done():
 				return
 			}

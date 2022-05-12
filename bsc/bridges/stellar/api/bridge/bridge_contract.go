@@ -240,7 +240,7 @@ func (bridge *BridgeContract) Refresh(head *types.Header) error {
 // Loop subscribes to new eth heads. If a new head is received, it is passed on the given channel,
 // after which the internal stats are updated if no update is already in progress
 func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
-	log.Debug("Subscribing to eth headers")
+	log.Info("Subscribing to eth headers")
 	// channel to receive head updates from client on
 	heads := make(chan *types.Header, 16)
 	// subscribe to head upates

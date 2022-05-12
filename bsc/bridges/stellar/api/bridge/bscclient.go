@@ -172,13 +172,6 @@ func (lc *LightClient) GetBalanceInfo() (*ERC20BalanceInfo, error) {
 	}, nil
 }
 
-// ERC20SyncStatus provides a definition for the current status of the ehtereum network sync.
-type ERC20SyncStatus struct {
-	StartingBlock uint64 `json:"startingblock"`
-	CurrentBlock  uint64 `json:"currentblock"`
-	HighestBlock  uint64 `json:"highestblock"`
-}
-
 // ERC20BalanceInfo provides a definition for the ethereum bridge address balance
 type ERC20BalanceInfo struct {
 	Balance *big.Int       `json:"balance"`
