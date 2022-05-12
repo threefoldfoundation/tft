@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: dylanverstraete/stellarbridge
-  pullPolicy: Always
-  tag: "1.0.1"
+  repository: stellarbridge
+  pullPolicy: IfNotPresent
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""
