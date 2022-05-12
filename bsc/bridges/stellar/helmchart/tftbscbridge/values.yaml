@@ -59,6 +59,15 @@ bridge_master_address: "GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V
 is_follower: false
 eth_url: "/storage/geth.ipc" 
 
+# Rescan from a certain blockheight
+# If set to 0, it will just take the current blockheight from the lightnode
+rescan_height: 100
+
+# If enabled, the bridge daemon will also start
+# It's recommended to delete the pod (helm uninstall)
+# before setting this to true and redeploying
+enable_bridge: true
+
 resources:
   {}
   # We usually recommend not to specify default resources and to leave this as a conscious

@@ -39,6 +39,7 @@ type Bridge struct {
 	mut              sync.Mutex
 	config           *BridgeConfig
 	depositFee       *big.Int
+	synced           bool
 }
 
 type BridgeConfig struct {
@@ -118,6 +119,9 @@ func (bridge *Bridge) Close() error {
 }
 
 func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
+	if !bridge.synced {
+		return errors.New("bridge is not synced, retry later")
+	}
 	log.Info("Minting", "receiver", hex.EncodeToString(receiver[:]), "txID", txID)
 	// check if we already know this ID
 	known, err := bridge.bridgeContract.IsMintTxID(txID)
@@ -228,8 +232,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 	go bridge.bridgeContract.Loop(heads)
 
-	synced := false
-
 	// subscribing to these events is not needed for operational purposes, but might be nice to get some info
 	go bridge.bridgeContract.SubscribeTransfers()
 	go bridge.bridgeContract.SubscribeMint()
@@ -335,12 +337,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					log.Error(fmt.Sprintf("failed to get sync progress %s", err.Error()))
 				}
 				if progress == nil {
-					synced = true
+					bridge.synced = true
 				}
 
-				log.Info("found new head", "head", head.Number, "synced", synced)
+				log.Info("found new head", "head", head.Number, "synced", bridge.synced)
 
-				if synced {
+				if bridge.synced {
 					ids := make([]string, 0, len(txMap))
 					for id := range txMap {
 						ids = append(ids, id)
