@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: stellarbridge
+  repository: dylanverstraete/stellarbridge
   pullPolicy: Always
-  tag: ""
+  tag: "1.0.1"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -89,7 +89,7 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 volume:
-  existingpersistentVolumeClaim: ""
+  existingpersistentVolumeClaim: "pvc-bridge-local"
   persistentVolume:
     create: false
 
