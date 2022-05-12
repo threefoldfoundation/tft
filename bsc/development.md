@@ -1,6 +1,6 @@
 # TFT on Binance Smart Chain
 
-Token address on Binance Smart Chain Testnet: [0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e](https://testnet.bscscan.com/address/0x770b0AA8b5B4f140cdA2F4d77205ceBe5f3D3C7e)
+Token address on Binance Smart Chain Testnet: [0xDC5a9199e2604A6BF4A99A583034506AE53F4B34](https://testnet.bscscan.com/address/0xDC5a9199e2604A6BF4A99A583034506AE53F4B34)
 
 You can add the token address to a Web3 compatible wallet. If you are using Metamask, check out following [guide](https://academy.binance.com/en/articles/connecting-metamask-to-binance-smart-chain) on how to connect Metamask to Binance Smart Chain Testnet or Mainnet.
 
@@ -81,7 +81,6 @@ Now browse to [bscscan-testnet](https://testnet.bscscan.com/) and search for you
 Copy the multisig contract address, click on the 3th tab in the remix editor and click on the token contract implementation in the section `deployed contracts`.
 
 Execute the transaction `addOwner` and provide the multisig contract address and click `transact`.
-
 
 ## Generating go code based on token / multisig contract ABI
 
