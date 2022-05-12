@@ -333,10 +333,10 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				if err != nil {
 					log.Error(fmt.Sprintf("failed to get sync progress %s", err.Error()))
 				}
-
-				if head.Number.Uint64() == progress.HighestBlock {
+				if progress == nil {
 					synced = true
 				}
+
 				log.Info("found new head", "head", head.Number, "synced", synced)
 
 				if synced {
