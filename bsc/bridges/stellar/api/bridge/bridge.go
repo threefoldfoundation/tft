@@ -163,6 +163,7 @@ func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 		log.Error("failed to unpack token mint", "err", err)
 		return err
 	}
+	// TODO, SEE IF THIS WORKS IN A MULTISIG SETUP, MIGHT NOT WORK DUE TO API CHANGES
 	data, ok := res[0].(Data)
 	if !ok {
 		return err
