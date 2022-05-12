@@ -82,7 +82,7 @@ spec:
             - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage
         - name: lightnode
-          image: dylanverstraete/bnbchain:latest
+          image: dylanverstraete/bnbchain-main:1.1.10
           imagePullPolicy: IfNotPresent
           ports:
             - name: ws
