@@ -87,7 +87,7 @@ spec:
               mountPath: /storage
         {{ end }}
         - name: lightnode
-          image: dylanverstraete/bnbchain-main:1.1.10
+          image: dylanverstraete/bnbchain-main:1.1.11
           imagePullPolicy: IfNotPresent
           ports:
             - name: ws
