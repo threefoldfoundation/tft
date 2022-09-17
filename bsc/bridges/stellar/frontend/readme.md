@@ -21,7 +21,8 @@ Browse to [http://localhost:3000](http://localhost:3000) and connect your wallet
 
 ## Deployed instances
 
-[testnet](https://bridge.testnet.threefold.io/)
+- [production](https://bridge.bsc.threefold.io/)
+- [testnet](https://bridge.testnet.threefold.io/)
 
 ## Development
 
