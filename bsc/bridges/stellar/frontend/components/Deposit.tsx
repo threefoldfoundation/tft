@@ -32,9 +32,9 @@ export default function DepositDialog({ open, handleClose, address }) {
       >
         <DialogTitle id="alert-dialog-title">{"Swap Stellar TFT for BSC TFT"}</DialogTitle>
         <DialogContent>
-          <DialogContentText style={{ margin: 'auto', textAlign: 'center',  width: '50%', display: 'flex', flexDirection: 'column' }}>
-            <WarningIcon style={{ alignSelf: 'center', fontSize: 40, color : 'orange' }}/>
-            If you want to swap your Stellar TFT to Binance Chain TFT you can transfer any amount to the destination address. 
+          <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
+            <WarningIcon style={{ alignSelf: 'center', fontSize: 40, color: 'orange' }} />
+            If you want to swap your Stellar TFT to Binance Chain TFT you can transfer any amount to the destination address.
             Important Note: Please always include the generated memo text for every swap transaction. <b style={{ color: 'red', marginTop: 5 }}>Failure to do so will result in unrecoverable loss of funds!</b>
           </DialogContentText>
 
@@ -52,13 +52,13 @@ export default function DepositDialog({ open, handleClose, address }) {
                 <span><b>Enter the following information manually:</b></span>
                 <span style={{ marginTop: 20 }}>Destination: <b>{BRIDGE_TFT_ADDRESS}</b></span>
                 <span>Memo: <b>{parsedAddress}</b></span>
-                <span><b>Deposit fee is 50 TFT</b></span>
+                <span><b>A deposit fee of 50 TFT will be taken from the amount you send</b></span>
               </DialogContentText>
               <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
                 <h4>
-                    Or scan the QR code with Threefold Connect
+                  Or scan the QR code with Threefold Connect
                 </h4>
-                
+
                 <QrCode style={{ alignSelf: 'center' }} value={`TFT:${BRIDGE_TFT_ADDRESS}?message=${encodedAddress}&sender=me`} />
               </DialogContentText>
             </>
