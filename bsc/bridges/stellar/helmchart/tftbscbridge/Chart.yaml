@@ -3,4 +3,4 @@ name: tftbscbridge
 description: TFT stellar-bsc bridge
 type: application
 version: 0.2.1
-appVersion: "1.0.9"
+appVersion: "1.0.10"
