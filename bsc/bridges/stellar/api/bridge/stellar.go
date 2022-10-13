@@ -193,7 +193,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 		Operations:           paymentOperations,
 		Timebounds:           txnbuild.NewTimeout(300),
 		SourceAccount:        &sourceAccount,
-		BaseFee:              txnbuild.MinBaseFee * 3,
+		BaseFee:              txnbuild.MinBaseFee * 10,
 		IncrementSequenceNum: true,
 	}
 
