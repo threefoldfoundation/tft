@@ -1,7 +1,7 @@
-# TFT on the Binance Smart Chain
+# TFT on the Polygon Chain
 
-TFT is implemented as a cross-chain asset (BToken) on the [Binance Smart Chain (BSC)](https://www.binance.org/en/smartChain).
+TFT is implemented as a wrapped asset on the [Polygon Chain](https://polygon.technology).
 
-The token address of TFT on BSC is [0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf](https://bscscan.com/address/0x8f0fb159380176d324542b3a7933f0c2fd0c2bbf)
+This is work in progress and TFT is not available on Polygon yet.
 
 For details of the contract adresses like the one providing the multisig see [addresses](./addresses.md).
