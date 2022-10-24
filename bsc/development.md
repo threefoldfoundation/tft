@@ -94,14 +94,14 @@ Save the contents to a file.
 
 ### Generate token contract
 
-```
+```sh
 cd api/bridge/contract
 go generate
 ```
 
 ### Generate multisig contract
 
-```
+```sh
 cd api/bridge/mscontract
 go generate
 ```
