@@ -57,7 +57,7 @@ bridge_master_address: "GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V
 # production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
 # stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
 is_follower: false
-eth_url: "/storage/geth.ipc" 
+eth_url: "/storage/geth.ipc"
 
 # Rescan from a certain blockheight
 # If set to 0, it will just take the current blockheight from the lightnode
@@ -80,13 +80,6 @@ resources:
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
 
 volume:
   existingpersistentVolumeClaim: "pvc-bridge-local"
