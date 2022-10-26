@@ -21,4 +21,5 @@ digraph erc20_proxy_contracts {
     tvx -> outs;
     outs -> tst;
     prx -> tst -> stg;
+    prx -> own;
  }
