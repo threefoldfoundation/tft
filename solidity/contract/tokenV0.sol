@@ -114,7 +114,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
     }
 
     // -----------------------------------------------------------------------
-    // Owner can withdraw and amount of tokens to another network, these tokens will be burned.
+    // Withdraw an amount of tokens to another network, these tokens will be burned.
     // -----------------------------------------------------------------------
     function withdraw(uint tokens, string memory blockchain_address, string memory network) public returns (bool success) {
         setBalance(msg.sender, getBalance(msg.sender).sub(tokens));
