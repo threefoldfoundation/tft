@@ -10,13 +10,14 @@ This is easy. The bridge leader fetches the signers and the medium treshold from
 
 This is not so easy. While a solid solution would be to add an external multisig contract as owner to the TFT contract, this has several downsides:
 
-- Every signer needs a Polygon account to submit its votes.
 - Every signer's Polygon account constantly needs to be funded with enough Matic.
 - Expensive in transaction fees.
-- when the set of signers changes, a new multisigcontract needs to be constructed to replace the old set ( manual gathering of accounts and replacement of the bridge owner by a manual multisig owner).
+- When the set of signers changes, a new multisigcontract needs to be constructed to replace the old set ( manual gathering of accounts and replacement of the bridge owner by a manual multisig owner).
 
-A better solution is to use the Ed25519 adresses and signatures from the signers and have only the leader call the mint function. The mint function then validates the supplied signatures.
+Another solution is link a Polygon address to the signer's Stellar account using a data-entry and have these addresses are available as `SignerSet` in the contract.
+The leaders collects the signatures from the cosigners and invokes the mint function. The mint function then validates the supplied signatures.
 
-This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract (through a multisig of the current signer set).
+This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract.
+This can be done dynamically through a multisig of the current signer set but in the first version through a `setSigners` function only callable by the owner of the token contract.
 
 Nonces are used to prevent replay attacks.
