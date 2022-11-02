@@ -13,3 +13,7 @@ docker run -v $(pwd)/bordatadir:/datadir -p 8546:8546 maticnetwork/bor:v0.2.17 b
 Bootnodes and snapshots can be found on <https://monitor.stakepool.dev.br/snapshots>.
 
 Snapshots are also available at <https://snapshot.polygon.technology> and <https://forum.polygon.technology/t/updated-snapshots-for-mainnet-and-mumbai/9564>.
+
+## Stellar testnetaccount
+
+The bridge needs an activated account on the Stellar testnet with a trustline to [testnet TFT](https://github.com/threefoldfoundation/tft-stellar/blob/master/development.md#tft-on-stellar-testnet).
