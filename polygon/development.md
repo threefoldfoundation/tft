@@ -11,7 +11,7 @@ As block explorer for the Mumbai testnet, you can use <https://mumbai.polygonsca
 - [Install Metamask](https://metamask.io/download/).
 - Open Metamask and select Custom RPC from the networks dropdown.
 
-    <img src="https://user-images.githubusercontent.com/56790126/198002275-41984b4c-aaf0-4ade-8ab2-2c5bb34b9a87.png" width="250">
+    ![Metamask custom RPC network](https://user-images.githubusercontent.com/56790126/198002275-41984b4c-aaf0-4ade-8ab2-2c5bb34b9a87.png)
 
 - Put in a Network name - “Matic Mumbai Testnet”
 - URL field: "https://rpc-mumbai.maticvigil.com"
