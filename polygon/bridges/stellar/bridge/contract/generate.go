@@ -3,7 +3,7 @@
 package contract
 
 //go:generate mkdir -p tmp
-//go:generate solc --abi --overwrite ../../../../../solidity/contract/tokenV0.sol -o tmp
+//go:generate solc --abi --overwrite ../../../../../solidity/contract/tokenV1.sol -o tmp
 //go:generate mv tmp/TFT.abi .
 //go:generate rm -rf tmp
 //go:generate abigen --abi TFT.abi --pkg contract --type Token --out token.go
