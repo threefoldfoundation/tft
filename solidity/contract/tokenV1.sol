@@ -137,8 +137,36 @@ contract TFT is OwnedUpgradeableTokenStorage {
     // ------------------------------------------------------------------------
     receive() external payable { }
 
+
+    // --------------------------------------------------------------------
+    // SetSigners sets the set of signer addresses for the mint function
+    // @param newSigners the addresses of the new signers 
+    // @param signaturesRequired the amount of signatures required to mint
+    // --------------------------------------------------------------------
+    function SetSigners(address[] calldata newSigners,uint signaturesRequired) external onlyOwner {
+        //TODO: check if signaturesRequired is less or equal than the number of signers
+       
+        address[] storage signersInStorage=getAddresses(keccak256(abi.encode("signers")));
+        //clear the set
+        for (uint i=0; i<signersInStorage.length - 1; i++)
+                signersInStorage.pop();
+        //Repopulate it
+        for (uint i=0; i<newSigners.length - 1; i++)
+                signersInStorage.push(newSigners[i]);
+        setAddresses(keccak256(abi.encode("signers")), signersInStorage);
+        setUint(keccak256(abi.encode("signaturesRequired")),signaturesRequired);
+    }
+
+    // --------------------------------------------------------------------
+    // GetSigners returns the set of signer addresses for the mint function
+    // and the number of required signatures
+    // --------------------------------------------------------------------
+    function GetSigners() public view returns (address[] memory,uint) {
+        return (getAddresses(keccak256(abi.encode("signers"))),getUint(keccak256(abi.encode("signaturesRequired"))) );
+    }
+
     // -----------------------------------------------------------------------
-    // Owner can mint tokens. Although minting tokens to a withdraw address
+    // Mint tokens. Although minting tokens to a withdraw address
     // is just an expensive tft transaction, it is possible, so after minting
     // attemt to withdraw.
     // -----------------------------------------------------------------------
