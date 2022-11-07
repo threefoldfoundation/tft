@@ -28,8 +28,8 @@ func main() {
 
 	flag.StringVar(&bridgeCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
-	// Fee wallet address where fees are held
-	flag.StringVar(&bridgeCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
+	// Stellar address where fees are sent to
+	flag.StringVar(&bridgeCfg.FeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
 	flag.Int64Var(&bridgeCfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")

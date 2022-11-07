@@ -15,12 +15,12 @@ type BridgeConfig struct {
 }
 
 type StellarConfig struct {
-	// network for the stellar config
+	// Stellar Network
 	StellarNetwork string
-	// seed for the stellar bridge wallet
+	// Seed for the stellar bridge signing account
 	StellarSeed string
 	// Stellar bridge address
 	VaultAddress string
-	// stellar fee wallet address
-	StellarFeeWallet string
+	// Stellar fee wallet address
+	FeeWallet string
 }
