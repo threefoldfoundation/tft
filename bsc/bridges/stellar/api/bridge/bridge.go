@@ -240,7 +240,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	// Should only be read from by the master bridge
 	withdrawChan := make(chan WithdrawEvent)
 
-	// Channel where sumbission events from the multisig contract are stored
+	// Channel where submission events from the multisig contract are stored
 	// Should only be read from by the follower bridges, this event channel
 	// will indicate when they need to confirm the withdrawal transaction that is submitted
 	submissionChan := make(chan SubmissionEvent)
