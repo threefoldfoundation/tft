@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,17 +43,19 @@ func main() {
 
 	//TODO cfg.Validate()
 
-	log.Info("Bor connection ", "url", bridgeCfg.EthUrl)
+	log.Info("Bor connection", "url", bridgeCfg.EthUrl)
 
 	br, err := bridge.NewBridge(&bridgeCfg)
 	if err != nil {
 		panic(err)
 	}
-
-	err = br.Start()
+	bridgeContext, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err = br.Start(bridgeContext)
 	if err != nil {
 		panic(err)
 	}
+
 	sigs := make(chan os.Signal, 1)
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -62,5 +65,7 @@ func main() {
 	log.Info("signal", "signal", sig)
 
 	log.Info("exiting")
+	cancel()
+	//Give everything some time to close off
 	time.Sleep(time.Second * 5)
 }
