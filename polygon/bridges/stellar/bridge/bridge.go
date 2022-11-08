@@ -1,26 +1,25 @@
 package bridge
 
-type BridgeConfig struct {
-	EthNetworkName      string
-	EthUrl              string
-	ContractAddress     string
-	AccountJSON         string
-	AccountPass         string
-	Datadir             string
-	RescanBridgeAccount bool
-	RescanFromHeight    int64
-	PersistencyFile     string
-	Follower            bool
-	StellarConfig
+// Bridge implements the actual briding
+type Bridge struct {
+	Persistency *ChainPersistency
+	config      *BridgeConfig
+	synced      bool
 }
 
-type StellarConfig struct {
-	// Stellar Network
-	StellarNetwork string
-	// Seed for the stellar bridge signing account
-	StellarSeed string
-	// Stellar bridge address
-	VaultAddress string
-	// Stellar fee wallet address
-	FeeWallet string
+// NewBridge creates a new Bridge.
+func NewBridge(config *BridgeConfig) (br *Bridge, err error) {
+
+	blockPersistency := newChainPersistency(config.PersistencyFile)
+
+	br = &Bridge{
+		Persistency: blockPersistency,
+		config:      config,
+	}
+
+	return
+}
+
+func (br *Bridge) Start() (err error) {
+	return
 }

@@ -15,7 +15,7 @@ import (
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	var bridgeCfg bridge.BridgeConfig
+	bridgeCfg := bridge.NewBridgeConfig()
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "smart-chain-testnet", "eth network name (defines storage directory name)")
 	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8576", "ethereum rpc url")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "TFT smart contract address")
@@ -36,7 +36,7 @@ func main() {
 
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
-	flag.StringVar(&bridgeCfg.VaultAddress, "vault", "", "bridge stellar address")
+	flag.StringVar(&bridgeCfg.VaultAddress, "address", "", "bridge stellar address")
 
 	flag.Parse()
 
@@ -44,6 +44,15 @@ func main() {
 
 	log.Info("Bor connection ", "url", bridgeCfg.EthUrl)
 
+	br, err := bridge.NewBridge(&bridgeCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	err = br.Start()
+	if err != nil {
+		panic(err)
+	}
 	sigs := make(chan os.Signal, 1)
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
