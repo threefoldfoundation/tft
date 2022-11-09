@@ -14,10 +14,7 @@ This is not so easy. While a solid solution would be to add an external multisig
 - Expensive in transaction fees.
 - When the set of signers changes, a new multisigcontract needs to be constructed to replace the old set ( manual gathering of accounts and replacement of the bridge owner by a manual multisig owner).
 
-Another solution is to link a Polygon address to the signer's Stellar account using a data-entry and have these addresses available as `SignerSet` in the contract.
+Another solution is to link a Polygon address to the signer's Stellar account using a data-entry and have these addresses available as **Signers** in the contract.
 The leaders collects the signatures from the cosigners and invokes the mint function. The mint function then validates the supplied signatures.
 
-This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract.
-This can be done dynamically through a multisig of the current signer set but in the first version through a `setSigners` function only callable by the owner of the token contract.
-
-Nonces are used to prevent replay attacks.
+This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract which is currently done hrough a `SetSigners` function only callable by the owner of the token contract.
