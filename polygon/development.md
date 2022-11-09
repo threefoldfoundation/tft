@@ -34,14 +34,14 @@ Upload the [contract](../solidity/contract) folder to the remix Editor.
 
 #### 2: Compile the token contract
 
-Select `tokenV0.sol` and switch to the 2nd tab in left Menu. Execute `compile` action.
+Select `tokenV1.sol` and switch to the 2nd tab in left Menu. Execute `compile` action.
 
 #### 3: Deploy token contract
 
 If you compiled the token contract, select the 3th tab in left Menu and select following:
 
 - Use `Injected Provider - Metamask`
-- In the contract dropdown, select `TFT - tokenV0.sol`
+- In the contract dropdown, select `TFT - tokenV1.sol`
 - Click `deploy`
 - Confirm transaction on Metamask
 
