@@ -1,6 +1,7 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import "./owned_upgradeable_token_storage.sol";
+import "./openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 // ----------------------------------------------------------------------------
 // Safe maths
@@ -22,6 +23,16 @@ library SafeMath {
         require(b > 0);
         c = a / b;
     }
+}
+
+error InvalidSignature();
+error InsufficientSignatures(uint256 numberOfSignatures, uint256 requiredSignatures);
+
+// This represents a validator signature
+struct Signature {
+	uint8 v;
+	bytes32 r;
+	bytes32 s;
 }
 
 // ----------------------------------------------------------------------------
@@ -161,24 +172,89 @@ contract TFT is OwnedUpgradeableTokenStorage {
     // GetSigners returns the set of signer addresses for the mint function
     // and the number of required signatures
     // --------------------------------------------------------------------
-    function GetSigners() public view returns (address[] memory,uint) {
-        return (getAddresses(keccak256(abi.encode("signers"))),getUint(keccak256(abi.encode("signaturesRequired"))) );
+    function GetSigners() public view returns (address[] memory) {
+        return getAddresses(keccak256(abi.encode("signers")));
     }
+
+
+    // ------------------------------------------------------------------------------------
+    // GetSignaturesRequired return the number of required signatures for the mint function
+    // ------------------------------------------------------------------------------------
+    function GetSignaturesRequired() public view returns (uint) {
+        return getUint(keccak256(abi.encode("signaturesRequired"))) ;
+    }
+
+
+    // Utility function to verify geth style signatures
+	function verifySig(
+		address _signer,
+		bytes32 _theHash,
+		Signature calldata _sig
+	) private pure returns (bool) {
+		bytes32 messageDigest = keccak256(
+			abi.encodePacked("\x19Ethereum Signed Message:\n32", _theHash)
+		);
+		return _signer == ECDSA.recover(messageDigest, _sig.v, _sig.r, _sig.s);
+	}
+
+	function checkSignatures(
+		// The current signers
+		address[] memory _signers,
+		// The signatures to verify
+		Signature[] calldata _sigs,
+		// This is what we are checking they have signed
+		uint256 _signaturesRequired,
+		// This is what we are checking they have signed
+		bytes32 _theHash
+	) private pure {
+		uint256 cumulativePower = 0;
+        
+		for (uint256 i = 0; i < _signers.length; i++) {
+			// If v is set to 0, this signifies that it was not possible to get a signature from this signer and we skip evaluation
+			// (In a valid signature, it is either 27 or 28)
+			if (_sigs[i].v != 0) {
+				// Check that the current signer has signed off on the hash
+				if (!verifySig(_signers[i], _theHash, _sigs[i])) {
+					revert InvalidSignature();
+				}
+
+				// Sum up cumulative power
+				cumulativePower += 1;
+
+				// Break early to avoid wasting gas
+				if (cumulativePower > _signaturesRequired) {
+					break;
+				}
+			}
+		}
+
+		// Check that there sre enough signatures
+		if (cumulativePower <= _signaturesRequired) {
+			revert InsufficientSignatures(cumulativePower, _signaturesRequired);
+		}
+		// Success
+	}
 
     // -----------------------------------------------------------------------
     // Mint tokens. Although minting tokens to a withdraw address
     // is just an expensive tft transaction, it is possible, so after minting
     // attemt to withdraw.
     // -----------------------------------------------------------------------
-    function mintTokens(address receiver, uint tokens, string memory txid) public onlyOwner {
+    function mintTokens(address receiver, uint tokens, string memory txid,Signature[] calldata _signatures ) public onlyOwner {
         // check if the txid is already known
         require(!_isMintID(txid), "TFT transacton ID already known");
+        bytes32 hashedPayload=keccak256(abi.encode(receiver,tokens,txid));
+        
+        checkSignatures(GetSigners(),_signatures,GetSignaturesRequired(),hashedPayload);
         _setMintID(txid);
         setBalance(receiver, getBalance(receiver).add(tokens));
         setTotalSupply(getTotalSupply().add(tokens));
         emit Mint(receiver, tokens, txid);
     }
 
+    //------------------------------------------------------
+    //Check if minting already occurred for a transaction id
+    //------------------------------------------------------
     function isMintID(string memory _txid) public view returns (bool) {
         return _isMintID(_txid);
     }
