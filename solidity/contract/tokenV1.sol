@@ -222,14 +222,14 @@ contract TFT is OwnedUpgradeableTokenStorage {
 				cumulativePower += 1;
 
 				// Break early to avoid wasting gas
-				if (cumulativePower > _signaturesRequired) {
+				if (cumulativePower >= _signaturesRequired) {
 					break;
 				}
 			}
 		}
 
 		// Check that there sre enough signatures
-		if (cumulativePower <= _signaturesRequired) {
+		if (cumulativePower < _signaturesRequired) {
 			revert InsufficientSignatures(cumulativePower, _signaturesRequired);
 		}
 		// Success
