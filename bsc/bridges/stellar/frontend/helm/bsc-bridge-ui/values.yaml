@@ -8,11 +8,11 @@ image:
   repository: bsc-bridge-ui
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: ''
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+nameOverride: ''
+fullnameOverride: ''
 
 podAnnotations: {}
 
@@ -49,6 +49,15 @@ ingress:
         - /
   tls: []
 
+stellar_horizon_url: https://horizon.stellar.org
+tft_asset_issuer: GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47
+contract_address: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
+bridge_tft_address: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
+chain_id: 56
+enable_deposit: 1
+# Set to 1 if the UI needs to prevent users from using the bridge
+disable: 0
+
 resources:
   {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -76,4 +85,4 @@ tolerations: []
 affinity: {}
 
 threefoldVdc:
-  backup: ""
+  backup: ''

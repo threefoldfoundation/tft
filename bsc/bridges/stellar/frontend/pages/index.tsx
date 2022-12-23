@@ -16,10 +16,12 @@ import {
 import { Spinner } from '../components/Spinner'
 import { Balance } from '../components/Balance'
 import { Withdraw } from '../components/Withdraw'
+import WarningIcon from '@material-ui/icons/Warning'
 
 import { toast, ToastContainer } from 'react-nextjs-toast'
 
 const ENABLE_DEPOSIT = parseInt(process.env.ENABLE_DEPOSIT) === 1 ? true : false
+const DISABLE_BRIDGE = parseInt(process.env.DISABLE_BRIDGE) === 1 ? true : false
 const CONTRACT_ADDRESS_TESTNET = process.env.CONTRACT_ADDRESS as string
 const STELLAR_ENV = process.env.STELLAR_ENV as string
 import abi from '../tokenabi.json'
@@ -88,7 +90,7 @@ function App() {
 
   const color = active ? 'secondary' : 'primary'
   const connected = currentConnector === connector
-  const disabled = !triedEager || !!activatingConnector || connected || !!error
+  const disabled = !triedEager || !!activatingConnector || connected || !!error || DISABLE_BRIDGE
   const activating = currentConnector === activatingConnector
 
   const [balance, setBalance] = useState()
@@ -155,7 +157,7 @@ function App() {
             activate(injected)
           }}
           disabled={disabled}
-        >
+          >
           Connect wallet
         </Button>)}
         {activating && <Spinner color={'black'} style={{ height: '25%', marginLeft: '-1rem' }} />}
@@ -170,7 +172,15 @@ function App() {
         <img style={{ width: '30%', height: '30%' }} src={'/3fold_logo.png'} />
         <h2>TFT Binance Chain bridge</h2>
 
-        {connected && !error && account && (
+        {DISABLE_BRIDGE && (
+          <div style={{ display: 'flex' }}>
+            <WarningIcon style={{ fontSize: 52, color: 'orange', alignSelf: 'center' }} />
+            <h2 style={{ color: 'black' }}>Bridge is in maintenance mode, deposits and withdrawals are suspended until further notice</h2>
+            <WarningIcon style={{ fontSize: 52, color: 'orange', alignSelf: 'center' }} />
+          </div>
+          )}
+
+        {!DISABLE_BRIDGE && connected && !error && account && (
           <>
             <div>
               {loadingWithdrawal ? (

@@ -38,6 +38,21 @@ spec:
               protocol: TCP
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          env:
+          - name: DISABLE_BRIDGE
+            value: {{ .Values.disable }}
+          - name: STELLAR_HORIZON_URL
+            value: {{ .Values.stellar_horizon_url }}
+          - name: TFT_ASSET_ISSUER
+            value: {{ .Values.tft_asset_issuer }}
+          - name: CONTRACT_ADDRESS
+            value: {{ .Values.contract_address }}
+          - name: BRIDGE_TFT_ADDRESS
+            value: {{ .Values.bridge_tft_address }}
+          - name: CHAIN_ID
+            value: {{ .Values.chain_id }}
+          - name: ENABLE_DEPOSIT
+            value: {{ .Values.enable_deposit }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
