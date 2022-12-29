@@ -1,7 +1,13 @@
 import App from 'next/app'
 import Head from 'next/head'
-
 import '../styles.css'
+
+declare global {
+  interface Window {
+      $crisp: any;
+      CRISP_WEBSITE_ID: string;
+  }
+}
 
 export default class Root extends App {
   componentDidMount(): void {
@@ -14,7 +20,7 @@ export default class Root extends App {
       var s = d.createElement("script");
 
       s.src = "https://client.crisp.chat/l.js";
-      s.async = 1;
+      s.async = true;
       d.getElementsByTagName("head")[0].appendChild(s);
     })();
   }

@@ -3,4 +3,4 @@ name: bsc-bridge-ui
 description: Frontend for the TFT Stellar BSC bridge
 type: application
 version: 1.0.3
-appVersion: "v1.0.13"
+appVersion: "v1.0.14"
