@@ -11,6 +11,7 @@ module.exports = {
     CONTRACT_ADDRESS: process.env.CONTRACT_ADDRESS,
     BRIDGE_TFT_ADDRESS: process.env.BRIDGE_TFT_ADDRESS,
     CHAIN_ID: process.env.CHAIN_ID,
-    ENABLE_DEPOSIT: process.env.ENABLE_DEPOSIT
+    ENABLE_DEPOSIT: process.env.ENABLE_DEPOSIT,
+    DEPOSIT_FEE: process.env.DEPOSIT_FEE,
   }
 }

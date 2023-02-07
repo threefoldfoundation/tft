@@ -61,6 +61,8 @@ spec:
             value: {{ .Values.eth_url }}
           - name: RESCAN_HEIGHT
             value: {{ .Values.rescan_height | quote }}
+          - name: DEPOSIT_FEE
+            value: {{ .Values.deposit_fee | quote }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--account", "$(ACCOUNT_JSON)",
@@ -76,7 +78,8 @@ spec:
             {{ end }}
             "--feewallet", "$(STELLAR_FEE_WALLET)",
             "--persistency", "/storage/node.json",
-            "--rescanHeight", "$(RESCAN_HEIGHT)"
+            "--rescanHeight", "$(RESCAN_HEIGHT)",
+            "--depositFee", "$(DEPOSIT_FEE)"
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
