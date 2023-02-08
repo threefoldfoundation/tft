@@ -300,7 +300,7 @@ func (w *stellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, t
 // mint handler
 type mint func(ERC20Address, *big.Int, string) error
 
-//MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
+// MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
 // mint function when a deposit is made
 func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
@@ -341,7 +341,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			return
 		}
 
-		if totalAmount <= DepositFee {
+		if totalAmount <= w.config.DepositFee {
 			log.Warn("Deposited amount is less than the depositfee, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
@@ -395,14 +395,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			var memo [32]byte
 			copy(memo[:], parsedMessage)
 
-			err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
+			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFee), memo)
 			for err != nil {
 				log.Error("error while to send fees to the fee wallet", "err", err.Error())
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(10 * time.Second):
-					err = w.CreateAndSubmitFeepayment(context.Background(), DepositFee, memo)
+					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFee), memo)
 				}
 			}
 		}

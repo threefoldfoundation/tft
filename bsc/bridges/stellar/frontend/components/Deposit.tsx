@@ -10,6 +10,7 @@ import WarningIcon from '@material-ui/icons/Warning'
 import { Checkbox, FormControlLabel } from '@material-ui/core'
 
 const BRIDGE_TFT_ADDRESS = process.env.BRIDGE_TFT_ADDRESS
+const DEPOSIT_FEE = process.env.DEPOSIT_FEE
 
 export default function DepositDialog({ open, handleClose, address }) {
   if (!address) return null
@@ -52,7 +53,7 @@ export default function DepositDialog({ open, handleClose, address }) {
                 <span><b>Enter the following information manually:</b></span>
                 <span style={{ marginTop: 20 }}>Destination: <b>{BRIDGE_TFT_ADDRESS}</b></span>
                 <span>Memo: <b>{parsedAddress}</b></span>
-                <span><b>A deposit fee of 50 TFT will be taken from the amount you send</b></span>
+                <span><b>A deposit fee of {DEPOSIT_FEE} TFT will be taken from the amount you send</b></span>
               </DialogContentText>
               <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
                 <h4>

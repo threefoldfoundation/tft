@@ -23,8 +23,6 @@ const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the stellar network
 	EthBlockDelay = 3
-	// Depositing from Stellar to smart chain fee
-	DepositFee = 50 * stellarPrecision
 	// Withdrawing from smartchain to Stellar fee
 	WithdrawFee   = int64(1 * stellarPrecision)
 	BridgeNetwork = "stellar"
@@ -65,6 +63,8 @@ type StellarConfig struct {
 	StellarSeed string
 	// stellar fee wallet address
 	StellarFeeWallet string
+	// deposit fee
+	DepositFee int64
 }
 
 // NewBridge creates a new Bridge.
@@ -98,7 +98,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		}
 	}
 	var depositFee big.Int
-	depositFee.SetInt64(DepositFee)
+	depositFee.SetInt64(config.DepositFee * stellarPrecision)
 	bridge = &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
