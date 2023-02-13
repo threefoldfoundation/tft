@@ -31,12 +31,12 @@ var (
 			}
 
 			fmt.Printf("\nBridge master address: %s\n", accounts[0].Address())
-			fmt.Printf("Bridge master address: %s\n", accounts[0].Seed())
+			fmt.Printf("Bridge master secret: %s\n", accounts[0].Seed())
 
 			for i := 1; i < len(accounts); i++ {
 				fmt.Println()
-				fmt.Printf("Other signer address: %s\n", accounts[i].Address())
-				fmt.Printf("Other signer address: %s\n", accounts[i].Seed())
+				fmt.Printf("Signer %d address: %s\n", i, accounts[i].Address())
+				fmt.Printf("Signer %d secret: %s\n", i, accounts[i].Seed())
 			}
 			return nil
 		},
