@@ -45,7 +45,7 @@ func GetTestnetTFT(secret string) error {
 		Destination:   kp.Address(),
 		DestAsset:     TestnetTft,
 		SourceAccount: kp.Address(),
-		DestAmount:    "10",
+		DestAmount:    "100",
 	}
 
 	params := txnbuild.TransactionParams{
