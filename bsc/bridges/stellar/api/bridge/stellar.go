@@ -29,7 +29,7 @@ const (
 	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
 	// TFTTest = "TFTXXX:GCRO7FLIU4LKELZBLGWOTQ7T64OKSU4O4OWATLHV3BFSVQZMJWWKRE5A"
 
-	stellarPrecision       = 1e7
+	tenMillion             = 1e7
 	stellarPrecisionDigits = 7
 )
 
@@ -167,7 +167,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 	var paymentOperations []txnbuild.Operation
 	paymentOP := txnbuild.Payment{
 		Destination: destination,
-		Amount:      big.NewRat(int64(amount), stellarPrecision).FloatString(stellarPrecisionDigits),
+		Amount:      big.NewRat(int64(amount), tenMillion).FloatString(stellarPrecisionDigits),
 		Asset: txnbuild.CreditAsset{
 			Code:   asset[0],
 			Issuer: asset[1],
@@ -179,7 +179,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 	if includeWithdrawFee {
 		feePaymentOP := txnbuild.Payment{
 			Destination: w.config.StellarFeeWallet,
-			Amount:      big.NewRat(WithdrawFee, stellarPrecision).FloatString(stellarPrecisionDigits),
+			Amount:      big.NewRat(WithdrawFee, tenMillion).FloatString(stellarPrecisionDigits),
 			Asset: txnbuild.CreditAsset{
 				Code:   asset[0],
 				Issuer: asset[1],
@@ -193,7 +193,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 		Operations:           paymentOperations,
 		Timebounds:           txnbuild.NewTimeout(300),
 		SourceAccount:        &sourceAccount,
-		BaseFee:              txnbuild.MinBaseFee * 10,
+		BaseFee:              tenMillion,
 		IncrementSequenceNum: true,
 	}
 
