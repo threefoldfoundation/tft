@@ -17,4 +17,4 @@ This is not so easy. While a solid solution would be to add an external multisig
 Another solution is to link a Polygon address to the signer's Stellar account using a data-entry and have these addresses available as **Signers** in the contract.
 The leaders collects the signatures from the cosigners and invokes the mint function. The mint function then validates the supplied signatures.
 
-This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract which is currently done hrough a `SetSigners` function only callable by the owner of the token contract.
+This does mean that the accounts of the signers on the bridge Stellar account have to be propagated to the TFT contract which is currently done through a `SetSigners` function only callable by the owner of the token contract.

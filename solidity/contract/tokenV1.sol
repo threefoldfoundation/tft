@@ -228,7 +228,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
 			}
 		}
 
-		// Check that there sre enough signatures
+		// Check that there are enough signatures
 		if (cumulativePower < _signaturesRequired) {
 			revert InsufficientSignatures(cumulativePower, _signaturesRequired);
 		}

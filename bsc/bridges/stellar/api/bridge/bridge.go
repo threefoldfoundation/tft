@@ -36,7 +36,6 @@ type Bridge struct {
 	blockPersistency *ChainPersistency
 	mut              sync.Mutex
 	config           *BridgeConfig
-	depositFee       *big.Int
 	synced           bool
 }
 
@@ -97,14 +96,15 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 			return
 		}
 	}
-	var depositFee big.Int
-	depositFee.SetInt64(config.DepositFee * stellarPrecision)
+
+	// Set correct depositfee
+	config.DepositFee = config.DepositFee * stellarPrecision
+
 	bridge = &Bridge{
 		bridgeContract:   contract,
 		blockPersistency: blockPersistency,
 		wallet:           wallet,
 		config:           config,
-		depositFee:       &depositFee,
 	}
 
 	return
@@ -134,12 +134,14 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return
 	}
 
-	if depositedAmount.Cmp(bridge.depositFee) <= 0 {
+	depositFeeBigInt := big.NewInt(bridge.config.DepositFee)
+
+	if depositedAmount.Cmp(depositFeeBigInt) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
 		return errInsufficientDepositAmount
 	}
 	amount := &big.Int{}
-	amount.Sub(depositedAmount, bridge.depositFee)
+	amount.Sub(depositedAmount, depositFeeBigInt)
 	return bridge.bridgeContract.Mint(receiver, amount, txID)
 }
 
@@ -207,7 +209,7 @@ func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 	depositedAmount := big.NewInt(int64(totalAmount))
 	// Subtract the deposit fee
 	amount := &big.Int{}
-	amount = amount.Sub(depositedAmount, bridge.depositFee)
+	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFee))
 
 	if data.Tokens.Cmp(amount) > 0 {
 		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
