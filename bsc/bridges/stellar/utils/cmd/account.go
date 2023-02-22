@@ -10,67 +10,70 @@ import (
 	"github.com/stellar/go/txnbuild"
 )
 
-const (
-	TFT            = "TFT"
-	TESTNET_ISSUER = "GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
-)
+// Generates and activates an account on the stellar testnet
+func GenerateAccount() (*keypair.Full, error) {
+	kp, err := keypair.Random()
+	if err != nil {
+		return nil, err
+	}
 
-var client = horizonclient.DefaultTestNetClient
+	err = activateAccount(kp.Address())
+	if err != nil {
+		return nil, err
+	}
 
-// Generates and activates account on the stellar testnet
+	createTftTrustlineOperation := txnbuild.ChangeTrust{
+		Line: txnbuild.ChangeTrustAssetWrapper{
+			Asset: txnbuild.CreditAsset{Code: TFT, Issuer: TESTNET_ISSUER},
+		},
+		Limit:         "",
+		SourceAccount: kp.Address(),
+	}
+
+	// Get information about the account we just created
+	accountRequest := horizonclient.AccountRequest{AccountID: kp.Address()}
+	hAccount, err := HorizonClient.AccountDetail(accountRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	params := txnbuild.TransactionParams{
+		SourceAccount:        &hAccount,
+		IncrementSequenceNum: true,
+		Operations:           []txnbuild.Operation{&createTftTrustlineOperation},
+		BaseFee:              txnbuild.MinBaseFee,
+		Memo:                 nil,
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewInfiniteTimeout(),
+		},
+	}
+	tx, err := txnbuild.NewTransaction(params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sign the transaction, and base 64 encode its XDR representation
+	signedTx, _ := tx.Sign(network.TestNetworkPassphrase, kp)
+	txeBase64, _ := signedTx.Base64()
+
+	// Submit the transaction
+	_, err = HorizonClient.SubmitTransactionXDR(txeBase64)
+	if err != nil {
+		hError := err.(*horizonclient.Error)
+		fmt.Println(hError.Problem.Extras)
+		return nil, hError
+	}
+
+	return kp, nil
+}
+
+// Generates and activates accounts on the stellar testnet
 func GenerateAndActivateAccounts(count int) ([]keypair.Full, error) {
 	accounts := make([]keypair.Full, 0)
 	for i := 0; i < count; i++ {
-		kp, err := keypair.Random()
+		kp, err := GenerateAccount()
 		if err != nil {
 			return nil, err
-		}
-
-		err = activateAccount(kp.Address())
-		if err != nil {
-			return nil, err
-		}
-
-		createTftTrustlineOperation := txnbuild.ChangeTrust{
-			Line: txnbuild.ChangeTrustAssetWrapper{
-				Asset: txnbuild.CreditAsset{Code: TFT, Issuer: TESTNET_ISSUER},
-			},
-			Limit:         "",
-			SourceAccount: kp.Address(),
-		}
-
-		// Get information about the account we just created
-		accountRequest := horizonclient.AccountRequest{AccountID: kp.Address()}
-		hAccount, err := client.AccountDetail(accountRequest)
-		if err != nil {
-			return nil, err
-		}
-
-		params := txnbuild.TransactionParams{
-			SourceAccount:        &hAccount,
-			IncrementSequenceNum: true,
-			Operations:           []txnbuild.Operation{&createTftTrustlineOperation},
-			BaseFee:              txnbuild.MinBaseFee,
-			Memo:                 nil,
-			Preconditions: txnbuild.Preconditions{
-				TimeBounds: txnbuild.NewInfiniteTimeout(),
-			},
-		}
-		tx, err := txnbuild.NewTransaction(params)
-		if err != nil {
-			return nil, err
-		}
-
-		// Sign the transaction, and base 64 encode its XDR representation
-		signedTx, _ := tx.Sign(network.TestNetworkPassphrase, kp)
-		txeBase64, _ := signedTx.Base64()
-
-		// Submit the transaction
-		_, err = client.SubmitTransactionXDR(txeBase64)
-		if err != nil {
-			hError := err.(*horizonclient.Error)
-			fmt.Println(hError.Problem.Extras)
-			return nil, hError
 		}
 
 		accounts = append(accounts, *kp)
@@ -104,7 +107,7 @@ func SetAccountOptions(keypairs []keypair.Full) error {
 
 	// Get information about the account we just created
 	accountRequest := horizonclient.AccountRequest{AccountID: masterKey.Address()}
-	hAccount, err := client.AccountDetail(accountRequest)
+	hAccount, err := HorizonClient.AccountDetail(accountRequest)
 	if err != nil {
 		return err
 	}
@@ -129,7 +132,7 @@ func SetAccountOptions(keypairs []keypair.Full) error {
 	txeBase64, _ := signedTx.Base64()
 
 	// Submit the transaction
-	_, err = client.SubmitTransactionXDR(txeBase64)
+	_, err = HorizonClient.SubmitTransactionXDR(txeBase64)
 	if err != nil {
 		hError := err.(*horizonclient.Error)
 		fmt.Println(hError.Problem.Extras)
