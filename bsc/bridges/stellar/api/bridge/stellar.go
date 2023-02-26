@@ -29,8 +29,8 @@ const (
 	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
 	// TFTTest = "TFTXXX:GCRO7FLIU4LKELZBLGWOTQ7T64OKSU4O4OWATLHV3BFSVQZMJWWKRE5A"
 
-	stellarPrecision       = 1e7
-	stellarPrecisionDigits = 7
+	stellarPrecision       int64 = 1e7
+	stellarPrecisionDigits       = 7
 )
 
 // stellarWallet is the bridge wallet
@@ -341,7 +341,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			return
 		}
 
-		if totalAmount <= w.config.DepositFee {
+		if totalAmount <= w.config.DepositFeeInStroops() {
 			log.Warn("Deposited amount is less than the depositfee, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
@@ -395,14 +395,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			var memo [32]byte
 			copy(memo[:], parsedMessage)
 
-			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFee), memo)
+			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFeeInStroops()), memo)
 			for err != nil {
 				log.Error("error sending fee to the fee wallet", "err", err.Error())
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(10 * time.Second):
-					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFee), memo)
+					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFeeInStroops()), memo)
 				}
 			}
 		}

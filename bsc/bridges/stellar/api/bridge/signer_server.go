@@ -269,12 +269,12 @@ func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.T
 		}
 
 		switch int64(paymentOperation.Amount) {
-		case int64(s.config.DepositFee):
+		case s.config.DepositFeeInStroops():
 			return nil
 		case WithdrawFee:
 			return nil
 		default:
-			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, int64(s.config.DepositFee), WithdrawFee)
+			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, s.config.DepositFeeInStroops(), WithdrawFee)
 		}
 
 	}
