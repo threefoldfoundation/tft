@@ -62,8 +62,13 @@ type StellarConfig struct {
 	StellarSeed string
 	// stellar fee wallet address
 	StellarFeeWallet string
-	// deposit fee
+	// deposit fee in TFT units
 	DepositFee int64
+}
+
+// DepositFeeInStroops returns the DepositFee in the Stellar base unit
+func (c *StellarConfig) DepositFeeInStroops() int64 {
+	return c.DepositFee * stellarPrecision
 }
 
 // NewBridge creates a new Bridge.
@@ -96,9 +101,6 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 			return
 		}
 	}
-
-	// Set correct depositfee
-	config.DepositFee = config.DepositFee * stellarPrecision
 
 	bridge = &Bridge{
 		bridgeContract:   contract,
@@ -134,7 +136,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return
 	}
 
-	depositFeeBigInt := big.NewInt(bridge.config.DepositFee)
+	depositFeeBigInt := big.NewInt(bridge.config.DepositFeeInStroops())
 
 	if depositedAmount.Cmp(depositFeeBigInt) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
@@ -209,7 +211,7 @@ func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
 	depositedAmount := big.NewInt(int64(totalAmount))
 	// Subtract the deposit fee
 	amount := &big.Int{}
-	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFee))
+	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFeeInStroops()))
 
 	if data.Tokens.Cmp(amount) > 0 {
 		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
