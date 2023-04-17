@@ -90,7 +90,7 @@ spec:
               mountPath: /storage
         {{ end }}
         - name: lightnode
-          image: threefolddev/bnbchain-main:1.1.18_hf
+          image: threefolddev/bnbchain-main:1.1.21
           imagePullPolicy: IfNotPresent
           ports:
             - name: ws
