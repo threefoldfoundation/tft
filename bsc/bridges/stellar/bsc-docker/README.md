@@ -1,8 +1,16 @@
 # Binance Smart Chain node Docker image
 
+## Build
+
+```sh
+docker build -t bnbchain-main .
+```
+
+Add `--platform linux/amd64` if on an arm processor ( Like an Apple silicon chip).
+
 ## QuickStart
 
-```
+```sh
 docker run -d -v /data/bsc:/root --name binance-smart-chain-node \
 -p 127.0.0.1:8545:8545 -p 127.0.0.1:8546:8546 -p 127.0.0.1:6060:6060 -p 30311:30311 -p 30311:30311/udp \
 vlddm/binance-smart-chain-node:latest --syncmode snap --cache 4096
@@ -14,7 +22,7 @@ Blockchain data will be stored at `/data/bsc` folder.
 
 ## Check sync status
 
-```
+```sh
 docker exec binance-smart-chain-node bsc attach --exec eth.syncing
 
 docker logs -f binance-smart-chain-node
@@ -26,7 +34,7 @@ docker logs -f binance-smart-chain-node
 * WebSocket at 8546
 * IPC (unix socket) at /data/bsc/.ethereum/geth.ipc
 
-Test it using [geth_linux](https://github.com/binance-chain/bsc/releases) binary: 
+Test it using [geth_linux](https://github.com/binance-chain/bsc/releases) binary:
 
 ```
 geth_linux attach http://localhost:8545
