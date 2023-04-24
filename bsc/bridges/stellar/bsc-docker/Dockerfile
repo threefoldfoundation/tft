@@ -1,19 +1,23 @@
 FROM debian:bullseye-slim
 
+ARG TARGETARCH
+
+# mainnet or testnet
+ARG network=mainnet
 
 RUN apt-get update -y \
   && apt-get install -y curl jq unzip \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-
-RUN curl https://api.github.com/repositories/265775217/releases/tags/v1.1.23 | jq -c '.assets[] | select( .browser_download_url | contains("mainnet.zip") or contains("geth_linux")) | .browser_download_url' | xargs -n1 curl -LOJ && \
-  unzip mainnet.zip -d / && \
+RUN if [ "${TARGETARCH}" = "arm64" ]; then geth_binary="geth-linux-arm64"; else geth_binary="geth-linux"; fi && \ 
+  curl https://api.github.com/repositories/265775217/releases/tags/v1.1.23 | jq -c ".assets[] | select( .browser_download_url | contains(\"${network}.zip\") or contains(\"$geth_binary\")) | .browser_download_url" | xargs -n1 curl -LOJ && \
+  unzip ${network}.zip -d / && \
   sed -i 's/^HTTPHost.*/HTTPHost = "0.0.0.0"/' /config.toml && \
   sed -i '/^WSPort.*/a WSHost = "0.0.0.0"' /config.toml && \
   sed -i 's/^HTTPVirtualHosts.*/HTTPVirtualHosts = ["*"]/' /config.toml && \
   sed -i '/Node\.LogConfig/,/^$/d' /config.toml && \ 
-  mv geth_linux /usr/local/bin/bsc && \
+  mv $geth_binary /usr/local/bin/bsc && \
   chmod +x /usr/local/bin/bsc
 
 ENV BSC_DATADIR=/storage

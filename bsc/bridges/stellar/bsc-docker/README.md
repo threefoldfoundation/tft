@@ -2,11 +2,17 @@
 
 ## Build
 
+## BSC mainnet
+
 ```sh
 docker build -t bnbchain-main .
 ```
 
-Add `--platform linux/amd64` if on an arm processor ( Like an Apple silicon chip).
+### BSC testnet
+
+```sh
+docker build -t bnbchain-testnet --build-arg network=testnet .
+```
 
 ## QuickStart
 
