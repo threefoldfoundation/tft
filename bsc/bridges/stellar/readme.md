@@ -81,6 +81,14 @@ Flow: a user will call the token contract `Withdraw`, the Master bridge will ini
 
 ## Running the bridge
 
+### Geth light client
+
+The bridge requires a bsc geth light client ( private instance).
+
+The easiest way to do is is using the [docker image in this repository](./bsc-docker/README.md).
+
+### Build and run
+
 To Build the bridge see the [buildinstructions](./building.md).
 
 Following parameters can be set when starting the bridge:
