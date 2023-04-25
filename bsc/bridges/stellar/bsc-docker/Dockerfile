@@ -24,7 +24,6 @@ ENV BSC_DATADIR=/storage
 
 COPY docker-entrypoint.sh /entrypoint.sh
 
-#VOLUME ["$BSC_DATADIR"]
 
 # NODE P2P
 EXPOSE 30311/udp
