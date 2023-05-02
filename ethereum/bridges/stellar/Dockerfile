@@ -1,10 +1,10 @@
 FROM golang:1.16 as BUILDER
-WORKDIR /go/src/github.com/threefoldfoundation/tft/bsc/bridges/stellar
+WORKDIR /go/src/github.com/threefoldfoundation/tft/ethereum/bridges/stellar
 COPY ./ ./
 RUN go build -ldflags '-w -s -extldflags "-static"'
 
 FROM alpine:3.13.5
-COPY --from=BUILDER /go/src/github.com/threefoldfoundation/tft/bsc/bridges/stellar/stellar /
+COPY --from=BUILDER /go/src/github.com/threefoldfoundation/tft/ethereum/bridges/stellar/stellar /
 RUN mkdir /storage
 VOLUME /storage
 ENTRYPOINT [ "/stellar" ]
