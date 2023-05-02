@@ -1,8 +1,8 @@
-# Smart chain Bridge
+# Ethereum chain bridge
 
 ## Token contract
 
-For TFT as a btoken on the Binance Smart chain, see the [tft eth readme](../../readme.md).
+For TFT as a btoken on the Ethereum chain, see the [tft eth readme](../../readme.md).
 
 ### Token contract security
 
