@@ -78,11 +78,6 @@ func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey, filteredID
 	var idht *dht.IpfsDHT
 	var err error
 
-	// tlsSec, err := libp2ptls.New(libp2ptls.ID, privateKey, nil)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-
 	cmgr, err := connmgr.NewConnManager(
 		100, // Lowwater
 		400, // HighWater,
@@ -98,16 +93,6 @@ func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey, filteredID
 			"/ip4/0.0.0.0/tcp/0",      // regular tcp connections
 			"/ip4/0.0.0.0/udp/0/quic", // a UDP endpoint for the QUIC transport
 		),
-		// support TLS connections
-		// libp2p.Security("sec", tlsSec),
-		// support secio connections
-		// libp2p.Security(secio.ID, secio.New),
-		// support QUIC
-		// libp2p.Transport(tcp.NewTCPTransport),
-		// support any other default transports (TCP)
-		// libp2p.DefaultTransports,
-		// Let's prevent our peer from having too many
-		// connections by attaching a connection manager.
 		libp2p.ConnectionManager(cmgr),
 		// Attempt to open ports using uPNP for NATed hosts.
 		libp2p.NATPortMap(),
