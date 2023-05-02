@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "tftbscbridge.fullname" . }}
+  name: {{ include "tftethbridge.fullname" . }}
   labels:
-    {{- include "tftbscbridge.labels" . | nindent 4 }}
+    {{- include "tftethbridge.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "tftbscbridge.selectorLabels" . | nindent 6 }}
+      {{- include "tftethbridge.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,13 +18,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "tftbscbridge.selectorLabels" . | nindent 8 }}
+        {{- include "tftethbridge.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "tftbscbridge.serviceAccountName" . }}
+      serviceAccountName: {{ include "tftethbridge.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -86,30 +86,16 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/eth-bridge
-            - name: tftbscbridge-storage-{{ .Release.Name }}
+            - name: tftethbridge-storage-{{ .Release.Name }}
               mountPath: /storage
         {{ end }}
-        - name: lightnode
-          image: threefolddev/bnbchain-main:1.1.23
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: ws
-              containerPort: 8546
-              protocol: TCP
-          args: [
-            "--syncmode=light",
-            "--ws"
-          ]
-          volumeMounts:
-            - name: tftbscbridge-storage-{{ .Release.Name }}
-              mountPath: /storage
       volumes:
-        - name: tftbscbridge-storage-{{ .Release.Name }}
+        - name: tftethbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
-            claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} tftbscbridge-volume-claim-{{ .Release.Name }} {{ end }}
+            claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} tftethbridge-volume-claim-{{ .Release.Name }} {{ end }}
         - name: config-volume
           configMap:
-            name: {{ template "tftbscbridge.fullname" . }}
+            name: {{ template "tftethbridge.fullname" . }}
             items:
               - key: account_json
                 path: account_json

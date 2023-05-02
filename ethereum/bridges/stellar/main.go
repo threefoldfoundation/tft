@@ -18,7 +18,7 @@ import (
 func main() {
 
 	var bridgeCfg bridge.BridgeConfig
-	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "eth-main", "eth network name (defines storage directory name)")
+	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
 	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")

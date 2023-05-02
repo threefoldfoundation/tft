@@ -6,7 +6,7 @@ metadata:
   labels:
     backupType: {{ .Values.threefoldVdc.backup | quote }}
   {{- end }}
-  name: tftbscbridge-volume-claim-{{ .Release.Name }}
+  name: tftethbridge-volume-claim-{{ .Release.Name }}
 spec:
   storageClassName: {{ .Values.volume.storageClassName }}
   accessModes:

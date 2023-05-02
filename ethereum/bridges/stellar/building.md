@@ -9,7 +9,7 @@ This is a normal go project so just execute `go build`.
 To build a docker image with the latest git tag as version:
 
 ```sh
-docker build -t tftstellarbscbridge:$(git describe --abbrev=0 --tags | sed 's/^v//')  .
+docker build -t tftstellarethbridge:$(git describe --abbrev=0 --tags | sed 's/^v//')  .
 ```
 
 ## Building the frontend docker image
