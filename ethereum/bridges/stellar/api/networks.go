@@ -27,6 +27,12 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 		ContractAddress:         common.HexToAddress("0x3022415B85F4d1E6ce8E9a25904f018455607416"),
 		MultisigContractAddress: common.HexToAddress("0xD59EE55B6B819a02f0eC0b3e1Bc435cA06CAE309"),
 	},
+	"goerli-testnet": {
+		NetworkID:               5,
+		NetworkName:             "goerli-testnet",
+		ContractAddress:         common.HexToAddress("0xa8B0DDD11B6Bb53a79E62B8Ae8a1e2f68cd75338"),
+		MultisigContractAddress: common.HexToAddress("0x4fD0f6fc13ADFF3D2aAb617702E31c49F715BE32"),
+	},
 }
 
 // GetEthNetworkConfiguration returns the EthNetworkConAfiguration for a specific network

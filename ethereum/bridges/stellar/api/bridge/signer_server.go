@@ -11,10 +11,11 @@ import (
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
+	stellarnetwork "github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
@@ -60,6 +61,7 @@ func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 	}
 
 	_, signerService, err := newSignerServer(host, config, bridgeMasterAddress, bridgeContract)
+
 	return signerService, err
 }
 
@@ -306,11 +308,11 @@ func newSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 func (s *SignerService) getNetworkPassPhrase() string {
 	switch s.config.StellarNetwork {
 	case "testnet":
-		return network.TestNetworkPassphrase
+		return stellarnetwork.TestNetworkPassphrase
 	case "production":
-		return network.PublicNetworkPassphrase
+		return stellarnetwork.PublicNetworkPassphrase
 	default:
-		return network.TestNetworkPassphrase
+		return stellarnetwork.TestNetworkPassphrase
 	}
 }
 

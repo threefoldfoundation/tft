@@ -4,25 +4,21 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	pkgErrors "errors"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/libp2p/go-libp2p"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p/config"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
+	"github.com/threefoldtech/libp2p-relay/client"
 )
 
 type SignerConfig struct {
@@ -46,7 +42,7 @@ func (c *SignerConfig) Valid() error {
 	return nil
 }
 
-func NewHost(ctx context.Context, secret, filteredID, relay string, psk string) (host.Host, routing.PeerRouting, error) {
+func NewHost(ctx context.Context, secret, relay string, psk string) (host.Host, routing.PeerRouting, error) {
 	seed, err := strkey.Decode(strkey.VersionByteSeed, secret)
 	if err != nil {
 		return nil, nil, err
@@ -56,93 +52,44 @@ func NewHost(ctx context.Context, secret, filteredID, relay string, psk string) 
 		return nil, nil, fmt.Errorf("invalid seed size '%d' expecting '%d'", len(seed), ed25519.SeedSize)
 	}
 
-	sk := ed25519.NewKeyFromSeed(seed)
-
-	privK, err := crypto.UnmarshalEd25519PrivateKey(sk)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var filteredPeerID peer.ID
-	if filteredID != "" {
-		filteredPeerID, err = getPeerIDFromStellarAddress(filteredID)
+	var privKey crypto.PrivKey
+	if secret != "" {
+		privKey, err = crypto.UnmarshalEd25519PrivateKey(
+			ed25519.NewKeyFromSeed(seed),
+		)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	return createLibp2pHost(ctx, privK, filteredPeerID, relay, psk)
-}
+	key, err := hex.DecodeString(psk)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(key) != 32 {
+		return nil, nil, errors.New("psk must be 32 bytes long")
+	}
 
-func createLibp2pHost(ctx context.Context, privateKey crypto.PrivKey, filteredID peer.ID, relay string, psk string) (host.Host, routing.PeerRouting, error) {
-	var idht *dht.IpfsDHT
-	var err error
-
-	cmgr, err := connmgr.NewConnManager(
-		100, // Lowwater
-		400, // HighWater,
-	)
+	relayAddrInfo, err := peer.AddrInfoFromString(relay)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	options := []config.Option{
-		libp2p.Identity(privateKey),
-		// Multiple listen addresses
-		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/0",      // regular tcp connections
-			"/ip4/0.0.0.0/udp/0/quic", // a UDP endpoint for the QUIC transport
-		),
-		libp2p.ConnectionManager(cmgr),
-		// Attempt to open ports using uPNP for NATed hosts.
-		libp2p.NATPortMap(),
-		// Let this host use the DHT to find other hosts
-		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			idht, err = dht.New(ctx, h, dht.Mode(dht.ModeAuto))
-			return idht, err
-		}),
-	}
-
-	//Explicitely set the transports to disable quic since it does not support private networks
-	options = append(options, libp2p.ChainOptions(
-		libp2p.Transport(tcp.NewTCPTransport),
-	))
-
-	if relay != "" {
-		relayAddrInfo, err := peer.AddrInfoFromString(relay)
-		if err != nil {
-			return nil, nil, err
-		}
-		// Let this host use relays and advertise itself on relays if
-		// it finds it is behind NAT. Use libp2p.Relay(options...) to
-		// enable active relays and more.
-		options = append(options, libp2p.EnableAutoRelayWithStaticRelays([]peer.AddrInfo{*relayAddrInfo}))
-	}
-
-	if psk != "" {
-		key, err := hex.DecodeString(psk)
-		if err != nil {
-			return nil, nil, err
-		}
-		if len(psk) != 32 {
-			return nil, nil, errors.New("psk must be 32 bytes long")
-		}
-		options = append(options, libp2p.PrivateNetwork(key))
-	}
-
-	if filteredID != "" {
-		// filter on ID
-		filter := NewGater(filteredID)
-		options = append(options, libp2p.ConnectionGater(filter))
-	}
-
-	libp2phost, err := libp2p.New(options...)
+	ar, routing, err := client.CreateLibp2pHost(ctx, 0, true, key, privKey, []peer.AddrInfo{*relayAddrInfo})
 	if err != nil {
-		fmt.Println(err)
+		return nil, nil, err
+	}
+	//Force the relayfinder of the autorelay to start
+	emitReachabilityChanged, err := ar.EventBus().Emitter(new(event.EvtLocalReachabilityChanged))
+	if err != nil {
+		return nil, nil, err
+	}
+	err = emitReachabilityChanged.Emit(event.EvtLocalReachabilityChanged{Reachability: network.ReachabilityUnknown})
+	if err != nil {
 		return nil, nil, err
 	}
 
-	return libp2phost, idht, err
+	return ar, routing, nil
 }
 
 type SignersClient struct {
@@ -249,7 +196,9 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRequest) (*SignResponse, error) {
-	if err := ConnectToPeer(ctx, s.host, s.router, s.relay, id); err != nil {
+	arHost := s.host.(*autorelay.AutoRelayHost)
+
+	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
 	}
 
@@ -277,31 +226,4 @@ func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
 
 	peerID, err = peer.IDFromPublicKey(libp2pPubKey)
 	return peerID, err
-}
-
-func ConnectToPeer(ctx context.Context, p2phost host.Host, hostRouting routing.PeerRouting, relay *peer.AddrInfo, peerID peer.ID) (err error) {
-	arHost := p2phost.(*autorelay.AutoRelayHost)
-
-	findPeerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	peeraddrInfo, err := hostRouting.FindPeer(findPeerCtx, peerID)
-	if err != nil {
-		if pkgErrors.Is(err, routing.ErrNotFound) && relay != nil {
-			targetMA, e := multiaddr.NewMultiaddr("/p2p/" + relay.ID.String() + "/p2p-circuit/p2p/" + peerID.String())
-			if e != nil {
-				err = e
-				return
-			}
-			peeraddrInfo = peer.AddrInfo{
-				ID:    peerID,
-				Addrs: []multiaddr.Multiaddr{targetMA},
-			}
-		} else {
-			return
-		}
-	}
-	ConnectPeerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err = arHost.Connect(ConnectPeerCtx, peeraddrInfo)
-	return
 }

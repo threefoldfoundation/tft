@@ -16,11 +16,10 @@ import (
 )
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
 	var bridgeCfg bridge.BridgeConfig
 	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "eth-main", "eth network name (defines storage directory name)")
-	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8576", "ethereum rpc url")
+	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
 
@@ -47,16 +46,24 @@ func main() {
 	flag.StringVar(&bridgeCfg.Psk, "psk", "", "psk for the relay")
 	flag.StringVar(&bridgeCfg.Relay, "relay", "", "relay address")
 
+	var debug bool
+	flag.BoolVar(&debug, "debug", false, "sets debug level log output")
+
 	flag.Parse()
 
 	//TODO cfg.Validate()
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	if debug {
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	}
 
 	log.Info("connection url provided: ", "url", bridgeCfg.EthUrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.BridgeMasterAddress, bridgeCfg.Relay, bridgeCfg.Psk)
+	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.Relay, bridgeCfg.Psk)
 	if err != nil {
 		fmt.Println("failed to create host")
 		panic(err)
