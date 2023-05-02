@@ -1,0 +1,99 @@
+# Default values for bridge.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: stellarbridge
+  pullPolicy: IfNotPresent
+  tag: ''
+
+imagePullSecrets: []
+nameOverride: ''
+fullnameOverride: ''
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ''
+
+podAnnotations: {}
+
+podSecurityContext:
+  {}
+  # fsGroup: 2000
+
+securityContext:
+  {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+global:
+
+# should be provided on startup
+stellar_secret: 'SDPYTGXR5AVMRC7RPGHICR33A76QUAJPJA344DM3TIATZ6PUBMGPVWE4'
+# testnet or production
+network: 'testnet'
+
+# json content for the account json file
+account_json: |-
+account_password: 'test123'
+# smart-chain-testnet or smart-chain-mainnet
+eth_network: 'smart-chain-testnet'
+# production: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
+contract_address: '0xa5900c87f25851A4ABaD0c2bFFf3ad3Ee852BC80'
+# production: 0xa4E8d413004d46f367D4F09D6BD4EcBccfE51D33
+ms_contract_address: '0x6B5507633eBa86E202b1385d47415d6e2c51937D'
+# production: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
+bridge_master_address: 'GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V'
+# production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
+# stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
+is_follower: false
+eth_url: '/storage/geth.ipc'
+
+# Rescan from a certain blockheight
+# If set to 0, it will just take the current blockheight from the lightnode
+rescan_height: 100
+
+# Deposit fee in TFT
+deposit_fee: 50
+
+# If enabled, the bridge daemon will also start
+# It's recommended to delete the pod (helm uninstall)
+# before setting this to true and redeploying
+enable_bridge: true
+
+resources:
+  {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+volume:
+  existingpersistentVolumeClaim: 'pvc-bridge-local'
+  persistentVolume:
+    create: false
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+threefoldVdc:
+  backup: ''

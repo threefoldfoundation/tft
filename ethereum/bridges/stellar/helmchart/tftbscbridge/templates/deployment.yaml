@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tftbscbridge.fullname" . }}
+  labels:
+    {{- include "tftbscbridge.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "tftbscbridge.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "tftbscbridge.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "tftbscbridge.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        {{ if .Values.enable_bridge }}
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # ports:
+          #   - name: http
+          #     containerPort: 80
+          #     protocol: TCP
+          env:
+          - name: STELLAR_SECRET
+            value: {{ .Values.stellar_secret }}
+          - name: ACCOUNT_JSON
+            value: /etc/eth-bridge/account_json
+          - name: ACCOUNT_PASSWORD
+            value: {{ .Values.account_password }}
+          - name: CONTRACT_ADDRESS
+            value: {{ .Values.contract_address }}
+          - name: MS_CONTRACT_ADDRESS
+            value: {{ .Values.ms_contract_address }}
+          - name: ETH_NETWORK
+            value: {{ .Values.eth_network }}
+          - name: BRIDGE_MASTER_ADDRESS
+            value: {{ .Values.bridge_master_address }}
+          - name: STELLAR_FEE_WALLET
+            value: {{ .Values.stellar_fee_wallet }}
+          - name: STELLAR_NETWORK
+            value: {{ .Values.network }}
+          - name: ETH_URL
+            value: {{ .Values.eth_url }}
+          - name: RESCAN_HEIGHT
+            value: {{ .Values.rescan_height | quote }}
+          - name: DEPOSIT_FEE
+            value: {{ .Values.deposit_fee | quote }}
+          args: [
+            "--secret", "$(STELLAR_SECRET)",
+            "--account", "$(ACCOUNT_JSON)",
+            "--password", "$(ACCOUNT_PASSWORD)",
+            "--ethnetwork", "$(ETH_NETWORK)",
+            "--contract", "$(CONTRACT_ADDRESS)",
+            "--mscontract", "$(MS_CONTRACT_ADDRESS)",
+            "--master", "$(BRIDGE_MASTER_ADDRESS)",
+            "--network","$(STELLAR_NETWORK)",
+            "--ethurl", "$(ETH_URL)",
+            {{ if .Values.is_follower }}
+            "--follower=true",
+            {{ end }}
+            "--feewallet", "$(STELLAR_FEE_WALLET)",
+            "--persistency", "/storage/node.json",
+            "--rescanHeight", "$(RESCAN_HEIGHT)",
+            "--depositFee", "$(DEPOSIT_FEE)"
+          ]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/eth-bridge
+            - name: tftbscbridge-storage-{{ .Release.Name }}
+              mountPath: /storage
+        {{ end }}
+        - name: lightnode
+          image: threefolddev/bnbchain-main:1.1.23
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ws
+              containerPort: 8546
+              protocol: TCP
+          args: [
+            "--syncmode=light",
+            "--ws"
+          ]
+          volumeMounts:
+            - name: tftbscbridge-storage-{{ .Release.Name }}
+              mountPath: /storage
+      volumes:
+        - name: tftbscbridge-storage-{{ .Release.Name }}
+          persistentVolumeClaim:
+            claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} tftbscbridge-volume-claim-{{ .Release.Name }} {{ end }}
+        - name: config-volume
+          configMap:
+            name: {{ template "tftbscbridge.fullname" . }}
+            items:
+              - key: account_json
+                path: account_json
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

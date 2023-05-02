@@ -1,0 +1,20 @@
+{{- if .Values.volume.persistentVolume.create -}}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tftbscbridge-volume-{{ .Release.Name }}
+  labels:
+    {{- if .Values.threefoldVdc.backup }}
+    backupType: {{ .Values.threefoldVdc.backup | quote }}
+    {{- end }}
+    type: local
+spec:
+  storageClassName: {{ .Values.volume.storageClassName }}
+  capacity:
+    storage: {{ .Values.volume.size }}
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: {{ .Values.volume.persistentVolume.hostPath }}
+    type: Directory
+{{- end }}

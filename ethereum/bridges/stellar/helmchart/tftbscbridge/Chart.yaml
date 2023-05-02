@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tftbscbridge
+description: TFT stellar-bsc bridge
+type: application
+version: 0.2.5
+appVersion: '1.2.2'
