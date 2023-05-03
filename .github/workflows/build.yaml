@@ -24,3 +24,6 @@ jobs:
           export PATH=/home/runner/go/bin:$PATH
           export GIT_COMMIT=$(git rev-list -1 HEAD) 
           go build -ldflags "-X main.GitCommit=$GIT_COMMIT" .
+        env:
+          GO111MODULE: on
+
