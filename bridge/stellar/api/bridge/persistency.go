@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 )
 
@@ -44,7 +43,7 @@ func (b *ChainPersistency) saveStellarCursor(cursor string) error {
 
 func (b *ChainPersistency) GetHeight() (*Blockheight, error) {
 	var blockheight Blockheight
-	file, err := ioutil.ReadFile(b.location)
+	file, err := os.ReadFile(b.location)
 	if os.IsNotExist(err) {
 		return &blockheight, nil
 	}
@@ -65,5 +64,5 @@ func (b *ChainPersistency) Save(blockheight *Blockheight) error {
 		return err
 	}
 
-	return ioutil.WriteFile(b.location, updatedPersistency, 0644)
+	return os.WriteFile(b.location, updatedPersistency, 0644)
 }

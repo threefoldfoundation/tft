@@ -30,8 +30,8 @@ const (
 	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
 	// TFTTest = "TFTXXX:GCRO7FLIU4LKELZBLGWOTQ7T64OKSU4O4OWATLHV3BFSVQZMJWWKRE5A"
 
-	stellarPrecision       int64 = 1e7
-	stellarPrecisionDigits       = 7
+	stellarPrecision       = 1e7
+	stellarPrecisionDigits = 7
 )
 
 // stellarWallet is the bridge wallet
@@ -269,7 +269,7 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
 
-	w.stellarTransactionStorage.StoreTransactionWithMemo(tx)
+	err = w.stellarTransactionStorage.StoreTransactionWithMemo(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to store transaction with memo")
 	}

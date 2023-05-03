@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -9,14 +9,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-//InitializeKeystore imports, creates  or opens the keystore and unlock the first account
-//If no account is found in the keystore, one is created.
+// InitializeKeystore imports, creates  or opens the keystore and unlock the first account
+// If no account is found in the keystore, one is created.
 func InitializeKeystore(datadir string, accountJSON string, accountPass string) (*keystore.KeyStore, error) {
 	ks := keystore.NewKeyStore(filepath.Join(datadir, "keys"), keystore.StandardScryptN, keystore.StandardScryptP)
 	var acc accounts.Account
 	if accountJSON != "" {
 		log.Info("Importing account")
-		blob, err := ioutil.ReadFile(accountJSON)
+		blob, err := os.ReadFile(accountJSON)
 		if err != nil {
 			return nil, err
 		}

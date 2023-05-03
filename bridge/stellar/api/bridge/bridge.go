@@ -248,8 +248,19 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	go bridge.bridgeContract.Loop(heads)
 
 	// subscribing to these events is not needed for operational purposes, but might be nice to get some info
-	go bridge.bridgeContract.SubscribeTransfers()
-	go bridge.bridgeContract.SubscribeMint()
+	go func() {
+		err := bridge.bridgeContract.SubscribeTransfers()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		err := bridge.bridgeContract.SubscribeMint()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	// Channel where withdrawal events are stored
 	// Should only be read from by the master bridge
@@ -312,9 +323,20 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			}()
 		}
 
-		go bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
+		go func() {
+			err := bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
+			if err != nil {
+				panic(err)
+			}
+		}()
+
 	} else {
-		go bridge.bridgeContract.SubscribeSubmission(submissionChan)
+		go func() {
+			err := bridge.bridgeContract.SubscribeSubmission(submissionChan)
+			if err != nil {
+				panic(err)
+			}
+		}()
 	}
 
 	go func() {

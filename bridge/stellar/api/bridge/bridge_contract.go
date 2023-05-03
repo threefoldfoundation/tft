@@ -252,13 +252,6 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 
 	for head := range heads {
 		ch <- head
-		select {
-		// only process new head if another isn't being processed yet
-		// case update <- head:
-		// 	log.Debug("Processing new head")
-		default:
-			log.Debug("Ignoring current head, update already in progress")
-		}
 	}
 	log.Error("Bridge state update loop ended")
 }
