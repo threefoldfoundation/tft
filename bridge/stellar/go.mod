@@ -1,4 +1,4 @@
-module github.com/threefoldfoundation/tft/bsc/bridges/stellar
+module github.com/threefoldfoundation/tft/bridge/stellar
 
 go 1.20
 
