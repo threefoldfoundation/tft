@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	tfeth "github.com/threefoldfoundation/tft/bridge/stellar/api"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/contract"
 	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
 )
 
@@ -298,7 +297,7 @@ func (w WithdrawEvent) BlockHeight() uint64 {
 // and prints out info about any withdraw as it happened
 func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHeight uint64) error {
 	log.Info("Subscribing to withdraw events", "start height", startHeight)
-	sink := make(chan *contract.TokenWithdraw)
+	sink := make(chan *tokenv1.TokenWithdraw)
 	watchOpts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 	sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
 	if err != nil {
@@ -335,7 +334,7 @@ func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHe
 // Solidity: e Withdraw(receiver indexed address, tokens uint256)
 //
 // This method is copied from the generated bindings and slightly modified, so we can add logic to stay backwards compatible with the old withdraw event signature
-func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *contract.TokenWithdraw, receiver []common.Address) (event.Subscription, error) {
+func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *tokenv1.TokenWithdraw, receiver []common.Address) (event.Subscription, error) {
 
 	var receiverRule []interface{}
 	for _, receiverItem := range receiver {
@@ -352,7 +351,7 @@ func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *c
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(contract.TokenWithdraw)
+				event := new(tokenv1.TokenWithdraw)
 				if err := bridge.tftContract.contract.UnpackLog(event, "Withdraw", log); err != nil {
 					return err
 				}
@@ -548,7 +547,7 @@ func (bridge *BridgeContract) EthBalance() (*big.Int, error) {
 //
 // This method is copied from the generated bindings as a convenient way to get a *bind.Contract, as this is needed to implement the WatchWithdraw function ourselves
 func bindTTFT20(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, abi.ABI, error) {
-	parsed, err := abi.JSON(strings.NewReader(contract.TokenABI))
+	parsed, err := abi.JSON(strings.NewReader(tokenv1.TokenABI))
 	if err != nil {
 		return nil, parsed, err
 	}
