@@ -12,7 +12,7 @@ import (
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
-	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/stellar"
+	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/stellar"
 )
 
 type StellarTransactionStorage struct {

@@ -22,7 +22,7 @@ import (
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
-	"github.com/threefoldfoundation/tft/bsc/bridges/stellar/api/bridge/stellar"
+	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/stellar"
 )
 
 const (
