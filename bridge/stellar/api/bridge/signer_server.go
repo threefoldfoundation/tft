@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -41,7 +40,7 @@ type EthSignRequest struct {
 	Receiver           common.Address
 	Amount             *big.Int
 	TxId               string
-	RequiredSignatures int
+	RequiredSignatures *big.Int
 }
 
 type StellarSignResponse struct {
@@ -52,6 +51,7 @@ type StellarSignResponse struct {
 }
 
 type EthSignResponse struct {
+	Who       common.Address
 	Signature tokenv1.Signature
 }
 
@@ -79,26 +79,32 @@ func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 	return signerService, err
 }
 
-func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest) (*EthSignResponse, error) {
-	bytes, err := s.bridgeContract.tftContract.abi.Pack("mintTokens", common.Address(request.Receiver), request.Amount, request.TxId)
+func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, response *EthSignResponse) error {
+	log.Debug("sign mint request", "request txid", request.TxId)
+
+	bytes, err := AbiEncodeArgs(request.Receiver, request.Amount, request.TxId)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	signature, err := s.bridgeContract.lc.account.keystore.SignHash(s.bridgeContract.lc.account.account, bytes)
+	signature, err := s.bridgeContract.lc.account.keystore.SignHash(s.bridgeContract.lc.account.account, signHash(bytes))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	r := EthSignResponse{
-		Signature: tokenv1.Signature{
-			V: uint8(binary.LittleEndian.Uint32(signature[:65])) + 27, // Yes add 27, weird Ethereum quirk
-			R: [32]byte(signature[:32]),
-			S: [32]byte(signature[32:64]),
-		},
+	response.Who = s.bridgeContract.lc.account.account.Address
+
+	v := signature[64]
+	if v < 27 {
+		v = v + 27
+	}
+	response.Signature = tokenv1.Signature{
+		V: v,
+		R: [32]byte(signature[:32]),
+		S: [32]byte(signature[32:64]),
 	}
 
-	return &r, nil
+	return nil
 }
 
 // Sign signs a stellar sign request

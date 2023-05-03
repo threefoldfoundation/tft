@@ -30,7 +30,7 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 	"goerli-testnet": {
 		NetworkID:               5,
 		NetworkName:             "goerli-testnet",
-		ContractAddress:         common.HexToAddress("0xa8B0DDD11B6Bb53a79E62B8Ae8a1e2f68cd75338"),
+		ContractAddress:         common.HexToAddress("0x33f92Ffd12A518ec3fe15875cAc8C8af45cF791d"),
 		MultisigContractAddress: common.HexToAddress("0x4fD0f6fc13ADFF3D2aAb617702E31c49F715BE32"),
 	},
 	"smart-chain-mainnet": {

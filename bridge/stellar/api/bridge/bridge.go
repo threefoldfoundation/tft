@@ -8,13 +8,16 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
+	"golang.org/x/crypto/sha3"
 )
 
 var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
@@ -155,21 +158,119 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	amount := &big.Int{}
 	amount.Sub(depositedAmount, depositFeeBigInt)
 
+	requiredSignatureCount, err := bridge.bridgeContract.GetRequiresSignatureCount()
+	if err != nil {
+		return err
+	}
+
+	// Create signatures array with the required length
+	signs := make([]tokenv1.Signature, requiredSignatureCount.Int64())
+
 	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
 		Amount:   amount,
 		TxId:     txID,
+		// subtract 1 from the required signature count, because the master signature is already included
+		RequiredSignatures: requiredSignatureCount.Sub(requiredSignatureCount, big.NewInt(1)),
 	})
 	if err != nil {
 		return err
 	}
 
-	signs := make([]tokenv1.Signature, len(res))
-	for _, s := range res {
-		signs = append(signs, s.Signature)
+	// First append the master signature
+
+	// TODO: split to different function
+	bytes, err := AbiEncodeArgs(common.Address(receiver), amount, txID)
+	if err != nil {
+		return err
 	}
 
+	log.Debug("hashed payload", "hash", signHash(bytes))
+	log.Debug("hashed payload len", "hash", len(signHash(bytes)))
+
+	masterSignature, err := bridge.bridgeContract.lc.account.keystore.SignHash(bridge.bridgeContract.lc.account.account, signHash(bytes))
+	if err != nil {
+		return err
+	}
+
+	v := masterSignature[64]
+	if v < 27 {
+		v = v + 27
+	}
+	signs[0] = tokenv1.Signature{
+		V: v,
+		R: [32]byte(masterSignature[:32]),
+		S: [32]byte(masterSignature[32:64]),
+	}
+	log.Debug("master sig", "sig", signs)
+
+	for i := 0; i < len(res); i++ {
+		// todo: verify signatures
+		signs[i+1] = res[i].Signature
+	}
+
+	signers, err := bridge.bridgeContract.GetSigners()
+	if err != nil {
+		return err
+	}
+
+	log.Debug("signers list", "l", signers)
+	log.Debug("signature list", "r", signs)
+
+	log.Debug("total signatures count", "count", len(signs))
+
 	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
+}
+
+func signHash(data []byte) []byte {
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	return crypto.Keccak256([]byte(msg))
+}
+
+func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, error) {
+	addressTy, err := abi.NewType("address", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	uintTy, err := abi.NewType("uint256", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	stringTy, err := abi.NewType("string", "", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	arguments := abi.Arguments{
+		{
+			Name: "receiver",
+			Type: addressTy,
+		},
+		{
+			Name: "tokens",
+			Type: uintTy,
+		},
+		{
+			Name: "txid",
+			Type: stringTy,
+		},
+	}
+
+	bytes, err := arguments.Pack(
+		addr,
+		amount,
+		txid,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf []byte
+	hash := sha3.New256()
+	hash.Write(bytes)
+	buf = hash.Sum(buf)
+
+	return buf, nil
 }
 
 type Data struct {

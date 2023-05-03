@@ -463,14 +463,14 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	if err != nil {
 		return err
 	}
-	newGas := big.NewInt(10 * gas.Int64())
+	// newGas := big.NewInt(10 * gas.Int64())
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	opts := &bind.TransactOpts{
 		Context: ctx, From: accountAddress,
 		Signer: bridge.getSignerFunc(),
-		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: newGas,
+		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: gas,
 	}
 
 	log.Info("Submitting transaction to token contract", "tokenaddress", bridge.networkConfig.ContractAddress)
@@ -490,6 +490,23 @@ func (bridge *BridgeContract) IsMintTxID(txID string) (bool, error) {
 		res, err = bridge.isMintTxID(txID)
 	}
 	return res, err
+}
+
+func (bridge *BridgeContract) GetRequiresSignatureCount() (*big.Int, error) {
+	log.Debug("Calling GetRequiresSignatureCountr")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	return bridge.tftContract.caller.GetSignaturesRequired(opts)
+}
+
+// GetSigners returns the list of signers for the contract
+func (bridge *BridgeContract) GetSigners() ([]common.Address, error) {
+	log.Debug("Calling GetSigners")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	opts := &bind.CallOpts{Context: ctx}
+	return bridge.tftContract.caller.GetSigners(opts)
 }
 
 func (bridge *BridgeContract) isMintTxID(txID string) (bool, error) {
