@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: { { template "tftethbridge.fullname" . } }
+  labels: { { - include "tftethbridge.labels" . | nindent 4 } }
+data:
+  account_json: { { .Values.account_json | toJson } }

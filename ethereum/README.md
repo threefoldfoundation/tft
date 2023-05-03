@@ -6,4 +6,3 @@ This is work in progress and TFT is not available on Ethereum yet.
 
 For details of the contract adresses like the one providing the multisig see [addresses](./addresses.md).
 
-For information on development and the Polygon testnet, see the [development doc](./development.md).
