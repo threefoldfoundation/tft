@@ -20,7 +20,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          working-directory: bridge/stellar
+          args: --timeout 3m --verbose
       
       - name: Build
         run: |
