@@ -1,7 +1,7 @@
 ## Testnet
 
-Ethereum Testnet: Rinkeby
+Ethereum Testnet: Goerli
 
 [Testnet Faucet](https://faucet.rinkeby.io/)
 
-[Rinkeby Etherscan](https://rinkeby.etherscan.io/)
+[Goerli Etherscan](https://goerli.etherscan.io/)
