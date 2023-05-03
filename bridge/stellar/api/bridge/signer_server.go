@@ -3,7 +3,9 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -11,6 +13,7 @@ import (
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
 
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/clients/horizonclient"
@@ -26,7 +29,7 @@ const (
 	Protocol = protocol.ID("/p2p/rpc/signer")
 )
 
-type SignRequest struct {
+type StellarSignRequest struct {
 	TxnXDR             string
 	RequiredSignatures int
 	Receiver           common.Address
@@ -34,11 +37,22 @@ type SignRequest struct {
 	Message            string
 }
 
-type SignResponse struct {
+type EthSignRequest struct {
+	Receiver           common.Address
+	Amount             *big.Int
+	TxId               string
+	RequiredSignatures int
+}
+
+type StellarSignResponse struct {
 	// Signature is a base64 of the signautre
 	Signature string
 	// The account address
 	Address string
+}
+
+type EthSignResponse struct {
+	Signature tokenv1.Signature
 }
 
 type SignerService struct {
@@ -65,7 +79,31 @@ func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 	return signerService, err
 }
 
-func (s *SignerService) Sign(ctx context.Context, request SignRequest, response *SignResponse) error {
+func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest) (*EthSignResponse, error) {
+	bytes, err := s.bridgeContract.tftContract.abi.Pack("mintTokens", common.Address(request.Receiver), request.Amount, request.TxId)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := s.bridgeContract.lc.account.keystore.SignHash(s.bridgeContract.lc.account.account, bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	r := EthSignResponse{
+		Signature: tokenv1.Signature{
+			R: [32]byte(signature[:32]),
+			S: [32]byte(signature[32:64]),
+			V: uint8(binary.LittleEndian.Uint32(signature[:65])) + 27, // Yes add 27, weird Ethereum quirk
+		},
+	}
+
+	return &r, nil
+}
+
+// Sign signs a stellar sign request
+// This is calable on the libp2p network with RPC
+func (s *SignerService) Sign(ctx context.Context, request StellarSignRequest, response *StellarSignResponse) error {
 	loaded, err := txnbuild.TransactionFromXDR(request.TxnXDR)
 	if err != nil {
 		return err
@@ -111,7 +149,7 @@ func (s *SignerService) Sign(ctx context.Context, request SignRequest, response 
 	return nil
 }
 
-func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating withdrawal request...")
 
 	withdraw, err := s.bridgeContract.tftContract.filter.FilterWithdraw(&bind.FilterOpts{Start: request.Block}, []common.Address{request.Receiver})
@@ -176,7 +214,7 @@ func (s *SignerService) validateWithdrawal(request SignRequest, txn *txnbuild.Tr
 	return nil
 }
 
-func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateRefundTransaction(request StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating refund request...")
 
 	for _, op := range txn.Operations() {
@@ -237,7 +275,7 @@ func (s *SignerService) validateRefundTransaction(request SignRequest, txn *txnb
 	return nil
 }
 
-func (s *SignerService) validateFeeTransfer(request SignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating fee transfer request...")
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
@@ -316,20 +354,8 @@ func (s *SignerService) getNetworkPassPhrase() string {
 	}
 }
 
-// GetHorizonClient gets the horizon client based on the wallet's network
-func (s *SignerService) getHorizonClient() (*horizonclient.Client, error) {
-	switch s.config.StellarNetwork {
-	case "testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "production":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
-}
-
 func (s *SignerService) getTransactionEffects(txHash string) (effects effects.EffectsPage, err error) {
-	client, err := s.getHorizonClient()
+	client, err := GetHorizonClient(s.config.StellarNetwork)
 	if err != nil {
 		return effects, err
 	}

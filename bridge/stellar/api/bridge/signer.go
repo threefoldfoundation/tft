@@ -101,7 +101,12 @@ type SignersClient struct {
 }
 
 type response struct {
-	answer *SignResponse
+	answer *StellarSignResponse
+	err    error
+}
+
+type ethResponse struct {
+	answer *EthSignResponse
 	err    error
 }
 
@@ -127,8 +132,7 @@ func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRo
 	}, nil
 }
 
-func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]SignResponse, error) {
-
+func (s *SignersClient) Sign(ctx context.Context, signRequest StellarSignRequest) ([]StellarSignResponse, error) {
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -149,7 +153,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 
 	}
 
-	var results []SignResponse
+	var results []StellarSignResponse
 
 	for len(responseChannels) > 0 {
 		if ctx.Err() != nil {
@@ -195,15 +199,97 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest SignRequest) ([]Si
 	return results, nil
 }
 
-func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest SignRequest) (*SignResponse, error) {
+func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest StellarSignRequest) (*StellarSignResponse, error) {
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
 	}
 
-	var response SignResponse
+	var response StellarSignResponse
 	if err := s.client.CallContext(ctx, id, "SignerService", "Sign", &signRequest, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest) ([]EthSignResponse, error) {
+	// cancel context after 30 seconds
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	responseChannels := make([]chan ethResponse, 0, len(s.peers))
+	for _, addr := range s.peers {
+		respCh := make(chan ethResponse, 1)
+		responseChannels = append(responseChannels, respCh)
+		go func(peerID peer.ID, ch chan ethResponse) {
+			defer close(ch)
+			answer, err := s.signMint(ctxWithTimeout, peerID, signRequest)
+
+			select {
+			case <-ctxWithTimeout.Done():
+			case ch <- ethResponse{answer: answer, err: err}:
+			}
+		}(addr, respCh)
+
+	}
+
+	var results []EthSignResponse
+
+	for len(responseChannels) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		receivedFrom := -1
+	responsechannelsLoop:
+		for i, responseChannel := range responseChannels {
+			select {
+			case reply := <-responseChannel:
+				receivedFrom = i
+				if reply.err != nil {
+					log.Error("failed to get signature from", "err", reply.err.Error())
+
+				} else {
+					if reply.answer != nil {
+						log.Info("got a valid reply from a signer")
+						results = append(results, *reply.answer)
+					}
+				}
+				break responsechannelsLoop
+			default: //don't block
+			}
+		}
+		if receivedFrom >= 0 {
+			//Remove the channel from the list
+			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
+			responseChannels = responseChannels[:len(responseChannels)-1]
+			//check if we have enough signatures
+			if len(results) == signRequest.RequiredSignatures {
+				break
+			}
+		} else {
+			time.Sleep(time.Millisecond * 100)
+		}
+
+	}
+
+	if len(results) != signRequest.RequiredSignatures {
+		return nil, fmt.Errorf("required number of signatures is not met")
+	}
+
+	return results, nil
+}
+
+func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest EthSignRequest) (*EthSignResponse, error) {
+	arHost := s.host.(*autorelay.AutoRelayHost)
+
+	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
+		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
+	}
+
+	var response EthSignResponse
+	if err := s.client.CallContext(ctx, id, "SignerService", "SignMint", &signRequest, &response); err != nil {
 		return nil, err
 	}
 

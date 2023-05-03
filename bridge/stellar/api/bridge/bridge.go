@@ -14,8 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
-	"github.com/stellar/go/amount"
-	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
+	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
 )
 
 var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
@@ -155,7 +154,22 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	}
 	amount := &big.Int{}
 	amount.Sub(depositedAmount, depositFeeBigInt)
-	return bridge.bridgeContract.Mint(receiver, amount, txID)
+
+	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
+		Receiver: common.BytesToAddress(receiver[:]),
+		Amount:   amount,
+		TxId:     txID,
+	})
+	if err != nil {
+		return err
+	}
+
+	signs := make([]tokenv1.Signature, len(res))
+	for _, s := range res {
+		signs = append(signs, s.Signature)
+	}
+
+	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
 }
 
 type Data struct {
@@ -164,72 +178,72 @@ type Data struct {
 	Txid     string
 }
 
-// validateTransaction validates a transaction before it will be confirmed
-func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
-	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
-	if err != nil {
-		log.Error("failed to fetch transaction from ms contract")
-		return err
-	}
+// // validateTransaction validates a transaction before it will be confirmed
+// func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
+// 	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
+// 	if err != nil {
+// 		log.Error("failed to fetch transaction from ms contract")
+// 		return err
+// 	}
 
-	var data struct {
-		Receiver common.Address
-		Tokens   *big.Int
-		Txid     string
-	}
-	res, err := bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(tx.Data[4:])
-	if err != nil {
-		log.Error("failed to unpack token mint", "err", err)
-		return err
-	}
-	// TODO, SEE IF THIS WORKS IN A MULTISIG SETUP, MIGHT NOT WORK DUE TO API CHANGES
-	data, ok := res[0].(Data)
-	if !ok {
-		return err
-	}
+// 	var data struct {
+// 		Receiver common.Address
+// 		Tokens   *big.Int
+// 		Txid     string
+// 	}
+// 	res, err := bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(tx.Data[4:])
+// 	if err != nil {
+// 		log.Error("failed to unpack token mint", "err", err)
+// 		return err
+// 	}
+// 	// TODO, SEE IF THIS WORKS IN A MULTISIG SETUP, MIGHT NOT WORK DUE TO API CHANGES
+// 	data, ok := res[0].(Data)
+// 	if !ok {
+// 		return err
+// 	}
 
-	effects, err := bridge.wallet.getTransactionEffects(data.Txid)
-	if err != nil {
-		log.Error("error while fetching transaction effects:", err.Error())
-		return err
-	}
+// 	effects, err := bridge.wallet.getTransactionEffects(data.Txid)
+// 	if err != nil {
+// 		log.Error("error while fetching transaction effects:", err.Error())
+// 		return err
+// 	}
 
-	asset := bridge.wallet.GetAssetCodeAndIssuer()
+// 	asset := bridge.wallet.GetAssetCodeAndIssuer()
 
-	totalAmount := 0
-	for _, effect := range effects.Embedded.Records {
-		// check if the effect account is the bridge master wallet address
-		found := effect.GetAccount() == bridge.config.BridgeMasterAddress
+// 	totalAmount := 0
+// 	for _, effect := range effects.Embedded.Records {
+// 		// check if the effect account is the bridge master wallet address
+// 		found := effect.GetAccount() == bridge.config.BridgeMasterAddress
 
-		// if the effect is a deposit, add the amount to the total
-		if found && effect.GetType() == "account_credited" {
-			creditedEffect := effect.(horizoneffects.AccountCredited)
-			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
-				continue
-			}
-			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
-			if err != nil {
-				continue
-			}
-			totalAmount += int(parsedAmount)
-		}
-	}
+// 		// if the effect is a deposit, add the amount to the total
+// 		if found && effect.GetType() == "account_credited" {
+// 			creditedEffect := effect.(horizoneffects.AccountCredited)
+// 			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
+// 				continue
+// 			}
+// 			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
+// 			if err != nil {
+// 				continue
+// 			}
+// 			totalAmount += int(parsedAmount)
+// 		}
+// 	}
 
-	if totalAmount == 0 {
-		return fmt.Errorf("transaction is not valid, we did not find a deposit to the master bridge address %s", bridge.config.BridgeMasterAddress)
-	}
+// 	if totalAmount == 0 {
+// 		return fmt.Errorf("transaction is not valid, we did not find a deposit to the master bridge address %s", bridge.config.BridgeMasterAddress)
+// 	}
 
-	depositedAmount := big.NewInt(int64(totalAmount))
-	// Subtract the deposit fee
-	amount := &big.Int{}
-	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFeeInStroops()))
+// 	depositedAmount := big.NewInt(int64(totalAmount))
+// 	// Subtract the deposit fee
+// 	amount := &big.Int{}
+// 	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFeeInStroops()))
 
-	if data.Tokens.Cmp(amount) > 0 {
-		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
-	}
+// 	if data.Tokens.Cmp(amount) > 0 {
+// 		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // GetClient returns bridgecontract lightclient
 func (bridge *Bridge) GetClient() *LightClient {
@@ -265,11 +279,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	// Channel where withdrawal events are stored
 	// Should only be read from by the master bridge
 	withdrawChan := make(chan WithdrawEvent)
-
-	// Channel where submission events from the multisig contract are stored
-	// Should only be read from by the follower bridges, this event channel
-	// will indicate when they need to confirm the withdrawal transaction that is submitted
-	submissionChan := make(chan SubmissionEvent)
 
 	// Only the bridge running as the master bridge should do the following things:
 	// - Monitor the Bridge Stellar account and initiate Minting transactions accordingly
@@ -330,13 +339,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			}
 		}()
 
-	} else {
-		go func() {
-			err := bridge.bridgeContract.SubscribeSubmission(submissionChan)
-			if err != nil {
-				panic(err)
-			}
-		}()
 	}
 
 	go func() {
@@ -351,20 +353,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					txMap[we.txHash.String()] = we
 				} else {
 					log.Warn("Ignoring withdrawal, invalid target network", "hash", we.TxHash(), "height", we.BlockHeight(), "network", we.network)
-				}
-			// If we get a new head, check every withdraw we have to see if it has matured
-			case submission := <-submissionChan:
-				log.Info("Submission Event seen", "txid", submission.TransactionId())
-
-				err := bridge.validateMintTransaction(submission.TransactionId())
-				if err != nil {
-					log.Error("error while validation minttransaction", "err", err)
-				} else {
-					log.Info("transaction validated, confirming now..")
-					err = bridge.bridgeContract.ConfirmTransaction(submission.TransactionId())
-					if err != nil {
-						log.Error("error occured during confirming transaction", "err", err)
-					}
 				}
 			case head := <-heads:
 				bridge.mut.Lock()

@@ -18,14 +18,12 @@ import (
 
 	tfeth "github.com/threefoldfoundation/tft/bridge/stellar/api"
 	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/contract"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/mscontract"
+	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
 )
 
 const ERC20AddressLength = 20
 
 type ERC20Address [ERC20AddressLength]byte
-
-var errNotOwner = errors.New("Bridge is not owner of the multisig contract")
 
 const (
 	// retryDelay is the delay to retry calls when there are no peers
@@ -40,8 +38,7 @@ type BridgeContract struct {
 
 	lc *LightClient
 
-	tftContract      *Contract
-	multisigContract *MsContract
+	tftContract *Contract
 
 	// cache some stats in case they might be usefull
 	head    *types.Header // Current head header of the bridge
@@ -53,18 +50,9 @@ type BridgeContract struct {
 }
 
 type Contract struct {
-	filter     *contract.TokenFilterer
-	transactor *contract.TokenTransactor
-	caller     *contract.TokenCaller
-
-	contract *bind.BoundContract
-	abi      abi.ABI
-}
-
-type MsContract struct {
-	filter     *mscontract.TokenFilterer
-	transactor *mscontract.TokenTransactor
-	caller     *mscontract.TokenCaller
+	filter     *tokenv1.TokenFilterer
+	transactor *tokenv1.TokenTransactor
+	caller     *tokenv1.TokenCaller
 
 	contract *bind.BoundContract
 	abi      abi.ABI
@@ -116,33 +104,27 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 		return nil, err
 	}
 
-	multisigContract, err := createMultisigContract(networkConfig, lc.Client)
-	if err != nil {
-		return nil, err
-	}
-
 	return &BridgeContract{
-		networkName:      bridgeConfig.EthNetworkName,
-		networkConfig:    networkConfig,
-		lc:               lc,
-		tftContract:      tftContract,
-		multisigContract: multisigContract,
+		networkName:   bridgeConfig.EthNetworkName,
+		networkConfig: networkConfig,
+		lc:            lc,
+		tftContract:   tftContract,
 	}, nil
 }
 
 func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethclient.Client) (*Contract, error) {
 	log.Info("Creating token contract binding", "address", networkConfig.ContractAddress)
-	filter, err := contract.NewTokenFilterer(networkConfig.ContractAddress, client)
+	filter, err := tokenv1.NewTokenFilterer(networkConfig.ContractAddress, client)
 	if err != nil {
 		return nil, err
 	}
 
-	transactor, err := contract.NewTokenTransactor(networkConfig.ContractAddress, client)
+	transactor, err := tokenv1.NewTokenTransactor(networkConfig.ContractAddress, client)
 	if err != nil {
 		return nil, err
 	}
 
-	caller, err := contract.NewTokenCaller(networkConfig.ContractAddress, client)
+	caller, err := tokenv1.NewTokenCaller(networkConfig.ContractAddress, client)
 	if err != nil {
 		return nil, err
 	}
@@ -158,37 +140,6 @@ func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethcl
 		caller:     caller,
 		contract:   tft20contract,
 		abi:        tft20abi,
-	}, nil
-}
-
-func createMultisigContract(networkConfig tfeth.NetworkConfiguration, client *ethclient.Client) (*MsContract, error) {
-	log.Info("Creating multisig contract binding", "address", networkConfig.MultisigContractAddress)
-	filter, err := mscontract.NewTokenFilterer(networkConfig.MultisigContractAddress, client)
-	if err != nil {
-		return nil, err
-	}
-
-	transactor, err := mscontract.NewTokenTransactor(networkConfig.MultisigContractAddress, client)
-	if err != nil {
-		return nil, err
-	}
-
-	caller, err := mscontract.NewTokenCaller(networkConfig.MultisigContractAddress, client)
-	if err != nil {
-		return nil, err
-	}
-
-	multisigContract, multisigAbi, err := bindMultisig(networkConfig.MultisigContractAddress, client, client, client)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MsContract{
-		filter:     filter,
-		transactor: transactor,
-		caller:     caller,
-		contract:   multisigContract,
-		abi:        multisigAbi,
 	}, nil
 }
 
@@ -259,7 +210,7 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 // SubscribeTransfers subscribes to new Transfer events on the given contract. This call blocks
 // and prints out info about any transfer as it happened
 func (bridge *BridgeContract) SubscribeTransfers() error {
-	sink := make(chan *contract.TokenTransfer)
+	sink := make(chan *tokenv1.TokenTransfer)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 	sub, err := bridge.tftContract.filter.WatchTransfer(opts, sink, nil, nil)
 	if err != nil {
@@ -279,7 +230,7 @@ func (bridge *BridgeContract) SubscribeTransfers() error {
 // SubscribeMint subscribes to new Mint events on the given contract. This call blocks
 // and prints out info about any mint as it happened
 func (bridge *BridgeContract) SubscribeMint() error {
-	sink := make(chan *contract.TokenMint)
+	sink := make(chan *tokenv1.TokenMint)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 	sub, err := bridge.tftContract.filter.WatchMint(opts, sink, nil, nil)
 	if err != nil {
@@ -292,39 +243,6 @@ func (bridge *BridgeContract) SubscribeMint() error {
 			return err
 		case mint := <-sink:
 			log.Info("Noticed mint event", "receiver", mint.Receiver, "amount", mint.Tokens, "TFT tx id", mint.Txid)
-		}
-	}
-}
-
-// SubmissionEvent holds relevant information about a submission event
-type SubmissionEvent struct {
-	transactionId *big.Int
-}
-
-// Receiver of the withdraw
-func (c SubmissionEvent) TransactionId() *big.Int {
-	return c.transactionId
-}
-
-// SubscribeSubmission subscribes to new submission event on the given multisig contract.
-func (bridge *BridgeContract) SubscribeSubmission(submitChan chan<- SubmissionEvent) error {
-	log.Debug("Subscribing multisig contract transaction submission channel")
-	sink := make(chan *mscontract.TokenSubmission)
-	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
-	sub, err := bridge.multisigContract.filter.WatchSubmission(opts, sink, nil)
-	if err != nil {
-		return err
-	}
-	defer sub.Unsubscribe()
-	for {
-		select {
-		case err = <-sub.Err():
-			return err
-		case submission := <-sink:
-			log.Info("Noticed submissions event", "txid", submission.TransactionId)
-			submitChan <- SubmissionEvent{
-				transactionId: submission.TransactionId,
-			}
 		}
 	}
 }
@@ -520,52 +438,28 @@ func (bridge *BridgeContract) transferFunds(recipient common.Address, amount *bi
 	return err
 }
 
-func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID string) error {
-	err := bridge.mint(receiver, amount, txID)
+func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
+	err := bridge.mint(receiver, amount, txID, signatures)
 	for IsNoPeerErr(err) {
 		log.Warn("no peers while trying to mint, retrying...")
 		time.Sleep(retryDelay)
-		err = bridge.mint(receiver, amount, txID)
+		err = bridge.mint(receiver, amount, txID, signatures)
 	}
 	return err
 }
 
-func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID string) error {
+func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
 	log.Info("Calling mint function in contract")
 	if amount == nil {
 		return errors.New("invalid amount")
 	}
 
-	owners, err := bridge.multisigContract.caller.GetOwners(&bind.CallOpts{})
-	if err != nil {
-		return err
-	}
-
 	accountAddress, err := bridge.lc.AccountAddress()
 	if err != nil {
 		return err
 	}
 
-	ownerExists := false
-	for _, owner := range owners {
-		if owner == accountAddress {
-			ownerExists = true
-			break
-		}
-	}
-
-	if !ownerExists {
-		for _, owner := range owners {
-			log.Info("Multisig contract owner", "owner", owner)
-		}
-		log.Error("Not an owner of the multisig contract", "account", accountAddress)
-		return errNotOwner
-	}
-
-	bytes, err := bridge.tftContract.abi.Pack("mintTokens", common.Address(receiver), amount, txID)
-	if err != nil {
-		return err
-	}
+	// TODO: get signatures
 
 	gas, err := bridge.lc.SuggestGasPrice(context.Background())
 	if err != nil {
@@ -581,68 +475,13 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: newGas,
 	}
 
-	log.Info("Submitting transaction to multisig contract", "tokenaddress", bridge.networkConfig.ContractAddress)
-	_, err = bridge.multisigContract.transactor.SubmitTransaction(opts, common.Address(bridge.networkConfig.ContractAddress), big.NewInt(0), bytes)
+	log.Info("Submitting transaction to token contract", "tokenaddress", bridge.networkConfig.ContractAddress)
+	_, err = bridge.tftContract.transactor.MintTokens(opts, common.Address(receiver), amount, txID, signatures)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (bridge *BridgeContract) ConfirmTransaction(txid *big.Int) error {
-	isConfirmed, err := bridge.IsConfirmedTxID(txid)
-	if err != nil {
-		return err
-	}
-
-	if isConfirmed {
-		return nil
-	}
-
-	log.Info("Going to confirm transaction")
-	accountAddress, err := bridge.lc.AccountAddress()
-	if err != nil {
-		return err
-	}
-
-	// TODO estimate gas more correctly ..
-	gas, err := bridge.lc.SuggestGasPrice(context.Background())
-	if err != nil {
-		return err
-	}
-	newGas := big.NewInt(10 * gas.Int64())
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	opts := &bind.TransactOpts{
-		Context: ctx, From: accountAddress,
-		Signer: bridge.getSignerFunc(),
-		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: newGas,
-	}
-
-	log.Info("Confirming transaction on multisig contract")
-	_, err = bridge.multisigContract.transactor.ConfirmTransaction(opts, txid)
-	return err
-}
-
-func (bridge *BridgeContract) IsConfirmedTxID(txID *big.Int) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	opts := &bind.CallOpts{Context: ctx}
-	return bridge.multisigContract.caller.IsConfirmed(opts, txID)
-}
-
-func (bridge *BridgeContract) GetTransactionByID(txID *big.Int) (struct {
-	Destination common.Address
-	Value       *big.Int
-	Data        []byte
-	Executed    bool
-}, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	opts := &bind.CallOpts{Context: ctx}
-	return bridge.multisigContract.caller.Transactions(opts, txID)
 }
 
 func (bridge *BridgeContract) IsMintTxID(txID string) (bool, error) {
@@ -695,17 +534,6 @@ func (bridge *BridgeContract) EthBalance() (*big.Int, error) {
 // This method is copied from the generated bindings as a convenient way to get a *bind.Contract, as this is needed to implement the WatchWithdraw function ourselves
 func bindTTFT20(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, abi.ABI, error) {
 	parsed, err := abi.JSON(strings.NewReader(contract.TokenABI))
-	if err != nil {
-		return nil, parsed, err
-	}
-	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), parsed, nil
-}
-
-// bindMultisig binds a generic wrapper to an already deployed contract.
-//
-// This method is copied from the generated bindings as a convenient way to get a *bind.Contract, as this is needed to implement the WatchWithdraw function ourselves
-func bindMultisig(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, abi.ABI, error) {
-	parsed, err := abi.JSON(strings.NewReader(mscontract.TokenABI))
 	if err != nil {
 		return nil, parsed, err
 	}

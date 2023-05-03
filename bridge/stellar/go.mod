@@ -177,4 +177,3 @@ require (
 	nhooyr.io/websocket v1.8.7 // indirect
 )
 
-replace github.com/ethereum/go-ethereum v1.10.17 => github.com/binance-chain/bsc v1.1.7
