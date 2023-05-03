@@ -459,8 +459,6 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 		return err
 	}
 
-	// TODO: get signatures
-
 	gas, err := bridge.lc.SuggestGasPrice(context.Background())
 	if err != nil {
 		return err

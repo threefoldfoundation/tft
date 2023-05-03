@@ -92,9 +92,9 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest) (*
 
 	r := EthSignResponse{
 		Signature: tokenv1.Signature{
+			V: uint8(binary.LittleEndian.Uint32(signature[:65])) + 27, // Yes add 27, weird Ethereum quirk
 			R: [32]byte(signature[:32]),
 			S: [32]byte(signature[32:64]),
-			V: uint8(binary.LittleEndian.Uint32(signature[:65])) + 27, // Yes add 27, weird Ethereum quirk
 		},
 	}
 
