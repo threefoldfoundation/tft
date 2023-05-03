@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/stellar"
 )
 
 const (
@@ -32,6 +32,7 @@ const (
 
 	stellarPrecision       = 1e7
 	stellarPrecisionDigits = 7
+	stellarPageLimit       = 100
 )
 
 // stellarWallet is the bridge wallet
@@ -466,7 +467,7 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 			handler(tx)
 			cursor = tx.PagingToken()
 		}
-		err = stellar.FetchTransactions(ctx, client, w.keypair.Address(), cursor, internalHandler)
+		err = fetchTransactions(ctx, client, w.keypair.Address(), cursor, internalHandler)
 		if err != nil {
 			return
 		}
@@ -474,6 +475,62 @@ func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 		case <-ctx.Done():
 			return
 		case <-time.After(10 * time.Second):
+		}
+
+	}
+
+}
+
+func fetchTransactions(ctx context.Context, client *horizonclient.Client, address string, cursor string, handler func(op hProtocol.Transaction)) error {
+	timeouts := 0
+	opRequest := horizonclient.TransactionRequest{
+		ForAccount:    address,
+		IncludeFailed: false,
+		Cursor:        cursor,
+		Limit:         stellarPageLimit,
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		response, err := client.Transactions(opRequest)
+		if err != nil {
+			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "pagelimit", opRequest.Limit, "error", err)
+			horizonError, ok := err.(*horizonclient.Error)
+			if ok && (horizonError.Response.StatusCode == http.StatusGatewayTimeout || horizonError.Response.StatusCode == http.StatusServiceUnavailable) {
+				timeouts++
+				if timeouts == 1 {
+					opRequest.Limit = 5
+				} else if timeouts > 1 {
+					opRequest.Limit = 1
+				}
+
+				log.Info("Request timed out, lowering pagelimit", "pagelimit", opRequest.Limit)
+			}
+
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+
+		}
+		for _, tx := range response.Embedded.Records {
+			handler(tx)
+			opRequest.Cursor = tx.PagingToken()
+		}
+
+		if timeouts > 0 {
+			log.Info("Fetching transaction succeeded, resetting page limit and timeouts")
+			opRequest.Limit = stellarPageLimit
+			timeouts = 0
+		}
+
+		if len(response.Embedded.Records) == 0 {
+			return nil
 		}
 
 	}
@@ -499,7 +556,7 @@ func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneff
 
 // GetHorizonClient gets the horizon client based on the wallet's network
 func (w *stellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
-	return stellar.GetHorizonClient(w.config.StellarNetwork)
+	return GetHorizonClient(w.config.StellarNetwork)
 }
 
 // GetNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
@@ -522,5 +579,17 @@ func (w *stellarWallet) GetAssetCodeAndIssuer() []string {
 		return strings.Split(TFTMainnet, ":")
 	default:
 		return strings.Split(TFTTest, ":")
+	}
+}
+
+// GetHorizonClient gets an horizon client for a specific network
+func GetHorizonClient(network string) (*horizonclient.Client, error) {
+	switch network {
+	case "testnet":
+		return horizonclient.DefaultTestNetClient, nil
+	case "production":
+		return horizonclient.DefaultPublicNetClient, nil
+	default:
+		return nil, errors.New("network is not supported")
 	}
 }

@@ -12,7 +12,6 @@ import (
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/stellar"
 )
 
 type StellarTransactionStorage struct {
@@ -106,7 +105,7 @@ func (s *StellarTransactionStorage) FetchTransactions(ctx context.Context, curso
 	}
 
 	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", s.addressToScan, "cursor", s.stellarCursor)
-	return stellar.FetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, handler)
+	return fetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, handler)
 
 }
 
@@ -155,5 +154,5 @@ func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txM
 
 // GetHorizonClient gets the horizon client based on the transaction storage's network
 func (s *StellarTransactionStorage) getHorizonClient() (*horizonclient.Client, error) {
-	return stellar.GetHorizonClient(s.network)
+	return GetHorizonClient(s.network)
 }
