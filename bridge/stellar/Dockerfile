@@ -1,4 +1,4 @@
-FROM golang:1.16 as BUILDER
+FROM golang:1.20 as BUILDER
 WORKDIR /go/src/github.com/threefoldfoundation/tft/bridge/stellar
 COPY ./ ./
 RUN go build -ldflags '-w -s -extldflags "-static"'
