@@ -31,7 +31,7 @@ export default class Root extends App {
     return (
       <>
         <Head>
-          <title>Threefold BSC Bridge</title>
+          <title>Threefold Ethereum Bridge</title>
         </Head>
 
         <Component />

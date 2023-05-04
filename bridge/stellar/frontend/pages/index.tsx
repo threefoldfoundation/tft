@@ -168,7 +168,7 @@ function App() {
       
       <div style={{ width: '50%', margin: 'auto', textAlign: 'center' }}>
         <img style={{ width: '30%', height: '30%' }} src={'/3fold_logo.png'} />
-        <h2>TFT Binance Chain bridge</h2>
+        <h2>TFT Ethereum bridge</h2>
 
         {connected && !error && account && (
           <>

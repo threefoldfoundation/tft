@@ -91,7 +91,7 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
         aria-describedby="alert-dialog-description"
         fullScreen={true}
       >
-        <DialogTitle id="alert-dialog-title">{"Swap BSC TFT for Stellar TFT"}</DialogTitle>
+        <DialogTitle id="alert-dialog-title">{"Swap Eth TFT for Stellar TFT"}</DialogTitle>
         <div className={styles.container}>
           <span>Fill in this form to withdraw tokens back to Stellar</span>
           <FormControl>

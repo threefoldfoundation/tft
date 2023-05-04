@@ -31,7 +31,7 @@ export default function DepositDialog({ open, handleClose, address }) {
         maxWidth={'lg'}
         fullScreen={true}
       >
-        <DialogTitle id="alert-dialog-title">{"Swap Stellar TFT for BSC TFT"}</DialogTitle>
+        <DialogTitle id="alert-dialog-title">{"Swap Stellar TFT for Eth TFT"}</DialogTitle>
         <DialogContent>
           <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
             <WarningIcon style={{ alignSelf: 'center', fontSize: 40, color: 'orange' }} />

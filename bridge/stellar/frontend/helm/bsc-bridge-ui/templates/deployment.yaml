@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bsc-bridge-ui.fullname" . }}
+  name: {{ include "eth-bridge-ui.fullname" . }}
   labels:
-    {{- include "bsc-bridge-ui.labels" . | nindent 4 }}
+    {{- include "eth-bridge-ui.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "bsc-bridge-ui.selectorLabels" . | nindent 6 }}
+      {{- include "eth-bridge-ui.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,7 +18,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "bsc-bridge-ui.selectorLabels" . | nindent 8 }}
+        {{- include "eth-bridge-ui.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

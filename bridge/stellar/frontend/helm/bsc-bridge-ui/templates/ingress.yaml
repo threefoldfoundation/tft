@@ -1,5 +1,5 @@
 {{- if .Values.ingress.enabled -}}
-{{- $fullName := include "bsc-bridge-ui.fullname" . -}}
+{{- $fullName := include "eth-bridge-ui.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
 {{- if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
 apiVersion: networking.k8s.io/v1
@@ -10,7 +10,7 @@ kind: Ingress
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "bsc-bridge-ui.labels" . | nindent 4 }}
+    {{- include "eth-bridge-ui.labels" . | nindent 4 }}
     backupType: {{ .Values.threefoldVdc.backup | quote }}
   annotations:
     {{- with .Values.ingress.annotations }}

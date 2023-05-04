@@ -5,14 +5,14 @@
 replicaCount: 1
 
 image:
-  repository: bsc-bridge-ui
+  repository: eth-bridge-ui
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: ''
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+nameOverride: ''
+fullnameOverride: ''
 
 podAnnotations: {}
 
@@ -76,4 +76,4 @@ tolerations: []
 affinity: {}
 
 threefoldVdc:
-  backup: ""
+  backup: ''
