@@ -16,7 +16,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
+	"github.com/threefoldfoundation/tft/bridge/stellar/contracts/tokenv1"
 	"golang.org/x/crypto/sha3"
 )
 

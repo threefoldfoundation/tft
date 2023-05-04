@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	tfeth "github.com/threefoldfoundation/tft/bridge/stellar/api"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge/tokenv1"
+	"github.com/threefoldfoundation/tft/bridge/stellar/contracts/tokenv1"
 )
 
 const ERC20AddressLength = 20
