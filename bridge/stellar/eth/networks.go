@@ -45,6 +45,12 @@ var ethNetworkConfigurations = map[string]NetworkConfiguration{
 		ContractAddress:         common.HexToAddress("0x4DFe8A53cD9dbA17038cAaDB4cd6743160dAf049"),
 		MultisigContractAddress: common.HexToAddress("0x0586d6afA50fA3b47FB51a34b906Ec8Fab5ACE0D"),
 	},
+	"hardhat": {
+		NetworkID:               31337,
+		NetworkName:             "homestead",
+		ContractAddress:         common.HexToAddress("0x4DFe8A53cD9dbA17038cAaDB4cd6743160dAf049"),
+		MultisigContractAddress: common.HexToAddress("0x0586d6afA50fA3b47FB51a34b906Ec8Fab5ACE0D"),
+	},
 }
 
 // GetEthNetworkConfiguration returns the EthNetworkConAfiguration for a specific network

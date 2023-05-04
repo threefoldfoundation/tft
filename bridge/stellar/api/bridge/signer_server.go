@@ -38,9 +38,9 @@ type StellarSignRequest struct {
 
 type EthSignRequest struct {
 	Receiver           common.Address
-	Amount             *big.Int
+	Amount             int64
 	TxId               string
-	RequiredSignatures *big.Int
+	RequiredSignatures int64
 }
 
 type StellarSignResponse struct {
@@ -82,17 +82,17 @@ func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, response *EthSignResponse) error {
 	log.Debug("sign mint request", "request txid", request.TxId)
 
-	bytes, err := AbiEncodeArgs(request.Receiver, request.Amount, request.TxId)
+	bytes, err := AbiEncodeArgs(request.Receiver, big.NewInt(request.Amount), request.TxId)
 	if err != nil {
 		return err
 	}
 
-	signature, err := s.bridgeContract.lc.account.keystore.SignHash(s.bridgeContract.lc.account.account, signHash(bytes))
+	signature, err := s.bridgeContract.ethc.SignHash(signHash(bytes))
 	if err != nil {
 		return err
 	}
 
-	response.Who = s.bridgeContract.lc.account.account.Address
+	response.Who = s.bridgeContract.ethc.address
 
 	v := signature[64]
 	if v < 27 {

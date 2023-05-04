@@ -35,7 +35,7 @@ type BridgeContract struct {
 	networkConfig tfeth.NetworkConfiguration // Ethereum network
 	networkName   string
 
-	lc *LightClient
+	ethc *EthClient
 
 	tftContract *Contract
 
@@ -84,21 +84,17 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 
-	lc, err := NewLightClient(LightClientConfig{
-		DataDir:     bridgeConfig.Datadir,
-		NetworkName: networkConfig.NetworkName,
-		EthUrl:      bridgeConfig.EthUrl,
-		NetworkID:   networkConfig.NetworkID,
+	ethc, err := NewEthClient(LightClientConfig{
+		NetworkName:   networkConfig.NetworkName,
+		EthUrl:        bridgeConfig.EthUrl,
+		NetworkID:     networkConfig.NetworkID,
+		EthPrivateKey: bridgeConfig.EthPrivateKey,
 	})
 	if err != nil {
 		return nil, err
 	}
-	err = lc.LoadAccount(bridgeConfig.AccountJSON, bridgeConfig.AccountPass)
-	if err != nil {
-		return nil, err
-	}
 
-	tftContract, err := createTft20Contract(networkConfig, lc.Client)
+	tftContract, err := createTft20Contract(networkConfig, ethc.Client)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +102,7 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 	return &BridgeContract{
 		networkName:   bridgeConfig.EthNetworkName,
 		networkConfig: networkConfig,
-		lc:            lc,
+		ethc:          ethc,
 		tftContract:   tftContract,
 	}, nil
 }
@@ -144,12 +140,12 @@ func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethcl
 
 // AccountAddress returns the account address of the bridge contract
 func (bridge *BridgeContract) AccountAddress() (common.Address, error) {
-	return bridge.lc.AccountAddress()
+	return bridge.ethc.AccountAddress()
 }
 
-// LightClient returns the LightClient driving this bridge contract
-func (bridge *BridgeContract) LightClient() *LightClient {
-	return bridge.lc
+// EthClient returns the EthClient driving this bridge contract
+func (bridge *BridgeContract) EthClient() *EthClient {
+	return bridge.ethc
 }
 
 // Refresh attempts to retrieve the latest header from the chain and extract the
@@ -161,7 +157,7 @@ func (bridge *BridgeContract) Refresh(head *types.Header) error {
 	// If no header was specified, use the current chain head
 	var err error
 	if head == nil {
-		if head, err = bridge.lc.HeaderByNumber(ctx, nil); err != nil {
+		if head, err = bridge.ethc.HeaderByNumber(ctx, nil); err != nil {
 			return err
 		}
 	}
@@ -171,14 +167,14 @@ func (bridge *BridgeContract) Refresh(head *types.Header) error {
 		price   *big.Int
 		balance *big.Int
 	)
-	if price, err = bridge.lc.SuggestGasPrice(ctx); err != nil {
+	if price, err = bridge.ethc.SuggestGasPrice(ctx); err != nil {
 		return err
 	}
 	log.Info("Suggested gas price is now", "price", price)
-	if balance, err = bridge.lc.AccountBalanceAt(ctx, head.Number); err != nil {
+	if balance, err = bridge.ethc.AccountBalanceAt(ctx, head.Number); err != nil {
 		return err
 	}
-	log.Debug(bridge.lc.account.account.Address.Hex())
+	log.Debug(bridge.ethc.address.Hex())
 	// Everything succeeded, update the cached stats
 	bridge.lock.Lock()
 	bridge.head, bridge.balance = head, balance
@@ -194,7 +190,7 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 	// channel to receive head updates from client on
 	heads := make(chan *types.Header, 16)
 	// subscribe to head upates
-	sub, err := bridge.lc.SubscribeNewHead(context.Background(), heads)
+	sub, err := bridge.ethc.SubscribeNewHead(context.Background(), heads)
 	if err != nil {
 		log.Error("Failed to subscribe to head events", "err", err)
 	}
@@ -422,7 +418,7 @@ func (bridge *BridgeContract) transferFunds(recipient common.Address, amount *bi
 	if amount == nil {
 		return errors.New("invalid amount")
 	}
-	accountAddress, err := bridge.lc.AccountAddress()
+	accountAddress, err := bridge.ethc.AccountAddress()
 	if err != nil {
 		return err
 	}
@@ -453,12 +449,12 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 		return errors.New("invalid amount")
 	}
 
-	accountAddress, err := bridge.lc.AccountAddress()
+	accountAddress, err := bridge.ethc.AccountAddress()
 	if err != nil {
 		return err
 	}
 
-	gas, err := bridge.lc.SuggestGasPrice(context.Background())
+	gas, err := bridge.ethc.SuggestGasPrice(context.Background())
 	if err != nil {
 		return err
 	}
@@ -518,7 +514,7 @@ func (bridge *BridgeContract) isMintTxID(txID string) (bool, error) {
 
 func (bridge *BridgeContract) getSignerFunc() bind.SignerFn {
 	return func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-		accountAddress, err := bridge.lc.AccountAddress()
+		accountAddress, err := bridge.ethc.AccountAddress()
 		if err != nil {
 			return nil, err
 		}
@@ -526,7 +522,7 @@ func (bridge *BridgeContract) getSignerFunc() bind.SignerFn {
 			return nil, errors.New("not authorized to sign this account")
 		}
 		networkID := int64(bridge.networkConfig.NetworkID)
-		return bridge.lc.SignTx(tx, big.NewInt(networkID))
+		return bridge.ethc.SignTx(tx, big.NewInt(networkID))
 	}
 }
 

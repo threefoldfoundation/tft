@@ -17,7 +17,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/threefoldfoundation/tft/bridge/stellar/contracts/tokenv1"
-	"golang.org/x/crypto/sha3"
 )
 
 var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
@@ -27,8 +26,9 @@ const (
 	// pushing eth transaction to the stellar network
 	EthBlockDelay = 3
 	// Withdrawing from smartchain to Stellar fee
-	WithdrawFee   = int64(1 * stellarPrecision)
-	BridgeNetwork = "stellar"
+	WithdrawFee      = int64(1 * stellarPrecision)
+	BridgeNetwork    = "stellar"
+	EthMessagePrefix = "\x19Ethereum Signed Message:\n32"
 )
 
 // Bridge is a high lvl structure which listens on contract events and bridge-related
@@ -45,11 +45,9 @@ type Bridge struct {
 type BridgeConfig struct {
 	EthNetworkName          string
 	EthUrl                  string
+	EthPrivateKey           string
 	ContractAddress         string
 	MultisigContractAddress string
-	AccountJSON             string
-	AccountPass             string
-	Datadir                 string
 	RescanBridgeAccount     bool
 	RescanFromHeight        int64
 	PersistencyFile         string
@@ -128,7 +126,7 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 // Close bridge
 func (bridge *Bridge) Close() error {
 	bridge.mut.Lock()
-	bridge.bridgeContract.lc.Close()
+	bridge.bridgeContract.ethc.Close()
 	defer bridge.mut.Unlock()
 	return nil
 }
@@ -156,7 +154,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return errInsufficientDepositAmount
 	}
 	amount := &big.Int{}
-	amount.Sub(depositedAmount, depositFeeBigInt)
+	amount = amount.Sub(depositedAmount, depositFeeBigInt)
 
 	requiredSignatureCount, err := bridge.bridgeContract.GetRequiresSignatureCount()
 	if err != nil {
@@ -168,10 +166,10 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 
 	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
-		Amount:   amount,
+		Amount:   amount.Int64(),
 		TxId:     txID,
 		// subtract 1 from the required signature count, because the master signature is already included
-		RequiredSignatures: requiredSignatureCount.Sub(requiredSignatureCount, big.NewInt(1)),
+		RequiredSignatures: requiredSignatureCount.Sub(requiredSignatureCount, big.NewInt(1)).Int64(),
 	})
 	if err != nil {
 		return err
@@ -185,10 +183,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	log.Debug("hashed payload", "hash", signHash(bytes))
-	log.Debug("hashed payload len", "hash", len(signHash(bytes)))
-
-	masterSignature, err := bridge.bridgeContract.lc.account.keystore.SignHash(bridge.bridgeContract.lc.account.account, signHash(bytes))
+	masterSignature, err := bridge.bridgeContract.ethc.SignHash(signHash(bytes))
 	if err != nil {
 		return err
 	}
@@ -202,7 +197,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		R: [32]byte(masterSignature[:32]),
 		S: [32]byte(masterSignature[32:64]),
 	}
-	log.Debug("master sig", "sig", signs)
 
 	for i := 0; i < len(res); i++ {
 		// todo: verify signatures
@@ -215,28 +209,30 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	}
 
 	log.Debug("signers list", "l", signers)
-	log.Debug("signature list", "r", signs)
 
 	log.Debug("total signatures count", "count", len(signs))
 
 	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
 }
 
-func signHash(data []byte) []byte {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return crypto.Keccak256([]byte(msg))
+// Prefixs a message with the Ethereum signed message prefix
+// and keccak256 hashes the result.
+func signHash(data []byte) common.Hash {
+	msg := fmt.Sprintf("%s%s", EthMessagePrefix, data)
+	return crypto.Keccak256Hash([]byte(msg))
 }
 
+// AbiEncodeArgs encodes the arguments for the mint function
 func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, error) {
-	addressTy, err := abi.NewType("address", "", nil)
+	addressTy, err := abi.NewType("address", "address", nil)
 	if err != nil {
 		return nil, err
 	}
-	uintTy, err := abi.NewType("uint256", "", nil)
+	uintTy, err := abi.NewType("uint256", "uint256", nil)
 	if err != nil {
 		return nil, err
 	}
-	stringTy, err := abi.NewType("string", "", nil)
+	stringTy, err := abi.NewType("string", "string", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +252,7 @@ func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, e
 		},
 	}
 
+	log.Debug("packing args", "addr", addr, "amount", amount, "txid", txid)
 	bytes, err := arguments.Pack(
 		addr,
 		amount,
@@ -265,12 +262,12 @@ func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, e
 		return nil, err
 	}
 
-	var buf []byte
-	hash := sha3.New256()
-	hash.Write(bytes)
-	buf = hash.Sum(buf)
+	// var buf []byte
+	// hash := sha3.New256()
+	// hash.Write(bytes)
+	// buf = hash.Sum(buf)
 
-	return buf, nil
+	return crypto.Keccak256(bytes), nil
 }
 
 type Data struct {
@@ -347,8 +344,8 @@ type Data struct {
 // }
 
 // GetClient returns bridgecontract lightclient
-func (bridge *Bridge) GetClient() *LightClient {
-	return bridge.bridgeContract.LightClient()
+func (bridge *Bridge) GetClient() *EthClient {
+	return bridge.bridgeContract.EthClient()
 }
 
 // GetBridgeContract returns this bridge's contract.
@@ -400,7 +397,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 		// Sync up any withdrawals made if the blockheight is manually set
 		// to a previous value
-		currentBlock, err := bridge.bridgeContract.lc.BlockNumber(ctx)
+		currentBlock, err := bridge.bridgeContract.ethc.BlockNumber(ctx)
 		if err != nil {
 			return err
 		}
@@ -458,7 +455,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			case head := <-heads:
 				bridge.mut.Lock()
 
-				progress, err := bridge.bridgeContract.lc.SyncProgress(ctx)
+				progress, err := bridge.bridgeContract.ethc.SyncProgress(ctx)
 				if err != nil {
 					log.Error(fmt.Sprintf("failed to get sync progress %s", err.Error()))
 				}

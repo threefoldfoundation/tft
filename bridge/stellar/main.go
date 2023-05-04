@@ -23,11 +23,9 @@ func main() {
 	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
 	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
 
-	flag.StringVar(&bridgeCfg.Datadir, "datadir", "./storage", "chain data directory")
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
 
-	flag.StringVar(&bridgeCfg.AccountJSON, "account", "", "ethereum account json")
-	flag.StringVar(&bridgeCfg.AccountPass, "password", "", "ethereum account password")
+	flag.StringVar(&bridgeCfg.EthPrivateKey, "ethkey", "", "ethereum account json")
 
 	flag.StringVar(&bridgeCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")

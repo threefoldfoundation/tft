@@ -2,54 +2,40 @@ package bridge
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"math/big"
-	"path/filepath"
-	"sync"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 
-	tfeth "github.com/threefoldfoundation/tft/bridge/stellar/eth"
-
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// LightClient creates a light client that can be used to interact with the Ethereum network,
-// for ERC20 purposes. By default it is read-only, in order to also write to the network,
-// you'll need load an account using the LoadAccount method.
-type LightClient struct {
+// EthClient creates a light client that can be used to interact with the Ethereum network,
+type EthClient struct {
 	*ethclient.Client // Client connection to the Ethereum chain
-	// optional account info
-	datadir     string
-	accountLock sync.RWMutex
-	account     *clientAccountInfo
-}
-
-type clientAccountInfo struct {
-	keystore *keystore.KeyStore // Keystore containing the signing info
-	account  accounts.Account   // Account funding the bridge requests
+	privateKey        *ecdsa.PrivateKey
+	address           common.Address
 }
 
 // LightClientConfig combines all configuration required for
-// creating and configuring a LightClient.
+// creating and configuring a EthClient.
 type LightClientConfig struct {
-	DataDir      string
-	NetworkName  string
-	EthUrl       string
-	NetworkID    uint64
-	GenesisBlock *core.Genesis
+	NetworkName   string
+	EthUrl        string
+	NetworkID     uint64
+	EthPrivateKey string
+	GenesisBlock  *core.Genesis
 }
 
 func (lccfg *LightClientConfig) validate() error {
-	if lccfg.DataDir == "" {
-		return errors.New("invalid LightClientConfig: no data directory defined")
-	}
 	if lccfg.NetworkName == "" {
 		return errors.New("invalid LightClientConfig: no network name defined")
 	}
@@ -59,46 +45,54 @@ func (lccfg *LightClientConfig) validate() error {
 	if lccfg.NetworkID == 0 {
 		return errors.New("invalid LightClientConfig: no network ID defined")
 	}
+	if lccfg.EthPrivateKey == "" {
+		return errors.New("invalid LightClientConfig: no private key defined")
+	}
 	return nil
 }
 
-// NewLightClient creates a new light client that can be used to interact with the ETH network.
-// See `LightClient` for more information.
-func NewLightClient(lccfg LightClientConfig) (*LightClient, error) {
+// NewLiEthient creates a new light client that can be used to interact with the ETH network.
+// See `EthClient` for more information.
+func NewEthClient(lccfg LightClientConfig) (*EthClient, error) {
 	// validate the cfg, as to provide better error reporting for obvious errors
 	err := lccfg.validate()
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("private key", "k", strings.Trim(lccfg.EthPrivateKey, "0x"))
+	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(lccfg.EthPrivateKey, "0x"))
+	if err != nil {
+		return nil, err
+	}
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("error casting public key to ECDSA")
+	}
+
+	addr := crypto.PubkeyToAddress(*publicKeyECDSA)
+
 	cl, err := ethclient.Dial(lccfg.EthUrl)
 	if err != nil {
 		return nil, err
 	}
-	datadir := filepath.Join(lccfg.DataDir, lccfg.NetworkName)
 	// return created light client
-	return &LightClient{
-		Client:  cl,
-		datadir: datadir,
+	return &EthClient{
+		Client:     cl,
+		privateKey: privateKey,
+		address:    addr,
 	}, nil
 }
 
-// LoadAccount loads an account into this light client,
-// allowing writeable operations using the loaded account.
-// An error is returned in case no account could be loaded.
-func (lc *LightClient) LoadAccount(accountJSON, accountPass string) error {
-	// create keystore
-	ks, err := tfeth.InitializeKeystore(lc.datadir, accountJSON, accountPass)
-	if err != nil {
-		return err
+func (c *EthClient) GetAddress() (common.Address, error) {
+	publicKey := c.privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return common.Address{}, errors.New("error casting public key to ECDSA")
 	}
-	lc.accountLock.Lock()
-	lc.account = &clientAccountInfo{
-		keystore: ks,
-		account:  ks.Accounts()[0],
-	}
-	lc.accountLock.Unlock()
-	return nil
+
+	return crypto.PubkeyToAddress(*publicKeyECDSA), nil
 }
 
 var (
@@ -108,36 +102,23 @@ var (
 )
 
 // AccountBalanceAt returns the balance for the account at the given block height.
-func (lc *LightClient) AccountBalanceAt(ctx context.Context, blockNumber *big.Int) (*big.Int, error) {
-	lc.accountLock.RLock()
-	defer lc.accountLock.RUnlock()
-	if lc.account == nil {
-		return nil, ErrNoAccountLoaded
-	}
-	return lc.BalanceAt(ctx, lc.account.account.Address, blockNumber)
+func (c *EthClient) AccountBalanceAt(ctx context.Context, blockNumber *big.Int) (*big.Int, error) {
+	return c.BalanceAt(ctx, c.address, blockNumber)
 }
 
 // SignTx signs a given traction with the loaded account, returning the signed transaction and no error on success.
-func (lc *LightClient) SignTx(tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	lc.accountLock.RLock()
-	defer lc.accountLock.RUnlock()
-	if lc.account == nil {
-		return nil, ErrNoAccountLoaded
-	}
-	return lc.account.keystore.SignTx(lc.account.account, tx, chainID)
+func (c *EthClient) SignTx(tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
+	return types.SignTx(tx, types.NewEIP155Signer(chainID), c.privateKey)
+}
+
+func (c *EthClient) SignHash(hash common.Hash) ([]byte, error) {
+	return crypto.Sign(hash.Bytes(), c.privateKey)
 }
 
 // AccountAddress returns the address of the loaded account,
 // returning an error only if no account was loaded.
-func (lc *LightClient) AccountAddress() (common.Address, error) {
-	lc.accountLock.RLock()
-	defer lc.accountLock.RUnlock()
-	var addr common.Address
-	if lc.account == nil {
-		return addr, ErrNoAccountLoaded
-	}
-	copy(addr[:], lc.account.account.Address[:])
-	return addr, nil
+func (c *EthClient) AccountAddress() (common.Address, error) {
+	return c.address, nil
 }
 
 // IsNoPeerErr checks if an error is means an ethereum client could not execute
@@ -150,17 +131,8 @@ func IsNoPeerErr(err error) bool {
 }
 
 // GetBalanceInfo returns bridge ethereum address and balance
-func (lc *LightClient) GetBalanceInfo() (*ERC20BalanceInfo, error) {
-	lc.accountLock.RLock()
-	defer lc.accountLock.RUnlock()
-	var addr common.Address
-
-	if lc.account == nil {
-		return nil, ErrNoAccountLoaded
-	}
-	copy(addr[:], lc.account.account.Address[:])
-
-	balance, err := lc.BalanceAt(context.Background(), addr, nil)
+func (c *EthClient) GetBalanceInfo() (*ERC20BalanceInfo, error) {
+	balance, err := c.BalanceAt(context.Background(), c.address, nil)
 
 	if err != nil {
 		return nil, err
@@ -168,7 +140,7 @@ func (lc *LightClient) GetBalanceInfo() (*ERC20BalanceInfo, error) {
 
 	return &ERC20BalanceInfo{
 		Balance: balance,
-		Address: lc.account.account.Address,
+		Address: c.address,
 	}, nil
 }
 

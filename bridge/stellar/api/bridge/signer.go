@@ -265,7 +265,7 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
 			responseChannels = responseChannels[:len(responseChannels)-1]
 			//check if we have enough signatures
-			if len(results) == int(signRequest.RequiredSignatures.Int64()) {
+			if len(results) == int(signRequest.RequiredSignatures) {
 				break
 			}
 		} else {
@@ -274,7 +274,7 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 
 	}
 
-	if len(results) != int(signRequest.RequiredSignatures.Int64()) {
+	if len(results) != int(signRequest.RequiredSignatures) {
 		return nil, fmt.Errorf("required number of signatures is not met")
 	}
 
