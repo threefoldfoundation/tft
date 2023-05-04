@@ -244,7 +244,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
     // is just an expensive tft transaction, it is possible, so after minting
     // attemt to withdraw.
     // -----------------------------------------------------------------------
-    function mintTokens(address receiver, uint tokens, string memory txid,Signature[] calldata _signatures ) public onlyOwner {
+    function mintTokens(address receiver, uint tokens, string memory txid, Signature[] calldata _signatures) public {
         // check if the txid is already known
         require(!_isMintID(txid), "TFT transacton ID already known");
         bytes32 hashedPayload=keccak256(abi.encode(receiver,tokens,txid));

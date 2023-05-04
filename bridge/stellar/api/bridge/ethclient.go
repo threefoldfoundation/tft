@@ -80,6 +80,7 @@ func NewEthClient(lccfg LightClientConfig) (*EthClient, error) {
 	}
 
 	addr := crypto.PubkeyToAddress(*publicKeyECDSA)
+	log.Debug("eth client loaded with address", "addr", addr.String())
 
 	cl, err := ethclient.Dial(lccfg.EthUrl)
 	if err != nil {
