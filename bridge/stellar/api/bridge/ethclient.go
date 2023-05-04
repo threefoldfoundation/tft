@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,6 +35,12 @@ type LightClientConfig struct {
 	NetworkID     uint64
 	EthPrivateKey string
 	GenesisBlock  *core.Genesis
+}
+
+type Signature struct {
+	V uint8
+	R [32]byte
+	S [32]byte
 }
 
 func (lccfg *LightClientConfig) validate() error {
@@ -111,8 +119,53 @@ func (c *EthClient) SignTx(tx *types.Transaction, chainID *big.Int) (*types.Tran
 	return types.SignTx(tx, types.NewEIP155Signer(chainID), c.privateKey)
 }
 
-func (c *EthClient) SignHash(hash common.Hash) ([]byte, error) {
-	return crypto.Sign(hash.Bytes(), c.privateKey)
+// Sign signs the given data and prepends the Ethereum message prefix.
+func (c *EthClient) Sign(data []byte) ([]byte, error) {
+	msg := fmt.Sprintf("%s%s", EthMessagePrefix, data)
+	return crypto.Sign(crypto.Keccak256Hash([]byte(msg)).Bytes(), c.privateKey)
+}
+
+// AbiEncodeArgs encodes the arguments for the mint function
+func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, error) {
+	addressTy, err := abi.NewType("address", "address", nil)
+	if err != nil {
+		return nil, err
+	}
+	uintTy, err := abi.NewType("uint256", "uint256", nil)
+	if err != nil {
+		return nil, err
+	}
+	stringTy, err := abi.NewType("string", "string", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	arguments := abi.Arguments{
+		{
+			Name: "receiver",
+			Type: addressTy,
+		},
+		{
+			Name: "tokens",
+			Type: uintTy,
+		},
+		{
+			Name: "txid",
+			Type: stringTy,
+		},
+	}
+
+	log.Debug("packing args", "addr", addr, "amount", amount, "txid", txid)
+	bytes, err := arguments.Pack(
+		addr,
+		amount,
+		txid,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return crypto.Keccak256(bytes), nil
 }
 
 // AccountAddress returns the address of the loaded account,

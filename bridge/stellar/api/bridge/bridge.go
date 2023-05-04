@@ -8,10 +8,8 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -176,28 +174,14 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	}
 
 	// First append the master signature
-
-	// TODO: split to different function
-	bytes, err := AbiEncodeArgs(common.Address(receiver), amount, txID)
+	signature, err := bridge.bridgeContract.CreateTokenSignature(common.Address(receiver), amount.Int64(), txID)
 	if err != nil {
 		return err
 	}
+	signs[0] = signature
 
-	masterSignature, err := bridge.bridgeContract.ethc.SignHash(signHash(bytes))
-	if err != nil {
-		return err
-	}
-
-	v := masterSignature[64]
-	if v < 27 {
-		v = v + 27
-	}
-	signs[0] = tokenv1.Signature{
-		V: v,
-		R: [32]byte(masterSignature[:32]),
-		S: [32]byte(masterSignature[32:64]),
-	}
-
+	// Append signatures in order
+	// TODO: check what order
 	for i := 0; i < len(res); i++ {
 		// todo: verify signatures
 		signs[i+1] = res[i].Signature
@@ -214,134 +198,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 
 	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
 }
-
-// Prefixs a message with the Ethereum signed message prefix
-// and keccak256 hashes the result.
-func signHash(data []byte) common.Hash {
-	msg := fmt.Sprintf("%s%s", EthMessagePrefix, data)
-	return crypto.Keccak256Hash([]byte(msg))
-}
-
-// AbiEncodeArgs encodes the arguments for the mint function
-func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, error) {
-	addressTy, err := abi.NewType("address", "address", nil)
-	if err != nil {
-		return nil, err
-	}
-	uintTy, err := abi.NewType("uint256", "uint256", nil)
-	if err != nil {
-		return nil, err
-	}
-	stringTy, err := abi.NewType("string", "string", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	arguments := abi.Arguments{
-		{
-			Name: "receiver",
-			Type: addressTy,
-		},
-		{
-			Name: "tokens",
-			Type: uintTy,
-		},
-		{
-			Name: "txid",
-			Type: stringTy,
-		},
-	}
-
-	log.Debug("packing args", "addr", addr, "amount", amount, "txid", txid)
-	bytes, err := arguments.Pack(
-		addr,
-		amount,
-		txid,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// var buf []byte
-	// hash := sha3.New256()
-	// hash.Write(bytes)
-	// buf = hash.Sum(buf)
-
-	return crypto.Keccak256(bytes), nil
-}
-
-type Data struct {
-	Receiver common.Address
-	Tokens   *big.Int
-	Txid     string
-}
-
-// // validateTransaction validates a transaction before it will be confirmed
-// func (bridge *Bridge) validateMintTransaction(txID *big.Int) error {
-// 	tx, err := bridge.bridgeContract.GetTransactionByID(txID)
-// 	if err != nil {
-// 		log.Error("failed to fetch transaction from ms contract")
-// 		return err
-// 	}
-
-// 	var data struct {
-// 		Receiver common.Address
-// 		Tokens   *big.Int
-// 		Txid     string
-// 	}
-// 	res, err := bridge.bridgeContract.tftContract.abi.Methods["mintTokens"].Inputs.Unpack(tx.Data[4:])
-// 	if err != nil {
-// 		log.Error("failed to unpack token mint", "err", err)
-// 		return err
-// 	}
-// 	// TODO, SEE IF THIS WORKS IN A MULTISIG SETUP, MIGHT NOT WORK DUE TO API CHANGES
-// 	data, ok := res[0].(Data)
-// 	if !ok {
-// 		return err
-// 	}
-
-// 	effects, err := bridge.wallet.getTransactionEffects(data.Txid)
-// 	if err != nil {
-// 		log.Error("error while fetching transaction effects:", err.Error())
-// 		return err
-// 	}
-
-// 	asset := bridge.wallet.GetAssetCodeAndIssuer()
-
-// 	totalAmount := 0
-// 	for _, effect := range effects.Embedded.Records {
-// 		// check if the effect account is the bridge master wallet address
-// 		found := effect.GetAccount() == bridge.config.BridgeMasterAddress
-
-// 		// if the effect is a deposit, add the amount to the total
-// 		if found && effect.GetType() == "account_credited" {
-// 			creditedEffect := effect.(horizoneffects.AccountCredited)
-// 			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
-// 				continue
-// 			}
-// 			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
-// 			if err != nil {
-// 				continue
-// 			}
-// 			totalAmount += int(parsedAmount)
-// 		}
-// 	}
-
-// 	if totalAmount == 0 {
-// 		return fmt.Errorf("transaction is not valid, we did not find a deposit to the master bridge address %s", bridge.config.BridgeMasterAddress)
-// 	}
-
-// 	depositedAmount := big.NewInt(int64(totalAmount))
-// 	// Subtract the deposit fee
-// 	amount := &big.Int{}
-// 	amount = amount.Sub(depositedAmount, big.NewInt(bridge.config.DepositFeeInStroops()))
-
-// 	if data.Tokens.Cmp(amount) > 0 {
-// 		return fmt.Errorf("deposited amount is not correct, found %v, need %v", amount, data.Tokens)
-// 	}
-
-// 	return nil
-// }
 
 // GetClient returns bridgecontract lightclient
 func (bridge *Bridge) GetClient() *EthClient {

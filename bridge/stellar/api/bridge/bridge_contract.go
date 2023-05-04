@@ -539,6 +539,33 @@ func (bridge *BridgeContract) EthBalance() (*big.Int, error) {
 	return bridge.balance, err
 }
 
+func (bridge *BridgeContract) CreateTokenSignature(receiver common.Address, amount int64, txid string) (tokenv1.Signature, error) {
+	bytes, err := AbiEncodeArgs(receiver, big.NewInt(amount), txid)
+	if err != nil {
+		return tokenv1.Signature{}, err
+	}
+
+	signature, err := bridge.ethc.Sign(bytes)
+	if err != nil {
+		return tokenv1.Signature{}, err
+	}
+
+	if len(signature) != 65 {
+		return tokenv1.Signature{}, errors.New("invalid signature length")
+	}
+
+	v := signature[64]
+	if v < 27 {
+		v = v + 27
+	}
+	return tokenv1.Signature{
+		V: v,
+		R: [32]byte(signature[:32]),
+		S: [32]byte(signature[32:64]),
+	}, nil
+
+}
+
 // bindTTFT20 binds a generic wrapper to an already deployed contract.
 //
 // This method is copied from the generated bindings as a convenient way to get a *bind.Contract, as this is needed to implement the WatchWithdraw function ourselves

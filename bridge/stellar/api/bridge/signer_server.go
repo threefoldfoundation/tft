@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -82,27 +81,13 @@ func NewSignerServer(host host.Host, config StellarConfig, bridgeMasterAddress s
 func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, response *EthSignResponse) error {
 	log.Debug("sign mint request", "request txid", request.TxId)
 
-	bytes, err := AbiEncodeArgs(request.Receiver, big.NewInt(request.Amount), request.TxId)
+	signature, err := s.bridgeContract.CreateTokenSignature(request.Receiver, request.Amount, request.TxId)
 	if err != nil {
 		return err
 	}
 
-	signature, err := s.bridgeContract.ethc.SignHash(signHash(bytes))
-	if err != nil {
-		return err
-	}
-
+	response.Signature = signature
 	response.Who = s.bridgeContract.ethc.address
-
-	v := signature[64]
-	if v < 27 {
-		v = v + 27
-	}
-	response.Signature = tokenv1.Signature{
-		V: v,
-		R: [32]byte(signature[:32]),
-		S: [32]byte(signature[32:64]),
-	}
 
 	return nil
 }
