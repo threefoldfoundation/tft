@@ -76,7 +76,7 @@ contract TokenStorage is Storage {
     // Token constructor here so it is also inheritted by our proxy. Needed to set some constants
     constructor() {
         setSymbol("TFT");
-        setName("TFT on BSC");
+        setName("TFT on Ethereum");
 
         // Use 7 decimals instead of 9, this way we have the same amount of decimals in both TFT and this Token
         uint8 _decimals = 7;

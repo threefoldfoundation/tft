@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
+require('hardhat-abi-exporter');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -10,5 +11,12 @@ module.exports = {
         interval: 5000
       }
     }
+  },
+  abiExporter: {
+    path: "./abi",
+    runOnCompile: true,
+    clear: true,
+    spacing: 2,
+    format: "json"
   }
 };

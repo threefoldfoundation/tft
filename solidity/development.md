@@ -4,20 +4,36 @@
 
 - Solidity compiler (solc): [Installing the Solidity Compiler](https://docs.soliditylang.org/en/develop/installing-solidity.html#binary-packages)
 
-## regenerate setup.svg
+## Install depdencies
 
 ```sh
-dot -Tsvg setup.dot -o setup.svg
+yarn
+```
+
+## Generating ABI
+
+```sh
+npx hardhat compile
+yarn run hardhat export-abi
+```
+
+Abis will be 
+
+## Deploying on local chain
+
+In one shell
+
+```shell
+npx hardhat node
+```
+
+In another shell:
+```
+npx hardhat run scripts/deploy.js
 ```
 
 ## Testing
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
+```sh
 npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.js
 ```

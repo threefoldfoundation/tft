@@ -24,6 +24,11 @@ contract Proxy is TokenStorage, Owned {
         }
     }
 
+    // ------------------------------------------------------------------------
+    // Don't accept ETH
+    // ------------------------------------------------------------------------
+    receive() external payable { }
+
     constructor() {
         //set initial contract address, needs to be hardcoded
         // TODO: Set correct address

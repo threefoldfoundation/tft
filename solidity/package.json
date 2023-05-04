@@ -13,6 +13,7 @@
     "chai": "^4.3.7",
     "ethers": "^5.7.2",
     "hardhat": "^2.12.7",
+    "hardhat-abi-exporter": "^2.10.1",
     "hardhat-gas-reporter": "^1.0.9",
     "solidity-coverage": "^0.8.2",
     "typechain": "^8.1.1"
