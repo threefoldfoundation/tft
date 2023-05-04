@@ -1,4 +1,6 @@
 const { expect } = require("chai");
+const { ethers } = require("hardhat");
+const { signHash } = require("./utils");
 
 describe("Token contract", function () {
   let tftToken
@@ -30,6 +32,23 @@ describe("Token contract", function () {
 
     await tftToken.setSigners([owner.address, addr1.address, addr2.address], 3);
     expect(await tftToken.getSigners(), [owner.address, addr1.address, addr2.address]);
+  });
+
+  it("Should be able to mint", async function() {
+    const [owner, addr1, addr2, addr3] = await ethers.getSigners();
+
+    await tftToken.setSigners([owner.address, addr1.address, addr2.address], 3);
+    expect(await tftToken.getSigners(), [owner.address, addr1.address, addr2.address]);
+
+    let abiEncoded = ethers.utils.defaultAbiCoder.encode(["address", "uint256", "string"], [addr3.address, 100, "sometxid"]);
+    let digest = ethers.utils.keccak256(abiEncoded);
+
+    owner.sign
+
+    let [sig1, sig2, sig3] = await signHash([owner, addr1, addr2], digest);
+
+    await tftToken.mintTokens(addr3.address, 100, "sometxid", [sig1, sig2, sig3]);
+    expect(await tftToken.balanceOf(addr3.address)).to.equal(100);
   });
 });
 
