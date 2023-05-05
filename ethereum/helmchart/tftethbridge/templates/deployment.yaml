@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "tftethbridge.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "tftethbridge.selectorLabels" . | nindent 6 }}
@@ -84,8 +81,6 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: config-volume
-              mountPath: /etc/eth-bridge
             - name: tftethbridge-storage-{{ .Release.Name }}
               mountPath: /storage
         {{ end }}
