@@ -30,7 +30,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
 
-      - name: Build and push tftservices
+      - name: Build and push the tft-stellar-evm-bridge container
         uses: docker/build-push-action@v3
         with:
           push: true
