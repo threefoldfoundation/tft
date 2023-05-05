@@ -55,6 +55,9 @@ bridge_master_address: ''
 # stellar_fee_wallet: ""
 is_follower: false
 
+relay_url: ''
+relay_psk: ''
+
 # use full node rpc url
 eth_url: ''
 

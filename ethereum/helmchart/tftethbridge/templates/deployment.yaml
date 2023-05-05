@@ -59,6 +59,10 @@ spec:
             value: {{ .Values.rescan_height | quote }}
           - name: DEPOSIT_FEE
             value: {{ .Values.deposit_fee | quote }}
+          - name: RELAY_URL
+            value: {{ .Values.relay_url | quote }}
+          - name: RELAY_PSK
+            value: {{ .Values.relay_psk | quote }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
             "--ethkey", "$(ETH_KEY)",
@@ -73,7 +77,9 @@ spec:
             "--feewallet", "$(STELLAR_FEE_WALLET)",
             "--persistency", "/storage/node.json",
             "--rescanHeight", "$(RESCAN_HEIGHT)",
-            "--depositFee", "$(DEPOSIT_FEE)"
+            "--depositFee", "$(DEPOSIT_FEE)",
+            "--relay", "$(RELAY_URL)",
+            "--psk", "$(RELAY_PSK)"
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
