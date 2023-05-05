@@ -21,3 +21,7 @@ See the Official safe ui: <https://app.safe.global/home?safe=eth:0x1533A6f9cd869
 ## Bridge Stellar address
 
 `GARQ6KUXUCKDPIGI7NPITDN55J23SVR5RJ5RFOOU3ZPLMRJYOQRNMOIJ`
+
+## Bridge Ethereum account that  executes the mint transactions
+
+`0x9a6c7df7d35973d4e19148553da7aea5daf4f99e`

@@ -1,5 +1,11 @@
 # Transferring TFT between Stellar and Ethereum
 
+## Bridge UI
+
+The easuest way is to use the  user interface for transfers using the bridge at <https://bridge.eth.threefold.io>.
+
+More technical details on how to transfer without the UI are explained below.
+
 ## From Ethereum to Stellar
 
 The `withdraw` method must be called on contract **0x395E925834996e558bdeC77CD648435d620AfB5b** with the following parameters:
