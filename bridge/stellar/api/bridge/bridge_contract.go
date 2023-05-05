@@ -460,7 +460,7 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	}
 	// newGas := big.NewInt(10 * gas.Int64())
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*6)
 	defer cancel()
 	opts := &bind.TransactOpts{
 		Context: ctx, From: accountAddress,
@@ -469,10 +469,18 @@ func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID 
 	}
 
 	log.Info("Submitting transaction to token contract", "tokenaddress", bridge.networkConfig.ContractAddress)
-	_, err = bridge.tftContract.transactor.MintTokens(opts, common.Address(receiver), amount, txID, signatures)
+	tx, err := bridge.tftContract.transactor.MintTokens(opts, common.Address(receiver), amount, txID, signatures)
 	if err != nil {
 		return err
 	}
+
+	// Wait for the transaction to be mined
+	r, e := bind.WaitMined(ctx, bridge.ethc, tx)
+	if e != nil {
+		return e
+	}
+
+	log.Debug("Transaction mined", "tx", tx.Hash().Hex(), "block", r.BlockNumber, "gas", r.GasUsed, "status", r.Status)
 
 	return nil
 }
