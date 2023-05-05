@@ -1,6 +1,6 @@
-# ThreeFold - Binance Smart Chain Dapp
+# ThreeFold - Ethereum Dapp
 
-Decentralised application for TFT on Binance Smart Chain (TESTNET).
+Decentralised application for TFT on Ethereum (TESTNET).
 
 ## Run locally
 
@@ -10,10 +10,6 @@ copy `.env.testnet` to `.env.development` to use the testnet setting or `.env.pr
 yarn
 yarn start
 ```
-
-## Connect metamask to binance chain testnet
-
-[binance academy](https://academy.binance.com/nl/articles/connecting-metamask-to-binance-smart-chain)
 
 ## Open Dapp
 

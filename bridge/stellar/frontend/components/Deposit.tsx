@@ -35,7 +35,7 @@ export default function DepositDialog({ open, handleClose, address }) {
         <DialogContent>
           <DialogContentText style={{ margin: 'auto', textAlign: 'center', width: '50%', display: 'flex', flexDirection: 'column' }}>
             <WarningIcon style={{ alignSelf: 'center', fontSize: 40, color: 'orange' }} />
-            If you want to swap your Stellar TFT to Binance Chain TFT you can transfer any amount to the destination address.
+            If you want to swap your Stellar TFT to Ethereum TFT you can transfer any amount to the destination address.
             Important Note: Please always include the generated memo text for every swap transaction. <b style={{ color: 'red', marginTop: 5 }}>Failure to do so will result in unrecoverable loss of funds!</b>
           </DialogContentText>
 
