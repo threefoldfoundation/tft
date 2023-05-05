@@ -159,9 +159,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	// Create signatures array with the required length
-	signs := make([]tokenv1.Signature, requiredSignatureCount.Int64())
-
 	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
 		Amount:   amount.Int64(),
@@ -187,7 +184,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	orderderedSignatures := make([]tokenv1.Signature, len(signers))
+	orderderedSignatures := make([]tokenv1.Signature, requiredSignatureCount.Int64())
 	for i := 0; i < len(signers); i++ {
 		for _, sign := range res {
 			if sign.Who == signers[i] {
@@ -198,9 +195,9 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 
 	log.Debug("signers list", "l", signers)
 
-	log.Debug("total signatures count", "count", len(signs))
+	log.Debug("total signatures count", "count", len(orderderedSignatures))
 
-	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
+	return bridge.bridgeContract.Mint(receiver, amount, txID, orderderedSignatures)
 }
 
 // GetClient returns bridgecontract lightclient
