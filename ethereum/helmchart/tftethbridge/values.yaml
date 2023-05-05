@@ -68,6 +68,8 @@ rescan_height: 0
 # Deposit fee in TFT
 deposit_fee: 1000
 
+rescan: false
+
 # If enabled, the bridge daemon will also start
 # It's recommended to delete the pod (helm uninstall)
 # before setting this to true and redeploying

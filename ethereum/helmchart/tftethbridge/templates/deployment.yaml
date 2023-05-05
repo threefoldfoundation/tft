@@ -76,7 +76,10 @@ spec:
             "--rescanHeight", "$(RESCAN_HEIGHT)",
             "--depositFee", "$(DEPOSIT_FEE)",
             "--relay", "$(RELAY_URL)",
-            "--psk", "$(RELAY_PSK)"
+            "--psk", "$(RELAY_PSK)",
+            {{ if .Values.rescan }}
+            "--rescan=true",
+            {{ end}}
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
