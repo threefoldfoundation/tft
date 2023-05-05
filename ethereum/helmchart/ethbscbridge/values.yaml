@@ -43,16 +43,13 @@ stellar_secret: ''
 # testnet or production
 network: 'testnet'
 
-# json content for the account json file
-account_json: |-
-account_password: 'test123'
+# Eth key
+eth_key: '0x...'
 # goerli-testnet or eth-mainnet
 eth_network: 'goerli-testnet'
-# production:
+# production: 0x395E925834996e558bdeC77CD648435d620AfB5b
 contract_address: ''
-# production:
-ms_contract_address: ''
-# production:
+# production: GARQ6KUXUCKDPIGI7NPITDN55J23SVR5RJ5RFOOU3ZPLMRJYOQRNMOIJ
 bridge_master_address: ''
 # production:
 # stellar_fee_wallet: ""
@@ -63,10 +60,10 @@ eth_url: ''
 
 # Rescan from a certain blockheight
 # If set to 0, it will just take the current blockheight from the lightnode
-rescan_height: 100
+rescan_height: 0
 
 # Deposit fee in TFT
-deposit_fee: 50
+deposit_fee: 1000
 
 # If enabled, the bridge daemon will also start
 # It's recommended to delete the pod (helm uninstall)

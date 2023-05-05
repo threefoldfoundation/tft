@@ -41,14 +41,10 @@ spec:
           env:
           - name: STELLAR_SECRET
             value: {{ .Values.stellar_secret }}
-          - name: ACCOUNT_JSON
-            value: /etc/eth-bridge/account_json
-          - name: ACCOUNT_PASSWORD
-            value: {{ .Values.account_password }}
+          - name: ETH_KEY
+            value: {{ .Values.eth_key }}
           - name: CONTRACT_ADDRESS
             value: {{ .Values.contract_address }}
-          - name: MS_CONTRACT_ADDRESS
-            value: {{ .Values.ms_contract_address }}
           - name: ETH_NETWORK
             value: {{ .Values.eth_network }}
           - name: BRIDGE_MASTER_ADDRESS
@@ -65,11 +61,9 @@ spec:
             value: {{ .Values.deposit_fee | quote }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
-            "--account", "$(ACCOUNT_JSON)",
-            "--password", "$(ACCOUNT_PASSWORD)",
+            "--ethkey", "$(ETH_KEY)",
             "--ethnetwork", "$(ETH_NETWORK)",
             "--contract", "$(CONTRACT_ADDRESS)",
-            "--mscontract", "$(MS_CONTRACT_ADDRESS)",
             "--master", "$(BRIDGE_MASTER_ADDRESS)",
             "--network","$(STELLAR_NETWORK)",
             "--ethurl", "$(ETH_URL)",
@@ -93,12 +87,6 @@ spec:
         - name: tftethbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
             claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} tftethbridge-volume-claim-{{ .Release.Name }} {{ end }}
-        - name: config-volume
-          configMap:
-            name: {{ template "tftethbridge.fullname" . }}
-            items:
-              - key: account_json
-                path: account_json
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
