@@ -91,47 +91,47 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
         aria-describedby="alert-dialog-description"
         fullScreen={true}
       >
-        <DialogTitle id="alert-dialog-title">{"Swap Eth TFT for Stellar TFT"}</DialogTitle>
+        <DialogTitle id="alert-dialog-title">{"Swap TFT on Ethereum for TFT on Stellar"}</DialogTitle>
         <div className={styles.container}>
           <span>Fill in this form to withdraw tokens back to Stellar</span>
           <FormControl>
-          <InputLabel htmlFor="StellarAddress">Stellar Address</InputLabel>
-          <Input 
-            value={stellarAddress}
-            onChange={handleStellarAddressChange}
-            id="StellarAddress"
-            aria-describedby="my-helper-text"
-          />
-          <FormHelperText id="my-helper-text">Enter a valid Stellar Address</FormHelperText>
-          {stellarAddressError && (
+            <InputLabel htmlFor="StellarAddress">Stellar Address</InputLabel>
+            <Input
+              value={stellarAddress}
+              onChange={handleStellarAddressChange}
+              id="StellarAddress"
+              aria-describedby="my-helper-text"
+            />
+            <FormHelperText id="my-helper-text">Enter a valid Stellar Address</FormHelperText>
+            {stellarAddressError && (
               <div className={styles.errorField}>{stellarAddressError}</div>
-          )}
+            )}
           </FormControl>
 
           <FormControl>
-          <InputLabel htmlFor="StellarAddress">Amount</InputLabel>
-          <Input 
-            value={amount}
-            onChange={handleAmountChange}
-            id="amount"
-            type='number'
-            inputProps={{step: 0.01}}
-          />
-          <FormHelperText id="my-helper-text">Enter an amount, balance: {balance / 1e7}</FormHelperText>
-          {amountError && (
+            <InputLabel htmlFor="StellarAddress">Amount</InputLabel>
+            <Input
+              value={amount}
+              onChange={handleAmountChange}
+              id="amount"
+              type='number'
+              inputProps={{ step: 0.01 }}
+            />
+            <FormHelperText id="my-helper-text">Enter an amount, balance: {balance / 1e7}</FormHelperText>
+            {amountError && (
               <div className={styles.errorField}>{amountError}</div>
-          )}
+            )}
           </FormControl>
 
           <span style={{ marginTop: '1em', color: 'grey' }}>Withdraw fee is 1 TFT</span>
 
-          <Button 
+          <Button
             color='primary'
             variant="contained"
             style={{ marginTop: 25 }}
             type='submit'
             onClick={() => submit()}
-            >
+          >
             Withdraw
           </Button>
         </div>
