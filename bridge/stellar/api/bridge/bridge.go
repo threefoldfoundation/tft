@@ -159,9 +159,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	// Create signatures array with the required length
-	signs := make([]tokenv1.Signature, requiredSignatureCount.Int64())
-
 	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
 		Amount:   amount.Int64(),
@@ -173,30 +170,34 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	// First append the master signature
+	// First create the master signature
 	signature, err := bridge.bridgeContract.CreateTokenSignature(common.Address(receiver), amount.Int64(), txID)
 	if err != nil {
 		return err
 	}
-	signs[0] = signature
 
-	// Append signatures in order
-	// TODO: check what order
-	for i := 0; i < len(res); i++ {
-		// todo: verify signatures
-		signs[i+1] = res[i].Signature
-	}
+	// Append to the signatures array
+	res = append(res, EthSignResponse{Who: bridge.GetClient().address, Signature: signature})
 
 	signers, err := bridge.bridgeContract.GetSigners()
 	if err != nil {
 		return err
 	}
 
+	orderderedSignatures := make([]tokenv1.Signature, requiredSignatureCount.Int64())
+	for i := 0; i < len(signers); i++ {
+		for _, sign := range res {
+			if sign.Who == signers[i] {
+				orderderedSignatures[i] = sign.Signature
+			}
+		}
+	}
+
 	log.Debug("signers list", "l", signers)
 
-	log.Debug("total signatures count", "count", len(signs))
+	log.Debug("total signatures count", "count", len(orderderedSignatures))
 
-	return bridge.bridgeContract.Mint(receiver, amount, txID, signs)
+	return bridge.bridgeContract.Mint(receiver, amount, txID, orderderedSignatures)
 }
 
 // GetClient returns bridgecontract lightclient
