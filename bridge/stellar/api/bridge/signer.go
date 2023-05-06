@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
+	"github.com/threefoldfoundation/tft/bridge/stellar/p2p"
 	"github.com/threefoldtech/libp2p-relay/client"
 )
 
@@ -116,7 +117,7 @@ type ethResponse struct {
 func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRouting, addresses []string, relay *peer.AddrInfo) (*SignersClient, error) {
 	var ids []peer.ID
 	for _, address := range addresses {
-		id, err := getPeerIDFromStellarAddress(address)
+		id, err := p2p.GetPeerIDFromStellarAddress(address)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get peer info")
 		}
@@ -294,22 +295,4 @@ func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest Et
 	}
 
 	return &response, nil
-}
-
-func getPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
-	versionbyte, pubkeydata, err := strkey.DecodeAny(address)
-	if err != nil {
-		return
-	}
-	if versionbyte != strkey.VersionByteAccountID {
-		err = fmt.Errorf("%s is not a valid Stellar address", address)
-		return
-	}
-	libp2pPubKey, err := crypto.UnmarshalEd25519PublicKey(pubkeydata)
-	if err != nil {
-		return
-	}
-
-	peerID, err = peer.IDFromPublicKey(libp2pPubKey)
-	return peerID, err
 }
