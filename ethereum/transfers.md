@@ -2,7 +2,7 @@
 
 ## Bridge UI
 
-The easuest way is to use the  user interface for transfers using the bridge at <https://bridge.eth.threefold.io>.
+The easiest way is to use the  user interface for transfers using the bridge at <https://bridge.eth.threefold.io>.
 
 More technical details on how to transfer without the UI are explained below.
 

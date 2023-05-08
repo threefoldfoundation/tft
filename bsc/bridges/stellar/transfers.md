@@ -1,5 +1,11 @@
 # Transferring TFT between Stellar and BSC
 
+## Bridge UI
+
+The easiest way is to use the  user interface for transfers using the bridge at <https://bridge.bsc.threefold.io/>.
+
+More technical details on how to transfer without the UI are explained below.
+
 ## From BSC to Stellar
 
 The `withdraw` method must be called on contract **0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf** with the following parameters:

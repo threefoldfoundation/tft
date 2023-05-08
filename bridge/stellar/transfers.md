@@ -1,16 +1,16 @@
-# Transferring TFT between Stellar and BSC
+# Transferring TFT between Stellar and Ethereum compatible chains
 
-## From BSC to Stellar
+## From Ethereum to Stellar
 
-The `withdraw` method must be called on contract **0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf** with the following parameters:
+The `withdraw` method must be called on contract token contract with the following parameters:
 
 - blockchain_address: Your stellar address
 - network: stellar
 - amount: any amount that does not exceed your balance (unsigned integer with a precision of 7 decimals, so 1 TFT = 10000000 )
 
-## From Stellar to BSC
+## From Stellar to Ethereum
 
-Transfer the TFT to the bridge address **GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5** with the target address in the memo text in a specially encoded way.
+Transfer the TFT to the bridge address with the target address in the memo text in a specially encoded way.
 
 ### Encoding the target address
 
@@ -26,16 +26,16 @@ base64.b64encode(b).decode("utf-8")
 
 ### Fees
 
-- From Stellar to BSC:
+- From Stellar to Ethereum:
 
-   To cover the costs of the bridge ( like the multisig interactions with the Binance chain), a fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
+   To cover the costs of the bridge, a fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
 
    Make sure the  amount received on the bridge's Stellar address is larger than the Fee..
 
-- From BSC to Stellar:
+- From Ethereum to Stellar:
 
    a fee of 1 TFT is deducted from the withdrawn amount
 
 ## Refunds
 
-When the supplied memo text of a deposit transaction can not be decoded to a valid BSC address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge  more expensive.
+When the supplied memo text of a deposit transaction can not be decoded to a valid Ethereum address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge  more expensive.
