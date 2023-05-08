@@ -24,7 +24,7 @@ func main() {
 
 	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
 	flag.StringVar(&ethCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
-	flag.StringVar(&ethCfg.ContractAddress, "contract", "", "smart contract address")
+	flag.StringVar(&ethCfg.ContractAddress, "contract", "", "token contract address")
 
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
 
