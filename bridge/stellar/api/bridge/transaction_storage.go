@@ -56,8 +56,11 @@ func (s *StellarTransactionStorage) transactionExists(txn *txnbuild.Transaction)
 
 	log.Info("checking if transaction exists", "memo", memo)
 
-	for _, tx := range s.knownTransactions {
-		exists = tx.Memo == memo
+	// txhash here is equal to memo
+	for h := range s.knownTransactions {
+		if h == memo {
+			exists = true
+		}
 	}
 
 	if !exists {
