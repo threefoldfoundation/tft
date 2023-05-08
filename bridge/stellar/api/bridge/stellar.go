@@ -40,6 +40,7 @@ type stellarWallet struct {
 	keypair                   *keypair.Full
 	config                    *StellarConfig
 	stellarTransactionStorage *StellarTransactionStorage
+	depositFee                int64
 	signerWallet
 }
 
@@ -50,13 +51,6 @@ type StellarConfig struct {
 	StellarSeed string
 	// stellar fee wallet address
 	StellarFeeWallet string
-	// deposit fee in TFT units
-	DepositFee int64
-}
-
-// DepositFeeInStroops returns the DepositFee in the Stellar base unit
-func (c *StellarConfig) DepositFeeInStroops() int64 {
-	return c.DepositFee * stellarPrecision
 }
 
 type signerWallet struct {
@@ -64,7 +58,7 @@ type signerWallet struct {
 	signatureCount int
 }
 
-func NewStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWallet, error) {
+func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
@@ -76,6 +70,7 @@ func NewStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWalle
 		keypair:                   kp,
 		config:                    config,
 		stellarTransactionStorage: stellarTransactionStorage,
+		depositFee:                depositFee,
 	}
 
 	return w, nil
@@ -334,7 +329,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			return
 		}
 
-		if totalAmount <= w.config.DepositFeeInStroops() {
+		if totalAmount <= IntToStroops(w.depositFee) {
 			log.Warn("Deposited amount is less than the depositfee, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
@@ -379,14 +374,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			var memo [32]byte
 			copy(memo[:], parsedMessage)
 
-			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFeeInStroops()), memo)
+			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
 			for err != nil {
 				log.Error("error sending fee to the fee wallet", "err", err.Error())
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(10 * time.Second):
-					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(w.config.DepositFeeInStroops()), memo)
+					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
 				}
 			}
 		}
@@ -605,4 +600,9 @@ func GetHorizonClient(network string) (*horizonclient.Client, error) {
 	default:
 		return nil, errors.New("network is not supported")
 	}
+}
+
+// IntToStroops converts units to stroops (1 TFT = 1000000 stroops)
+func IntToStroops(x int64) int64 {
+	return x * stellarPrecision
 }

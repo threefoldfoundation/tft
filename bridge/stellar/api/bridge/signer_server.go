@@ -102,7 +102,7 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, re
 	}
 	log.Debug("validating amount for sign tx", "amount", depositedAmount, "request amount", request.Amount)
 
-	depositFeeBigInt := big.NewInt(s.stellarWallet.config.DepositFeeInStroops())
+	depositFeeBigInt := big.NewInt(IntToStroops(s.stellarWallet.depositFee))
 
 	amount := &big.Int{}
 	amount = amount.Sub(big.NewInt(depositedAmount), depositFeeBigInt)
@@ -341,12 +341,12 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 		}
 
 		switch int64(paymentOperation.Amount) {
-		case s.stellarWallet.config.DepositFeeInStroops():
+		case IntToStroops(s.stellarWallet.depositFee):
 			return nil
 		case WithdrawFee:
 			return nil
 		default:
-			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, s.stellarWallet.config.DepositFeeInStroops(), WithdrawFee)
+			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, IntToStroops(s.stellarWallet.depositFee), WithdrawFee)
 		}
 
 	}

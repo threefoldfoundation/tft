@@ -41,7 +41,7 @@ func main() {
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
 	flag.StringVar(&bridgeMasterAddress, "master", "", "master stellar public address")
-	flag.Int64Var(&stellarCfg.DepositFee, "depositFee", 50, "sets the depositfee in TFT")
+	flag.Int64Var(&bridgeCfg.DepositFee, "depositFee", 50, "sets the depositfee in TFT")
 
 	// P2P Configuration
 	flag.StringVar(&bridgeCfg.Psk, "psk", "", "psk for the relay")
@@ -80,7 +80,7 @@ func main() {
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg)
+	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg, bridgeCfg.DepositFee)
 	if err != nil {
 		panic(err)
 	}

@@ -47,6 +47,8 @@ type BridgeConfig struct {
 	Follower            bool
 	Relay               string
 	Psk                 string
+	// deposit fee in TFT units
+	DepositFee int64
 }
 
 // NewBridge creates a new Bridge.
@@ -67,7 +69,7 @@ func NewBridge(ctx context.Context, wallet *stellarWallet, contract *BridgeContr
 	}
 
 	if config.RescanBridgeAccount {
-		log.Debug("Rescan triggered")
+		log.Info("rescan triggered")
 		// setting the cursor to 0 will trigger the bridge
 		// to scan for every transaction ever made on the bridge account
 		// and mint accordingly
@@ -111,7 +113,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return
 	}
 
-	depositFeeBigInt := big.NewInt(bridge.wallet.config.DepositFeeInStroops())
+	depositFeeBigInt := big.NewInt(IntToStroops(bridge.config.DepositFee))
 
 	if depositedAmount.Cmp(depositFeeBigInt) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
