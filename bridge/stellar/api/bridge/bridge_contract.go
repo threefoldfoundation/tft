@@ -63,32 +63,25 @@ func (bridge *BridgeContract) GetContractAdress() common.Address {
 }
 
 // NewBridgeContract creates a new wrapper for an allready deployed contract
-func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
+func NewBridgeContract(ethConfig *EthConfig) (*BridgeContract, error) {
 	// load correct network config
-	networkConfig, err := tfeth.GetEthNetworkConfiguration(bridgeConfig.EthNetworkName)
+	networkConfig, err := tfeth.GetEthNetworkConfiguration(ethConfig.EthNetworkName)
 	if err != nil {
 		return nil, err
 	}
 	// override contract address if it's provided
-	if bridgeConfig.ContractAddress != "" {
-		log.Info("Overriding default token contract", "address", bridgeConfig.ContractAddress)
-		networkConfig.ContractAddress = common.HexToAddress(bridgeConfig.ContractAddress)
-		// TODO: validate ABI of contract,
-		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
-	}
-	// override contract address if it's provided
-	if bridgeConfig.MultisigContractAddress != "" {
-		log.Info("Overriding default multisig contract", "address", bridgeConfig.MultisigContractAddress)
-		networkConfig.MultisigContractAddress = common.HexToAddress(bridgeConfig.MultisigContractAddress)
+	if ethConfig.ContractAddress != "" {
+		log.Info("Overriding default token contract", "address", ethConfig.ContractAddress)
+		networkConfig.ContractAddress = common.HexToAddress(ethConfig.ContractAddress)
 		// TODO: validate ABI of contract,
 		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 
 	ethc, err := NewEthClient(LightClientConfig{
 		NetworkName:   networkConfig.NetworkName,
-		EthUrl:        bridgeConfig.EthUrl,
+		EthUrl:        ethConfig.EthUrl,
 		NetworkID:     networkConfig.NetworkID,
-		EthPrivateKey: bridgeConfig.EthPrivateKey,
+		EthPrivateKey: ethConfig.EthPrivateKey,
 	})
 	if err != nil {
 		return nil, err
@@ -100,7 +93,7 @@ func NewBridgeContract(bridgeConfig *BridgeConfig) (*BridgeContract, error) {
 	}
 
 	return &BridgeContract{
-		networkName:   bridgeConfig.EthNetworkName,
+		networkName:   ethConfig.EthNetworkName,
 		networkConfig: networkConfig,
 		ethc:          ethc,
 		tftContract:   tftContract,

@@ -41,53 +41,21 @@ type Bridge struct {
 }
 
 type BridgeConfig struct {
-	EthNetworkName          string
-	EthUrl                  string
-	EthPrivateKey           string
-	ContractAddress         string
-	MultisigContractAddress string
-	RescanBridgeAccount     bool
-	RescanFromHeight        int64
-	PersistencyFile         string
-	Follower                bool
-	BridgeMasterAddress     string
-	Relay                   string
-	Psk                     string
-	StellarConfig
-}
-
-type StellarConfig struct {
-	// network for the stellar config
-	StellarNetwork string
-	// seed for the stellar bridge wallet
-	StellarSeed string
-	// stellar fee wallet address
-	StellarFeeWallet string
+	RescanBridgeAccount bool
+	RescanFromHeight    int64
+	PersistencyFile     string
+	Follower            bool
+	Relay               string
+	Psk                 string
 	// deposit fee in TFT units
 	DepositFee int64
 }
 
-// DepositFeeInStroops returns the DepositFee in the Stellar base unit
-func (c *StellarConfig) DepositFeeInStroops() int64 {
-	return c.DepositFee * stellarPrecision
-}
-
 // NewBridge creates a new Bridge.
-func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
-
-	contract, err := NewBridgeContract(config)
-	if err != nil {
-		return
-	}
-
+func NewBridge(ctx context.Context, wallet *stellarWallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
 	blockPersistency := newChainPersistency(config.PersistencyFile)
 
-	wallet, err := newStellarWallet(ctx, &config.StellarConfig)
-	if err != nil {
-		return
-	}
-
-	// Only create the stellar signer wallet if the bridge is a master bridge
+	// Only create the singer client if the bridge is running in master mode
 	if !config.Follower {
 		relayAddrInfo, addrErr := peer.AddrInfoFromString(config.Relay)
 		if err != nil {
@@ -98,10 +66,10 @@ func NewBridge(ctx context.Context, config *BridgeConfig, host host.Host, router
 		if err != nil {
 			return
 		}
-		log.Info(fmt.Sprintf("Stellar bridge account %s loaded on Stellar network %s", wallet.keypair.Address(), config.StellarNetwork))
 	}
 
 	if config.RescanBridgeAccount {
+		log.Info("rescan triggered")
 		// setting the cursor to 0 will trigger the bridge
 		// to scan for every transaction ever made on the bridge account
 		// and mint accordingly
@@ -145,7 +113,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return
 	}
 
-	depositFeeBigInt := big.NewInt(bridge.config.DepositFeeInStroops())
+	depositFeeBigInt := big.NewInt(IntToStroops(bridge.config.DepositFee))
 
 	if depositedAmount.Cmp(depositFeeBigInt) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
@@ -158,6 +126,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	if err != nil {
 		return err
 	}
+	log.Debug("required signature count", "count", requiredSignatureCount)
 
 	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
@@ -184,7 +153,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return err
 	}
 
-	orderderedSignatures := make([]tokenv1.Signature, requiredSignatureCount.Int64())
+	orderderedSignatures := make([]tokenv1.Signature, len(signers))
 	for i := 0; i < len(signers); i++ {
 		for _, sign := range res {
 			if sign.Who == signers[i] {
@@ -192,8 +161,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 			}
 		}
 	}
-
-	log.Debug("signers list", "l", signers)
 
 	log.Debug("total signatures count", "count", len(orderderedSignatures))
 
@@ -203,11 +170,6 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 // GetClient returns bridgecontract lightclient
 func (bridge *Bridge) GetClient() *EthClient {
 	return bridge.bridgeContract.EthClient()
-}
-
-// GetBridgeContract returns this bridge's contract.
-func (bridge *Bridge) GetBridgeContract() *BridgeContract {
-	return bridge.bridgeContract
 }
 
 // Start the main processing loop of the bridge
@@ -361,7 +323,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error) {
 	// if a withdraw was made to the bridge fee wallet or the bridge address, soak the funds and return
-	if we.blockchain_address == bridge.config.StellarFeeWallet || we.blockchain_address == bridge.wallet.keypair.Address() {
+	if we.blockchain_address == bridge.wallet.config.StellarFeeWallet || we.blockchain_address == bridge.wallet.keypair.Address() {
 		log.Warn("Received a withdrawal with destination which is either the fee wallet or the bridge wallet, skipping...")
 		return nil
 	}

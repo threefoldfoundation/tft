@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,26 +14,26 @@ import (
 )
 
 type StellarTransactionStorage struct {
-	network                   string
-	addressToScan             string
-	knownTransactionWithMemos map[string]struct{}
-	stellarCursor             string
+	network           string
+	addressToScan     string
+	knownTransactions map[string]hProtocol.Transaction
+	stellarCursor     string
 }
 
 func NewStellarTransactionStorage(network, addressToScan string) *StellarTransactionStorage {
 	return &StellarTransactionStorage{
-		network:                   network,
-		addressToScan:             addressToScan,
-		knownTransactionWithMemos: make(map[string]struct{}),
+		network:           network,
+		addressToScan:     addressToScan,
+		knownTransactions: make(map[string]hProtocol.Transaction),
 	}
 }
 
-func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	return s.transactionWithMemoExists(txn)
+func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
+	return s.transactionExists(txn)
 }
 
-func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
-	exists, err = s.transactionWithMemoExists(txn)
+func (s *StellarTransactionStorage) TransactionExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
+	exists, err = s.transactionExists(txn)
 	if err != nil {
 		return
 	}
@@ -46,19 +45,24 @@ func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbui
 		return
 	}
 
-	return s.transactionWithMemoExists(txn)
+	return s.transactionExists(txn)
 }
 
-func (s *StellarTransactionStorage) transactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
+func (s *StellarTransactionStorage) transactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	memo, err := s.memoToString(txn)
 	if err != nil || memo == "" {
 		return
 	}
+
 	log.Info("checking if transaction exists", "memo", memo)
 
-	_, exists = s.knownTransactionWithMemos[memo]
+	for _, tx := range s.knownTransactions {
+		exists = tx.Memo == memo
+	}
+
 	if !exists {
 		log.Info("transaction not found")
+		return false, nil
 	}
 
 	return
@@ -71,21 +75,10 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 	log.Info("scanning account ", "account", s.addressToScan)
 
 	transactionHandler := func(tx hProtocol.Transaction) {
-		if tx.MemoType != "hash" && tx.MemoType != "return" {
-			return
-		}
-
-		bytes, err := base64.StdEncoding.DecodeString(tx.Memo)
-		if err != nil {
-			return
-		}
-		memoAsHex := hex.EncodeToString(bytes)
-
-		_, ok := s.knownTransactionWithMemos[memoAsHex]
+		_, ok := s.knownTransactions[tx.Hash]
 		if !ok {
-			log.Info("storing memo hash in known transaction storage", "hash", memoAsHex)
-			// add the transaction memo to the list of known transaction memos
-			s.knownTransactionWithMemos[memoAsHex] = struct{}{}
+			log.Info("storing memo hash in known transaction storage", "hash", tx.Hash)
+			s.knownTransactions[tx.Hash] = tx
 		}
 		s.stellarCursor = tx.PagingToken()
 	}
@@ -109,21 +102,21 @@ func (s *StellarTransactionStorage) FetchTransactionsForStorage(ctx context.Cont
 
 }
 
-func (s *StellarTransactionStorage) StoreTransactionWithMemo(txn *txnbuild.Transaction) error {
-	memo, err := s.memoToString(txn)
-	if err != nil {
-		return err
-	}
-
-	_, ok := s.knownTransactionWithMemos[memo]
+func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) {
+	_, ok := s.knownTransactions[txn.Hash]
 	if !ok {
-		log.Info("storing memo hash in known transaction storage", "hash", memo)
+		log.Info("storing memo hash in known transaction storage", "hash", txn.Hash)
 		// add the transaction memo to the list of known transaction memos
-		s.knownTransactionWithMemos[memo] = struct{}{}
-		return nil
+		s.knownTransactions[txn.Hash] = txn
 	}
+}
 
-	return fmt.Errorf("transaction with memo already exists")
+func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (*hProtocol.Transaction, error) {
+	tx, ok := s.knownTransactions[txid]
+	if !ok {
+		return nil, errors.New("transaction not found")
+	}
+	return &tx, nil
 }
 
 func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txMemoString string, err error) {
