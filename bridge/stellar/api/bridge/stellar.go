@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -44,12 +43,28 @@ type stellarWallet struct {
 	signerWallet
 }
 
+type StellarConfig struct {
+	// network for the stellar config
+	StellarNetwork string
+	// seed for the stellar bridge wallet
+	StellarSeed string
+	// stellar fee wallet address
+	StellarFeeWallet string
+	// deposit fee in TFT units
+	DepositFee int64
+}
+
+// DepositFeeInStroops returns the DepositFee in the Stellar base unit
+func (c *StellarConfig) DepositFeeInStroops() int64 {
+	return c.DepositFee * stellarPrecision
+}
+
 type signerWallet struct {
 	client         *SignersClient
 	signatureCount int
 }
 
-func newStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWallet, error) {
+func NewStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
@@ -64,6 +79,10 @@ func newStellarWallet(ctx context.Context, config *StellarConfig) (*stellarWalle
 	}
 
 	return w, nil
+}
+
+func (w *stellarWallet) GetAddress() string {
+	return w.keypair.Address()
 }
 
 func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting, relay *peer.AddrInfo) error {
@@ -211,7 +230,7 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 
 	// check if a similar transaction with a memo was made before
-	exists, err := w.stellarTransactionStorage.TransactionWithMemoExists(tx)
+	exists, err := w.stellarTransactionStorage.TransactionExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 	}
@@ -270,10 +289,8 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
 
-	err = w.stellarTransactionStorage.StoreTransactionWithMemo(tx)
-	if err != nil {
-		return errors.Wrap(err, "failed to store transaction with memo")
-	}
+	// Store TX
+	w.stellarTransactionStorage.StoreTransaction(txResult)
 
 	return nil
 }
@@ -312,34 +329,8 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		}
 		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
-		effects, err := w.getTransactionEffects(tx.Hash)
-		if err != nil {
-			log.Error("error while fetching transaction effects:", err.Error())
-			return
-		}
-
-		asset := w.GetAssetCodeAndIssuer()
-
-		var totalAmount int64
-		for _, effect := range effects.Embedded.Records {
-			if effect.GetAccount() != w.keypair.Address() {
-				continue
-			}
-			if effect.GetType() == "account_credited" {
-				creditedEffect := effect.(horizoneffects.AccountCredited)
-				if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
-					continue
-				}
-				parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
-				if err != nil {
-					continue
-				}
-
-				totalAmount += parsedAmount
-			}
-		}
-
-		if totalAmount == 0 {
+		totalAmount, err := w.getAmountFromTx(tx.Hash, w.keypair.Address())
+		if err != nil || totalAmount == 0 {
 			return
 		}
 
@@ -351,23 +342,14 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 
 		log.Info("deposited amount", "a", totalAmount)
 		depositedAmount := big.NewInt(totalAmount)
+		log.Info("memo", "m", tx.Memo)
 
-		data, err := base64.StdEncoding.DecodeString(tx.Memo)
+		ethAddress, err := GetErc20AddressFromB64(tx.Memo)
 		if err != nil {
 			log.Warn("error decoding transaction memo, refunding", "error", err.Error())
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
 			return
 		}
-
-		// if the user sent an invalid memo, return the funds
-		if len(data) != 20 {
-			log.Warn("length of parsed memo is less than 20, refunding")
-			w.refundDeposit(ctx, uint64(totalAmount), tx)
-			return
-		}
-
-		var ethAddress ERC20Address
-		copy(ethAddress[0:20], data)
 
 		err = mintFn(ethAddress, depositedAmount, tx.Hash)
 		for err != nil {
@@ -434,6 +416,37 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 	}
 
 	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
+}
+
+func (w *stellarWallet) getAmountFromTx(txHash string, forAccount string) (int64, error) {
+	effects, err := w.getTransactionEffects(txHash)
+	if err != nil {
+		log.Error("error while fetching transaction effects:", err.Error())
+		return 0, err
+	}
+
+	asset := w.GetAssetCodeAndIssuer()
+
+	var totalAmount int64
+	for _, effect := range effects.Embedded.Records {
+		if effect.GetAccount() != forAccount {
+			continue
+		}
+		if effect.GetType() == "account_credited" {
+			creditedEffect := effect.(horizoneffects.AccountCredited)
+			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
+				continue
+			}
+			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
+			if err != nil {
+				continue
+			}
+
+			totalAmount += parsedAmount
+		}
+	}
+
+	return totalAmount, nil
 }
 
 // GetAccountDetails gets account details based an a Stellar address

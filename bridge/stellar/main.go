@@ -18,27 +18,30 @@ import (
 func main() {
 
 	var bridgeCfg bridge.BridgeConfig
-	flag.StringVar(&bridgeCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
-	flag.StringVar(&bridgeCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
-	flag.StringVar(&bridgeCfg.ContractAddress, "contract", "", "smart contract address")
-	flag.StringVar(&bridgeCfg.MultisigContractAddress, "mscontract", "", "multisig smart contract address")
+	var stellarCfg bridge.StellarConfig
+	var ethCfg bridge.EthConfig
+	var bridgeMasterAddress string
+
+	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
+	flag.StringVar(&ethCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
+	flag.StringVar(&ethCfg.ContractAddress, "contract", "", "smart contract address")
 
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
 
-	flag.StringVar(&bridgeCfg.EthPrivateKey, "ethkey", "", "ethereum account json")
+	flag.StringVar(&ethCfg.EthPrivateKey, "ethkey", "", "ethereum account json")
 
-	flag.StringVar(&bridgeCfg.StellarSeed, "secret", "", "stellar secret")
-	flag.StringVar(&bridgeCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
+	flag.StringVar(&stellarCfg.StellarSeed, "secret", "", "stellar secret")
+	flag.StringVar(&stellarCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
 	// Fee wallet address where fees are held
-	flag.StringVar(&bridgeCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
+	flag.StringVar(&stellarCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
 	flag.Int64Var(&bridgeCfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")
 
 	flag.BoolVar(&bridgeCfg.Follower, "follower", false, "if true then the bridge will run in follower mode meaning that it will not submit mint transactions to the multisig contract, if false the bridge will also submit transactions")
 
-	flag.StringVar(&bridgeCfg.BridgeMasterAddress, "master", "", "master stellar public address")
-	flag.Int64Var(&bridgeCfg.DepositFee, "depositFee", 50, "sets the depositfee in TFT")
+	flag.StringVar(&bridgeMasterAddress, "master", "", "master stellar public address")
+	flag.Int64Var(&stellarCfg.DepositFee, "depositFee", 50, "sets the depositfee in TFT")
 
 	// P2P Configuration
 	flag.StringVar(&bridgeCfg.Psk, "psk", "", "psk for the relay")
@@ -56,12 +59,12 @@ func main() {
 		log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 	}
 
-	log.Info("connection url provided: ", "url", bridgeCfg.EthUrl)
+	log.Info("connection url provided: ", "url", ethCfg.EthUrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	host, router, err := bridge.NewHost(ctx, bridgeCfg.StellarSeed, bridgeCfg.Relay, bridgeCfg.Psk)
+	host, router, err := bridge.NewHost(ctx, stellarCfg.StellarSeed, bridgeCfg.Relay, bridgeCfg.Psk)
 	if err != nil {
 		fmt.Println("failed to create host")
 		panic(err)
@@ -77,7 +80,18 @@ func main() {
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	br, err := bridge.NewBridge(ctx, &bridgeCfg, host, router)
+	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg)
+	if err != nil {
+		panic(err)
+	}
+	log.Info(fmt.Sprintf("Stellar wallet %s loaded on Stellar network %s", stellarWallet.GetAddress(), stellarCfg.StellarNetwork))
+
+	contract, err := bridge.NewBridgeContract(&ethCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	br, err := bridge.NewBridge(ctx, stellarWallet, contract, &bridgeCfg, host, router)
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +102,7 @@ func main() {
 	}
 
 	if bridgeCfg.Follower {
-		signer, err := bridge.NewSignerServer(host, bridgeCfg.StellarConfig, bridgeCfg.BridgeMasterAddress, br.GetBridgeContract())
+		signer, err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet)
 		if err != nil {
 			panic(err)
 		}
