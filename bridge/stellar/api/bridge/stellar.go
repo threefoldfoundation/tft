@@ -103,8 +103,8 @@ func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, rou
 	return nil
 }
 
-func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
-	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
+func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string) error {
+	txnBuild, err := w.generatePaymentOperation(amount, target)
 	if err != nil {
 		return err
 	}
@@ -121,8 +121,8 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
-	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
+func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string) error {
+	txnBuild, err := w.generatePaymentOperation(amount, target)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 		feeWalletAddress = w.config.StellarFeeWallet
 	}
 
-	txnBuild, err := w.generatePaymentOperation(amount, feeWalletAddress, false)
+	txnBuild, err := w.generatePaymentOperation(amount, feeWalletAddress)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate payment operation")
 	}
@@ -167,7 +167,7 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
+func (w *stellarWallet) generatePaymentOperation(amount uint64, destination string) (txnbuild.TransactionParams, error) {
 	// if amount is zero, do nothing
 	if amount == 0 {
 		return txnbuild.TransactionParams{}, errors.New("invalid amount")
@@ -192,7 +192,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 	}
 	paymentOperations = append(paymentOperations, &paymentOP)
 
-	if includeWithdrawFee {
+	if w.config.StellarFeeWallet != "" {
 		feePaymentOP := txnbuild.Payment{
 			Destination: w.config.StellarFeeWallet,
 			Amount:      big.NewRat(WithdrawFee, stellarPrecision).FloatString(stellarPrecisionDigits),
@@ -296,16 +296,16 @@ func (w *stellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, t
 		return
 	}
 	amount := totalAmount - uint64(WithdrawFee)
-	log.Warn("Calling refund")
+	log.Warn("Calling refund", "tx", tx.Hash, "amount", amount, "account", tx.Account)
 
-	err := w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
+	err := w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash)
 	for err != nil {
 		log.Error("error while trying to refund user", "err", err.Error(), "amount", totalAmount)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(10 * time.Second):
-			err = w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
+			err = w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash)
 		}
 	}
 
