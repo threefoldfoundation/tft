@@ -32,7 +32,7 @@ func main() {
 
 	flag.StringVar(&stellarCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&stellarCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
-	// Fee wallet address where fees are held
+	// Stellar account where fees are sent to
 	flag.StringVar(&stellarCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
@@ -52,7 +52,9 @@ func main() {
 
 	flag.Parse()
 
-	//TODO cfg.Validate()
+	if err := stellarCfg.Validate(); err != nil {
+		panic(err)
+	}
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 	if debug {
