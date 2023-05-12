@@ -68,13 +68,6 @@ func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction)
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
 func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	// trigger a rescan
-	// will not rescan from start since we saved the cursor
-	err = s.ScanBridgeAccount()
-	if err != nil {
-		return
-	}
-
 	memo, err := s.extractMemoFromTx(txn)
 	if err != nil || memo == "" {
 		return
@@ -93,6 +86,16 @@ func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Tran
 	}
 
 	return
+}
+
+// StoreTransaction stores a transaction in the transaction storage
+func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) {
+	_, ok := s.knownTransactions[txn.Hash]
+	if !ok {
+		log.Info("storing memo hash in known transaction storage", "hash", txn.Hash)
+		// add the transaction memo to the list of known transaction memos
+		s.knownTransactions[txn.Hash] = txn
+	}
 }
 
 func (s *StellarTransactionStorage) ScanBridgeAccount() error {

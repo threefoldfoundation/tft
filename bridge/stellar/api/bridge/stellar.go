@@ -65,7 +65,6 @@ func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int
 		return nil, err
 	}
 
-	// stellarTransactionStorage := NewStellarTransactionStorage(config.StellarNetwork, kp.Address())
 	w := &stellarWallet{
 		keypair:                   kp,
 		config:                    config,
@@ -225,7 +224,7 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 
 	// check if the actual transaction to be submitted already happened on the stellar network
-	exists, err := w.stellarTransactionStorage.TransactionExists(tx)
+	exists, err := w.stellarTransactionStorage.TransactionWithMemoExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 	}
@@ -283,6 +282,9 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 		return errors.Wrap(err, "error submitting transaction")
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
+
+	// Store the transaction in the database
+	w.stellarTransactionStorage.StoreTransaction(txResult)
 
 	return nil
 }
