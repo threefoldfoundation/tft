@@ -44,15 +44,6 @@ type stellarWallet struct {
 	signerWallet
 }
 
-type StellarConfig struct {
-	// network for the stellar config
-	StellarNetwork string
-	// seed for the stellar bridge wallet
-	StellarSeed string
-	// stellar fee wallet address
-	StellarFeeWallet string
-}
-
 type signerWallet struct {
 	client         *SignersClient
 	signatureCount int
