@@ -566,14 +566,7 @@ func (w *stellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
 
 // GetNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
 func (w *stellarWallet) GetNetworkPassPhrase() string {
-	switch w.config.StellarNetwork {
-	case "testnet":
-		return network.TestNetworkPassphrase
-	case "production":
-		return network.PublicNetworkPassphrase
-	default:
-		return network.TestNetworkPassphrase
-	}
+	return GetNetworkPassPhrase(w.config.StellarNetwork)
 }
 
 func (w *stellarWallet) GetAssetCodeAndIssuer() []string {
