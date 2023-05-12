@@ -238,6 +238,7 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 		}
 
 		if exits {
+			log.Info("Transaction with this hash already executed, skipping now..")
 			return fmt.Errorf("transaction already exists")
 		}
 	}
@@ -299,7 +300,7 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 		}
 		// if the transaction exists, return with error
 		if !exists {
-			// log.Info("Transaction with this hash already executed, skipping now..")
+			log.Info("Transaction with this hash already executed, skipping now..")
 			return fmt.Errorf("deposit transaction with hash does not exist")
 		}
 
