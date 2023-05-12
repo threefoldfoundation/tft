@@ -58,14 +58,14 @@ type signerWallet struct {
 	signatureCount int
 }
 
-func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64) (*stellarWallet, error) {
+func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64, stellarTransactionStorage *StellarTransactionStorage) (*stellarWallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
 		return nil, err
 	}
 
-	stellarTransactionStorage := NewStellarTransactionStorage(config.StellarNetwork, kp.Address())
+	// stellarTransactionStorage := NewStellarTransactionStorage(config.StellarNetwork, kp.Address())
 	w := &stellarWallet{
 		keypair:                   kp,
 		config:                    config,
@@ -283,9 +283,6 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 		return errors.Wrap(err, "error submitting transaction")
 	}
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
-
-	// Store TX
-	w.stellarTransactionStorage.StoreTransaction(txResult)
 
 	return nil
 }

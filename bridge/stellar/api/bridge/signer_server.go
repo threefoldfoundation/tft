@@ -52,17 +52,16 @@ type EthSignResponse struct {
 }
 
 type SignerService struct {
-	bridgeContract            *BridgeContract
-	StellarTransactionStorage *StellarTransactionStorage
-	stellarWallet             *stellarWallet
-	bridgeMasterAddress       string
+	bridgeContract      *BridgeContract
+	stellarWallet       *stellarWallet
+	bridgeMasterAddress string
 }
 
-func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellarWallet) (*SignerService, error) {
+func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellarWallet) error {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, addr := range host.Addrs() {
@@ -72,25 +71,20 @@ func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract 
 
 	server := gorpc.NewServer(host, Protocol)
 
-	stellarTransactionStorage := NewStellarTransactionStorage(stellarWallet.config.StellarNetwork, bridgeMasterAddress)
-
 	signerService := SignerService{
-		bridgeContract:            bridgeContract,
-		StellarTransactionStorage: stellarTransactionStorage,
-		stellarWallet:             stellarWallet,
-		bridgeMasterAddress:       bridgeMasterAddress,
+		bridgeContract:      bridgeContract,
+		stellarWallet:       stellarWallet,
+		bridgeMasterAddress: bridgeMasterAddress,
 	}
 
-	err = server.Register(&signerService)
-
-	return &signerService, err
+	return server.Register(&signerService)
 }
 
 func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, response *EthSignResponse) error {
 	log.Info("sign mint request", "request txid", request.TxId)
 
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.StellarTransactionStorage.GetTransactionWithId(request.TxId)
+	tx, err := s.stellarWallet.stellarTransactionStorage.GetTransactionWithId(request.TxId)
 	if err != nil {
 		log.Debug("tx not found in storage", "txid", request.TxId)
 		return err
@@ -232,13 +226,13 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
-		exits, err := s.StellarTransactionStorage.TransactionExists(txn)
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
 
-		if exits {
-			log.Info("Transaction with this hash already executed, skipping now..")
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping validating withdraw now..")
 			return fmt.Errorf("transaction already exists")
 		}
 	}
@@ -294,23 +288,23 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 		}
 
 		// check if the deposit for this fee transaction actually happened
-		exists, err := s.StellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
-		// if the transaction exists, return with error
+		// if the transaction not exists, return with error
 		if !exists {
-			log.Info("Transaction with this hash already executed, skipping now..")
 			return fmt.Errorf("deposit transaction with hash does not exist")
 		}
 
 		// check if the actual transaction already happened or not
-		exits, err := s.StellarTransactionStorage.TransactionExists(txn)
+		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
 
-		if exits {
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping validating refund now..")
 			return fmt.Errorf("transaction already exists")
 		}
 	}
@@ -340,7 +334,7 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 		}
 
 		// check if the deposit for this fee transaction actually happened
-		exists, err := s.StellarTransactionStorage.TransactionWithMemoExistsAndScan(txn)
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
@@ -350,12 +344,13 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 		}
 
 		// get the transaction hash
-		exits, err := s.StellarTransactionStorage.TransactionExists(txn)
+		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
 
-		if exits {
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping validating fee transfer now..")
 			return fmt.Errorf("transaction already exists")
 		}
 

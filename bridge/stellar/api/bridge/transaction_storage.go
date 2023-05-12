@@ -28,18 +28,46 @@ func NewStellarTransactionStorage(network, addressToScan string) *StellarTransac
 	}
 }
 
-// TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network
-func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	return s.transactionWthMemoExists(txn)
-}
-
-// TransactionWithMemoExistsAndScan checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
-func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
-	exists, err = s.transactionWthMemoExists(txn)
+// GetTransactionWithId returns a transaction with the given id (hash)
+// returns error if the transaction is not found
+func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (*hProtocol.Transaction, error) {
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err := s.ScanBridgeAccount()
 	if err != nil {
-		return
+		return nil, nil
 	}
 
+	tx, ok := s.knownTransactions[txid]
+	if !ok {
+		return nil, errors.New("transaction not found")
+	}
+	return &tx, nil
+}
+
+// TransactionExists checks if a transaction exists on the stellar network
+// it hashes the transaction and checks if the hash is in the list of known transactions
+// this can be used to check if a transaction was already submitted to the stellar network
+func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction) (bool, error) {
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err := s.ScanBridgeAccount()
+	if err != nil {
+		return false, nil
+	}
+
+	// check if the actual transaction already happened or not
+	hash, err := txn.HashHex(GetNetworkPassPhrase(s.network))
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get transaction hash")
+	}
+
+	_, ok := s.knownTransactions[hash]
+	return ok, nil
+}
+
+// TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
+func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
 	err = s.ScanBridgeAccount()
@@ -47,11 +75,7 @@ func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbui
 		return
 	}
 
-	return s.transactionWthMemoExists(txn)
-}
-
-func (s *StellarTransactionStorage) transactionWthMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	memo, err := s.memoToString(txn)
+	memo, err := s.extractMemoFromTx(txn)
 	if err != nil || memo == "" {
 		return
 	}
@@ -73,81 +97,28 @@ func (s *StellarTransactionStorage) transactionWthMemoExists(txn *txnbuild.Trans
 
 func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 	if s.addressToScan == "" {
-		return errors.New("no master bridge account set, aborting now")
+		return errors.New("no account set, aborting now")
 	}
-	log.Info("scanning account ", "account", s.addressToScan)
 
 	transactionHandler := func(tx hProtocol.Transaction) {
 		_, ok := s.knownTransactions[tx.Hash]
 		if !ok {
-			log.Info("storing memo hash in known transaction storage", "hash", tx.Hash)
+			log.Info("storing tx in transaction storage", "hash", tx.Hash)
 			s.knownTransactions[tx.Hash] = tx
 		}
 		s.stellarCursor = tx.PagingToken()
 	}
 
-	err := s.FetchTransactionsForStorage(context.Background(), s.stellarCursor, transactionHandler)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *StellarTransactionStorage) FetchTransactionsForStorage(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) error {
 	client, err := s.getHorizonClient()
 	if err != nil {
 		return err
 	}
 
-	log.Info("Start fetching stellar transactions", "horizon", client.HorizonURL, "account", s.addressToScan, "cursor", s.stellarCursor)
-	return fetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, handler)
-
+	log.Info("start fetching stellar transactions", "horizon", client.HorizonURL, "account", s.addressToScan, "cursor", s.stellarCursor)
+	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
 
-func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) {
-	_, ok := s.knownTransactions[txn.Hash]
-	if !ok {
-		log.Info("storing memo hash in known transaction storage", "hash", txn.Hash)
-		// add the transaction memo to the list of known transaction memos
-		s.knownTransactions[txn.Hash] = txn
-	}
-}
-
-func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (*hProtocol.Transaction, error) {
-	// trigger a rescan
-	// will not rescan from start since we saved the cursor
-	err := s.ScanBridgeAccount()
-	if err != nil {
-		return nil, nil
-	}
-
-	tx, ok := s.knownTransactions[txid]
-	if !ok {
-		return nil, errors.New("transaction not found")
-	}
-	return &tx, nil
-}
-
-func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction) (bool, error) {
-	// trigger a rescan
-	// will not rescan from start since we saved the cursor
-	err := s.ScanBridgeAccount()
-	if err != nil {
-		return false, nil
-	}
-
-	// check if the actual transaction already happened or not
-	hash, err := txn.HashHex(GetNetworkPassPhrase(s.network))
-	if err != nil {
-		return false, errors.Wrap(err, "failed to get transaction hash")
-	}
-
-	_, ok := s.knownTransactions[hash]
-	return ok, nil
-}
-
-func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txMemoString string, err error) {
+func (s *StellarTransactionStorage) extractMemoFromTx(txn *txnbuild.Transaction) (txMemoString string, err error) {
 	memo := txn.Memo()
 
 	if memo == nil {

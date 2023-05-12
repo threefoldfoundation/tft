@@ -80,7 +80,13 @@ func main() {
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg, bridgeCfg.DepositFee)
+	txStorage := bridge.NewStellarTransactionStorage(stellarCfg.StellarNetwork, bridgeMasterAddress)
+	err = txStorage.ScanBridgeAccount()
+	if err != nil {
+		panic(err)
+	}
+
+	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg, bridgeCfg.DepositFee, txStorage)
 	if err != nil {
 		panic(err)
 	}
@@ -101,14 +107,9 @@ func main() {
 		panic(err)
 	}
 
+	// Start the signer server
 	if bridgeCfg.Follower {
-		signer, err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet)
-		if err != nil {
-			panic(err)
-		}
-
-		// Initially scan bridge account for stellar transactions
-		err = signer.StellarTransactionStorage.ScanBridgeAccount()
+		err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet)
 		if err != nil {
 			panic(err)
 		}
