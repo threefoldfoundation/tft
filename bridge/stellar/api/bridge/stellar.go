@@ -224,7 +224,7 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 		return errors.Wrap(err, "failed to build transaction")
 	}
 
-	// check if a similar transaction with a memo was made before
+	// check if the actual transaction to be submitted already happened on the stellar network
 	exists, err := w.stellarTransactionStorage.TransactionExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
@@ -599,6 +599,18 @@ func GetHorizonClient(network string) (*horizonclient.Client, error) {
 		return horizonclient.DefaultPublicNetClient, nil
 	default:
 		return nil, errors.New("network is not supported")
+	}
+}
+
+// GetNetworkPassPhrase gets the Stellar network passphrase based on a network input
+func GetNetworkPassPhrase(ntwrk string) string {
+	switch ntwrk {
+	case "testnet":
+		return network.TestNetworkPassphrase
+	case "production":
+		return network.PublicNetworkPassphrase
+	default:
+		return network.TestNetworkPassphrase
 	}
 }
 

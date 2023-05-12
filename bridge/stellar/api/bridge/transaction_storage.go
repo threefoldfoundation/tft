@@ -3,12 +3,12 @@ package bridge
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stellar/go/clients/horizonclient"
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )
@@ -28,12 +28,14 @@ func NewStellarTransactionStorage(network, addressToScan string) *StellarTransac
 	}
 }
 
-func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	return s.transactionExists(txn)
+// TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network
+func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
+	return s.transactionWthMemoExists(txn)
 }
 
-func (s *StellarTransactionStorage) TransactionExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
-	exists, err = s.transactionExists(txn)
+// TransactionWithMemoExistsAndScan checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
+func (s *StellarTransactionStorage) TransactionWithMemoExistsAndScan(txn *txnbuild.Transaction) (exists bool, err error) {
+	exists, err = s.transactionWthMemoExists(txn)
 	if err != nil {
 		return
 	}
@@ -45,17 +47,16 @@ func (s *StellarTransactionStorage) TransactionExistsAndScan(txn *txnbuild.Trans
 		return
 	}
 
-	return s.transactionExists(txn)
+	return s.transactionWthMemoExists(txn)
 }
 
-func (s *StellarTransactionStorage) transactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
+func (s *StellarTransactionStorage) transactionWthMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	memo, err := s.memoToString(txn)
 	if err != nil || memo == "" {
 		return
 	}
 
 	log.Info("checking if transaction exists", "memo", memo)
-
 	// txhash here is equal to memo
 	for h := range s.knownTransactions {
 		if h == memo {
@@ -115,11 +116,36 @@ func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) 
 }
 
 func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (*hProtocol.Transaction, error) {
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err := s.ScanBridgeAccount()
+	if err != nil {
+		return nil, nil
+	}
+
 	tx, ok := s.knownTransactions[txid]
 	if !ok {
 		return nil, errors.New("transaction not found")
 	}
 	return &tx, nil
+}
+
+func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction) (bool, error) {
+	// trigger a rescan
+	// will not rescan from start since we saved the cursor
+	err := s.ScanBridgeAccount()
+	if err != nil {
+		return false, nil
+	}
+
+	// check if the actual transaction already happened or not
+	hash, err := txn.HashHex(GetNetworkPassPhrase(s.network))
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get transaction hash")
+	}
+
+	_, ok := s.knownTransactions[hash]
+	return ok, nil
 }
 
 func (s *StellarTransactionStorage) memoToString(txn *txnbuild.Transaction) (txMemoString string, err error) {
