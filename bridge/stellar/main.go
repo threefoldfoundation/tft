@@ -22,13 +22,13 @@ func main() {
 	var ethCfg bridge.EthConfig
 	var bridgeMasterAddress string
 
-	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
+	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "ethereum network name")
 	flag.StringVar(&ethCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
 	flag.StringVar(&ethCfg.ContractAddress, "contract", "", "token contract address")
 
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
 
-	flag.StringVar(&ethCfg.EthPrivateKey, "ethkey", "", "ethereum account json")
+	flag.StringVar(&ethCfg.EthPrivateKey, "ethkey", "", "ethereum account private key")
 
 	flag.StringVar(&stellarCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&stellarCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
