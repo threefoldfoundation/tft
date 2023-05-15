@@ -25,7 +25,6 @@ const (
 )
 
 var (
-	ErrTransactionNotFound      = errors.New("transaction not found")
 	ErrTransactionAlreadyExists = errors.New("transaction already exists")
 )
 

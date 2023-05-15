@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 
@@ -16,34 +17,42 @@ import (
 type StellarTransactionStorage struct {
 	network       string
 	addressToScan string
-	// knownTransactions is an in-memory cache of the transactions of the addressToScan account
-	knownTransactions map[string]hProtocol.Transaction
-	stellarCursor     string
+	// transactions is an in-memory cache of the transactions of the addressToScan account
+	transactions map[string]hProtocol.Transaction
+	// sentTransactionMemos keeps the memo's of outgoing transactions of the addressToScan account
+	// this is used to check if a withdraw, refund or feetransfer for a deposit has already occurred
+	sentTransactionMemos map[string]bool
+	stellarCursor        string
 }
+
+var ErrTransactionNotFound = errors.New("transaction not found")
 
 func NewStellarTransactionStorage(network, addressToScan string) *StellarTransactionStorage {
 	return &StellarTransactionStorage{
-		network:           network,
-		addressToScan:     addressToScan,
-		knownTransactions: make(map[string]hProtocol.Transaction),
+		network:              network,
+		addressToScan:        addressToScan,
+		transactions:         make(map[string]hProtocol.Transaction),
+		sentTransactionMemos: make(map[string]bool),
 	}
 }
 
 // GetTransactionWithId returns a transaction with the given id (hash)
 // returns error if the transaction is not found
-func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (*hProtocol.Transaction, error) {
+func (s *StellarTransactionStorage) GetTransactionWithId(txid string) (tx *hProtocol.Transaction, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
-	err := s.ScanBridgeAccount()
+	err = s.ScanBridgeAccount()
 	if err != nil {
-		return nil, nil
+		return
 	}
 
-	tx, ok := s.knownTransactions[txid]
+	foundTx, ok := s.transactions[txid]
 	if !ok {
-		return nil, errors.New("transaction not found")
+		err = ErrTransactionNotFound
+		return
 	}
-	return &tx, nil
+	tx = &foundTx
+	return
 }
 
 // TransactionExists checks if a transaction exists on the stellar network
@@ -63,7 +72,7 @@ func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction)
 		return false, errors.Wrap(err, "failed to get transaction hash")
 	}
 
-	_, ok := s.knownTransactions[hash]
+	_, ok := s.transactions[hash]
 	return ok, nil
 }
 
@@ -74,27 +83,35 @@ func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Tran
 		return
 	}
 
-	log.Info("checking if transaction with memo exists in strorage..", "memo", memo)
-	// txhash here is equal to memo
-	for h := range s.knownTransactions {
-		if h == memo {
-			exists = true
-		}
-	}
-
-	if !exists {
-		return false, nil
-	}
-
+	log.Debug("checking if transaction with memo exists in the cache..", "memo", memo)
+	_, exists = s.sentTransactionMemos[memo]
 	return
 }
 
-// StoreTransaction stores a transaction in the transaction storage
-func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) {
-	_, ok := s.knownTransactions[txn.Hash]
+// StoreTransaction stores a transaction in the cache
+// If there is a memo of type hash or return
+// and the transaction is created by the account being watched ( the bridge vault account),
+// the memo is kept as well to know that a withdraw, refund or fee transfer already happened.
+func (s *StellarTransactionStorage) StoreTransaction(tx hProtocol.Transaction) {
+	_, ok := s.transactions[tx.Hash]
 	if !ok {
-		log.Info("storing transaction in the cache", "hash", txn.Hash)
-		s.knownTransactions[txn.Hash] = txn
+		log.Debug("storing transaction in the cache", "hash", tx.Hash)
+		s.transactions[tx.Hash] = tx
+		if tx.Account == s.addressToScan {
+			if tx.MemoType == "hash" || tx.MemoType == "return" {
+
+				bytes, err := base64.StdEncoding.DecodeString(tx.Memo)
+				if err != nil {
+					log.Error("Unable to base64 decode a transaction memo", "tx", tx.Hash)
+				} else {
+					memoAsHex := hex.EncodeToString(bytes)
+					log.Debug("Remembering memo of transaction", "tx", tx.Hash, "memo", memoAsHex)
+					s.sentTransactionMemos[memoAsHex] = true
+				}
+
+			}
+		}
+
 	}
 }
 
@@ -113,7 +130,8 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 		return err
 	}
 
-	log.Info("start fetching stellar transactions", "horizon", client.HorizonURL, "account", s.addressToScan, "cursor", s.stellarCursor)
+	log.Debug("start fetching stellar transactions", "account", s.addressToScan, "cursor", s.stellarCursor)
+	//TODO: we should not use the background context here
 	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
 

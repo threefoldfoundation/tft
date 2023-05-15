@@ -71,7 +71,7 @@ func (w *StellarWallet) GetAddress() string {
 }
 
 func (w *StellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting, relay *peer.AddrInfo) error {
-	account, err := w.GetAccountDetails(w.keypair.Address())
+	account, err := w.GetAccountDetails(w.GetAddress())
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (w *StellarWallet) generatePaymentOperation(amount uint64, destination stri
 		return txnbuild.TransactionParams{}, errors.New("invalid amount")
 	}
 
-	sourceAccount, err := w.GetAccountDetails(w.keypair.Address())
+	sourceAccount, err := w.GetAccountDetails(w.GetAddress())
 	if err != nil {
 		return txnbuild.TransactionParams{}, errors.Wrap(err, "failed to get source account")
 	}
@@ -465,7 +465,7 @@ func (w *StellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 			handler(tx)
 			cursor = tx.PagingToken()
 		}
-		err = fetchTransactions(ctx, client, w.keypair.Address(), cursor, internalHandler)
+		err = fetchTransactions(ctx, client, w.GetAddress(), cursor, internalHandler)
 		if err != nil {
 			return
 		}
