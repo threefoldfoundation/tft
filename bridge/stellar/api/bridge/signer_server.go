@@ -24,6 +24,11 @@ const (
 	Protocol = protocol.ID("/p2p/rpc/signer")
 )
 
+var (
+	ErrTransactionNotFound      = errors.New("transaction not found")
+	ErrTransactionAlreadyExists = errors.New("transaction already exists")
+)
+
 type StellarSignRequest struct {
 	TxnXDR             string
 	RequiredSignatures int
@@ -52,17 +57,16 @@ type EthSignResponse struct {
 }
 
 type SignerService struct {
-	bridgeContract            *BridgeContract
-	StellarTransactionStorage *StellarTransactionStorage
-	stellarWallet             *stellarWallet
-	bridgeMasterAddress       string
+	bridgeContract      *BridgeContract
+	stellarWallet       *stellarWallet
+	bridgeMasterAddress string
 }
 
-func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellarWallet) (*SignerService, error) {
+func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellarWallet) error {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, addr := range host.Addrs() {
@@ -72,26 +76,22 @@ func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract 
 
 	server := gorpc.NewServer(host, Protocol)
 
-	stellarTransactionStorage := NewStellarTransactionStorage(stellarWallet.config.StellarNetwork, bridgeMasterAddress)
-
 	signerService := SignerService{
-		bridgeContract:            bridgeContract,
-		StellarTransactionStorage: stellarTransactionStorage,
-		stellarWallet:             stellarWallet,
-		bridgeMasterAddress:       bridgeMasterAddress,
+		bridgeContract:      bridgeContract,
+		stellarWallet:       stellarWallet,
+		bridgeMasterAddress: bridgeMasterAddress,
 	}
 
-	err = server.Register(&signerService)
-
-	return &signerService, err
+	return server.Register(&signerService)
 }
 
 func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, response *EthSignResponse) error {
-	log.Debug("sign mint request", "request txid", request.TxId)
+	log.Info("sign mint request", "request txid", request.TxId)
 
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.StellarTransactionStorage.GetTransactionWithId(request.TxId)
+	tx, err := s.stellarWallet.stellarTransactionStorage.GetTransactionWithId(request.TxId)
 	if err != nil {
+		log.Debug("tx not found in storage", "txid", request.TxId)
 		return err
 	}
 
@@ -231,15 +231,14 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
-		// check if a similar transaction was made before
-		exists, err := s.StellarTransactionStorage.TransactionExistsAndScan(txn)
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
 		if err != nil {
-			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+			return errors.Wrap(err, "failed to check if transaction exists")
 		}
-		// if the transaction exists, return with error
+
 		if exists {
-			log.Info("Transaction with this hash already executed, skipping now..")
-			return fmt.Errorf("transaction with hash already exists")
+			log.Info("Transaction with this hash already executed, skipping validating withdraw now..")
+			return ErrTransactionAlreadyExists
 		}
 	}
 
@@ -293,15 +292,25 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 			}
 		}
 
-		// check if a similar transaction was made before
-		exists, err := s.StellarTransactionStorage.TransactionExistsAndScan(txn)
+		// check if the actual transaction already happened or not
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
+		if err != nil {
+			return errors.Wrap(err, "failed to check if transaction exists")
+		}
+
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping validating refund now..")
+			return ErrTransactionAlreadyExists
+		}
+
+		// check if the deposit for this fee transaction actually happened
+		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
-		// if the transaction exists, return with error
-		if exists {
-			log.Info("Transaction with this hash already executed, skipping now..")
-			return fmt.Errorf("transaction with hash already exists")
+		// if the transaction not exists, return with error
+		if !exists {
+			return ErrTransactionNotFound
 		}
 	}
 	return nil
@@ -329,15 +338,25 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.stellarWallet.config.StellarFeeWallet)
 		}
 
-		// check if a similar transaction was made before
-		exists, err := s.StellarTransactionStorage.TransactionExistsAndScan(txn)
+		// get the transaction hash
+		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
+		if err != nil {
+			return errors.Wrap(err, "failed to check if transaction exists")
+		}
+
+		if exists {
+			log.Info("Transaction with this hash already executed, skipping validating fee transfer now..")
+			return ErrTransactionAlreadyExists
+		}
+
+		// check if the deposit for this fee transaction actually happened
+		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
-		// if the transaction exists, return with error
-		if exists {
-			log.Info("Transaction with this hash already executed, skipping now..")
-			return fmt.Errorf("transaction with hash already exists")
+		// if the transaction not exists, return with error
+		if !exists {
+			return ErrTransactionNotFound
 		}
 
 		switch int64(paymentOperation.Amount) {
