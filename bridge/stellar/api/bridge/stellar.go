@@ -34,9 +34,9 @@ const (
 	stellarPageLimit       = 100
 )
 
-// stellarWallet is the bridge wallet
+// StellarWallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
-type stellarWallet struct {
+type StellarWallet struct {
 	keypair                   *keypair.Full
 	config                    *StellarConfig
 	stellarTransactionStorage *StellarTransactionStorage
@@ -49,14 +49,14 @@ type signerWallet struct {
 	signatureCount int
 }
 
-func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64, stellarTransactionStorage *StellarTransactionStorage) (*stellarWallet, error) {
+func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64, stellarTransactionStorage *StellarTransactionStorage) (*StellarWallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
 		return nil, err
 	}
 
-	w := &stellarWallet{
+	w := &StellarWallet{
 		keypair:                   kp,
 		config:                    config,
 		stellarTransactionStorage: stellarTransactionStorage,
@@ -66,11 +66,11 @@ func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int
 	return w, nil
 }
 
-func (w *stellarWallet) GetAddress() string {
+func (w *StellarWallet) GetAddress() string {
 	return w.keypair.Address()
 }
 
-func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting, relay *peer.AddrInfo) error {
+func (w *StellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting, relay *peer.AddrInfo) error {
 	account, err := w.GetAccountDetails(w.keypair.Address())
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, rou
 		keys = append(keys, signer.Key)
 	}
 
-	log.Info("required signature count", "signatures", int(account.Thresholds.MedThreshold))
+	log.Info("required Stellar signature count", "signatures", int(account.Thresholds.MedThreshold))
 	w.signatureCount = int(account.Thresholds.MedThreshold) - 1
 
 	w.client, err = NewSignersClient(ctx, host, router, keys, relay)
@@ -93,7 +93,7 @@ func (w *stellarWallet) newSignerClient(ctx context.Context, host host.Host, rou
 	return nil
 }
 
-func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
+func (w *StellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (w *stellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
+func (w *StellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (w *stellarWallet) CreateAndSubmitRefund(ctx context.Context, target string
 
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
 // only an amount and hash needs to be specified
-func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash common.Hash) error {
+func (w *StellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash common.Hash) error {
 	feeWalletAddress := w.keypair.Address()
 	if w.config.StellarFeeWallet != "" {
 		feeWalletAddress = w.config.StellarFeeWallet
@@ -157,7 +157,7 @@ func (w *stellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount ui
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *stellarWallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
+func (w *StellarWallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
 	// if amount is zero, do nothing
 	if amount == 0 {
 		return txnbuild.TransactionParams{}, errors.New("invalid amount")
@@ -208,7 +208,7 @@ func (w *stellarWallet) generatePaymentOperation(amount uint64, destination stri
 
 // submitTransaction gathers signatures from cosigners if required and submits the transaction to the Stellar network
 // If there already is a transaction with the same memo hash, no new transaction is created and submitted.
-func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq StellarSignRequest) error {
+func (w *StellarWallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq StellarSignRequest) error {
 	tx, err := txnbuild.NewTransaction(txn)
 	if err != nil {
 		return errors.Wrap(err, "failed to build transaction")
@@ -280,7 +280,7 @@ func (w *stellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	return nil
 }
 
-func (w *stellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
+func (w *StellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
 	if totalAmount <= uint64(WithdrawFee) {
 		log.Warn("Deposited amount is smaller than the withdraw fee, not refunding", "tx", tx.Hash)
 		return
@@ -307,7 +307,7 @@ type mint func(ERC20Address, *big.Int, string) error
 // MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
 // mint function when a deposit is made
-func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
+func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
 		if !tx.Successful {
 			return
@@ -403,7 +403,7 @@ func (w *stellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
 }
 
-func (w *stellarWallet) getAmountFromTx(txHash string, forAccount string) (int64, error) {
+func (w *StellarWallet) getAmountFromTx(txHash string, forAccount string) (int64, error) {
 	effects, err := w.getTransactionEffects(txHash)
 	if err != nil {
 		log.Error("error while fetching transaction effects:", err.Error())
@@ -435,7 +435,7 @@ func (w *stellarWallet) getAmountFromTx(txHash string, forAccount string) (int64
 }
 
 // GetAccountDetails gets account details based an a Stellar address
-func (w *stellarWallet) GetAccountDetails(address string) (account hProtocol.Account, err error) {
+func (w *StellarWallet) GetAccountDetails(address string) (account hProtocol.Account, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return hProtocol.Account{}, err
@@ -448,7 +448,7 @@ func (w *stellarWallet) GetAccountDetails(address string) (account hProtocol.Acc
 	return account, nil
 }
 
-func (w *stellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) (err error) {
+func (w *StellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) (err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return
@@ -535,11 +535,11 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 
 }
 
-func (w *stellarWallet) ScanBridgeAccount() error {
+func (w *StellarWallet) ScanBridgeAccount() error {
 	return w.stellarTransactionStorage.ScanBridgeAccount()
 }
 
-func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
+func (w *StellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return
@@ -553,16 +553,16 @@ func (w *stellarWallet) getTransactionEffects(txHash string) (effects horizoneff
 }
 
 // GetHorizonClient gets the horizon client based on the wallet's network
-func (w *stellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
+func (w *StellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
 	return GetHorizonClient(w.config.StellarNetwork)
 }
 
 // GetNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
-func (w *stellarWallet) GetNetworkPassPhrase() string {
+func (w *StellarWallet) GetNetworkPassPhrase() string {
 	return GetNetworkPassPhrase(w.config.StellarNetwork)
 }
 
-func (w *stellarWallet) GetAssetCodeAndIssuer() []string {
+func (w *StellarWallet) GetAssetCodeAndIssuer() []string {
 	switch w.config.StellarNetwork {
 	case "testnet":
 		return strings.Split(TFTTest, ":")

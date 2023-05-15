@@ -14,8 +14,9 @@ import (
 )
 
 type StellarTransactionStorage struct {
-	network           string
-	addressToScan     string
+	network       string
+	addressToScan string
+	// knownTransactions is an in-memory cache of the transactions of the addressToScan account
 	knownTransactions map[string]hProtocol.Transaction
 	stellarCursor     string
 }
@@ -68,7 +69,7 @@ func (s *StellarTransactionStorage) TransactionExists(txn *txnbuild.Transaction)
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
 func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	memo, err := s.extractMemoFromTx(txn)
+	memo, err := extractMemoFromTx(txn)
 	if err != nil || memo == "" {
 		return
 	}
@@ -92,8 +93,7 @@ func (s *StellarTransactionStorage) TransactionWithMemoExists(txn *txnbuild.Tran
 func (s *StellarTransactionStorage) StoreTransaction(txn hProtocol.Transaction) {
 	_, ok := s.knownTransactions[txn.Hash]
 	if !ok {
-		log.Info("storing memo hash in known transaction storage", "hash", txn.Hash)
-		// add the transaction memo to the list of known transaction memos
+		log.Info("storing transaction in the cache", "hash", txn.Hash)
 		s.knownTransactions[txn.Hash] = txn
 	}
 }
@@ -104,11 +104,7 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 	}
 
 	transactionHandler := func(tx hProtocol.Transaction) {
-		_, ok := s.knownTransactions[tx.Hash]
-		if !ok {
-			log.Info("storing tx in transaction storage", "hash", tx.Hash)
-			s.knownTransactions[tx.Hash] = tx
-		}
+		s.StoreTransaction(tx)
 		s.stellarCursor = tx.PagingToken()
 	}
 
@@ -121,7 +117,7 @@ func (s *StellarTransactionStorage) ScanBridgeAccount() error {
 	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
 
-func (s *StellarTransactionStorage) extractMemoFromTx(txn *txnbuild.Transaction) (txMemoString string, err error) {
+func extractMemoFromTx(txn *txnbuild.Transaction) (txMemoString string, err error) {
 	memo := txn.Memo()
 
 	if memo == nil {

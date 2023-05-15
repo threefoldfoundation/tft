@@ -33,7 +33,7 @@ const (
 // stellar transactions, and handles them
 type Bridge struct {
 	bridgeContract   *BridgeContract
-	wallet           *stellarWallet
+	wallet           *StellarWallet
 	blockPersistency *ChainPersistency
 	mut              sync.Mutex
 	config           *BridgeConfig
@@ -52,7 +52,7 @@ type BridgeConfig struct {
 }
 
 // NewBridge creates a new Bridge.
-func NewBridge(ctx context.Context, wallet *stellarWallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
+func NewBridge(ctx context.Context, wallet *StellarWallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
 	blockPersistency := newChainPersistency(config.PersistencyFile)
 
 	// Only create the singer client if the bridge is running in master mode

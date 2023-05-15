@@ -58,11 +58,11 @@ type EthSignResponse struct {
 
 type SignerService struct {
 	bridgeContract      *BridgeContract
-	stellarWallet       *stellarWallet
+	stellarWallet       *StellarWallet
 	bridgeMasterAddress string
 }
 
-func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellarWallet) error {
+func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *StellarWallet) error {
 	log.Info("server started", "identity", host.ID().Pretty())
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
