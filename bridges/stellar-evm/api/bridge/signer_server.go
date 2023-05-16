@@ -12,7 +12,7 @@ import (
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/threefoldfoundation/tft/bridge/stellar/contracts/tokenv1"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/contracts/tokenv1"
 
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/support/errors"

@@ -1,4 +1,4 @@
-module github.com/threefoldfoundation/tft/bridge/stellar
+module github.com/threefoldfoundation/tft/bridges/stellar-evm
 
 go 1.20
 
@@ -176,4 +176,3 @@ require (
 	lukechampine.com/blake3 v1.1.7 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
-

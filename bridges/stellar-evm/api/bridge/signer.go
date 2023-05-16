@@ -18,7 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
-	"github.com/threefoldfoundation/tft/bridge/stellar/p2p"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/p2p"
 	"github.com/threefoldtech/libp2p-relay/client"
 )
 
