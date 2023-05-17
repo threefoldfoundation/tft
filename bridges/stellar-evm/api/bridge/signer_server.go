@@ -52,14 +52,13 @@ type SignerService struct {
 
 func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellar.Wallet, depositFee int64) error {
 	log.Info("server started", "identity", host.ID().Pretty())
-	//TODO: ipfs is deprecated, use p2p
-	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
+	partialMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", host.ID()))
 	if err != nil {
 		return err
 	}
 
 	for _, addr := range host.Addrs() {
-		full := addr.Encapsulate(ipfs)
+		full := addr.Encapsulate(partialMA)
 		log.Info("p2p node address", "address", full.String())
 	}
 

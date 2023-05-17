@@ -73,13 +73,13 @@ func main() {
 		panic(err)
 	}
 
-	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
+	partialMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", host.ID()))
 	if err != nil {
 		panic(err)
 	}
 
 	for _, addr := range host.Addrs() {
-		full := addr.Encapsulate(ipfs)
+		full := addr.Encapsulate(partialMA)
 		log.Info("p2p node address", "address", full.String())
 	}
 
