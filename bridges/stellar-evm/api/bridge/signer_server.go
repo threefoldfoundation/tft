@@ -13,6 +13,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/threefoldfoundation/tft/bridges/stellar-evm/contracts/tokenv1"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/eth"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/multisig"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/stellar"
 
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stellar/go/support/errors"
@@ -28,26 +31,11 @@ var (
 	ErrTransactionAlreadyExists = errors.New("transaction already exists")
 )
 
-type StellarSignRequest struct {
-	TxnXDR             string
-	RequiredSignatures int
-	Receiver           common.Address
-	Block              uint64
-	Message            string
-}
-
 type EthSignRequest struct {
 	Receiver           common.Address
 	Amount             int64
 	TxId               string
 	RequiredSignatures int64
-}
-
-type StellarSignResponse struct {
-	// Signature is a base64 of the signautre
-	Signature string
-	// The account address
-	Address string
 }
 
 type EthSignResponse struct {
@@ -57,12 +45,14 @@ type EthSignResponse struct {
 
 type SignerService struct {
 	bridgeContract      *BridgeContract
-	stellarWallet       *StellarWallet
+	stellarWallet       *stellar.Wallet
 	bridgeMasterAddress string
+	depositFee          int64 // deposit fee in TFT units TODO: maybe just pass part of the comfig
 }
 
-func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *StellarWallet) error {
+func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellar.Wallet, depositFee int64) error {
 	log.Info("server started", "identity", host.ID().Pretty())
+	//TODO: ipfs is deprecated, use p2p
 	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
 	if err != nil {
 		return err
@@ -79,6 +69,7 @@ func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract 
 		bridgeContract:      bridgeContract,
 		stellarWallet:       stellarWallet,
 		bridgeMasterAddress: bridgeMasterAddress,
+		depositFee:          depositFee,
 	}
 
 	return server.Register(&signerService)
@@ -88,20 +79,20 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, re
 	log.Info("sign mint request", "request txid", request.TxId)
 
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.stellarWallet.stellarTransactionStorage.GetTransactionWithId(request.TxId)
+	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithId(request.TxId)
 	if err != nil {
-		log.Debug("tx not found in storage", "txid", request.TxId)
+		log.Info("transaction not found", "txid", request.TxId)
 		return err
 	}
 
 	// Validate amount
-	depositedAmount, err := s.stellarWallet.getAmountFromTx(request.TxId, s.bridgeMasterAddress)
+	depositedAmount, err := s.stellarWallet.GetAmountFromTx(request.TxId, s.bridgeMasterAddress)
 	if err != nil {
 		return err
 	}
 	log.Debug("validating amount for sign tx", "amount", depositedAmount, "request amount", request.Amount)
 
-	depositFeeBigInt := big.NewInt(IntToStroops(s.stellarWallet.depositFee))
+	depositFeeBigInt := big.NewInt(stellar.IntToStroops(s.depositFee))
 
 	amount := &big.Int{}
 	amount = amount.Sub(big.NewInt(depositedAmount), depositFeeBigInt)
@@ -112,12 +103,12 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, re
 
 	log.Debug("tx memo", "memoType", tx.MemoType, "memo", tx.Memo)
 	// Validate address
-	addr, err := GetErc20AddressFromB64(tx.Memo)
+	addr, err := eth.GetErc20AddressFromB64(tx.Memo)
 	if err != nil {
 		return err
 	}
 
-	if addr != ERC20Address(request.Receiver.Bytes()) {
+	if addr != eth.ERC20Address(request.Receiver.Bytes()) {
 		return fmt.Errorf("deposit addresses do not match")
 	}
 
@@ -134,7 +125,7 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, re
 
 // Sign signs a stellar sign request
 // This is calable on the libp2p network with RPC
-func (s *SignerService) Sign(ctx context.Context, request StellarSignRequest, response *StellarSignResponse) error {
+func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRequest, response *multisig.StellarSignResponse) error {
 	loaded, err := txnbuild.TransactionFromXDR(request.TxnXDR)
 	if err != nil {
 		return err
@@ -165,7 +156,7 @@ func (s *SignerService) Sign(ctx context.Context, request StellarSignRequest, re
 		}
 	}
 
-	txn, err = txn.Sign(s.stellarWallet.GetNetworkPassPhrase(), s.stellarWallet.keypair)
+	txn, err = s.stellarWallet.Sign(txn)
 	if err != nil {
 		return err
 	}
@@ -175,12 +166,12 @@ func (s *SignerService) Sign(ctx context.Context, request StellarSignRequest, re
 		return fmt.Errorf("invalid number of signatures on the transaction")
 	}
 
-	response.Address = s.stellarWallet.keypair.Address()
+	response.Address = s.stellarWallet.GetAddress()
 	response.Signature = base64.StdEncoding.EncodeToString(signatures[0].Signature)
 	return nil
 }
 
-func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating withdrawal request...")
 
 	withdraw, err := s.bridgeContract.tftContract.filter.FilterWithdraw(&bind.FilterOpts{Start: request.Block}, []common.Address{request.Receiver})
@@ -215,7 +206,7 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 
 		acc := paymentOperation.Destination.ToAccountId()
 
-		if acc.Address() == s.stellarWallet.config.StellarFeeWallet {
+		if acc.Address() == s.stellarWallet.Config.StellarFeeWallet {
 			if int64(paymentOperation.Amount) != WithdrawFee {
 				return errors.New("the withdraw fee is incorrect")
 			}
@@ -230,7 +221,7 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
 
-		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
+		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
@@ -244,7 +235,7 @@ func (s *SignerService) validateWithdrawal(request StellarSignRequest, txn *txnb
 	return nil
 }
 
-func (s *SignerService) validateRefundTransaction(request StellarSignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating refund request...")
 
 	for _, op := range txn.Operations() {
@@ -265,23 +256,24 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 		destinationAccount := paymentOperation.Destination.ToAccountId()
 
 		// Skip the fee wallet transaction
-		if destinationAccount.Address() == s.stellarWallet.config.StellarFeeWallet {
+		if destinationAccount.Address() == s.stellarWallet.Config.StellarFeeWallet {
 			if paymentOperation.Amount != xdr.Int64(WithdrawFee) {
 				return fmt.Errorf("fee payment operation should be %d, but got %d", WithdrawFee, paymentOperation.Amount)
 			}
 			continue
 		}
 
-		txnEffectsFromMessage, err := s.stellarWallet.getTransactionEffects(request.Message)
+		//TODO: this does an horizon call, is this necessary?
+		txnEffectsFromMessage, err := s.stellarWallet.GetTransactionEffects(request.Message)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve transaction from message")
+			return fmt.Errorf("failed to retrieve transaction effects from message")
 		}
 
 		// Check if the source transaction actually was sent from the account that we are trying to credit
 		// This way we can infer that it is indeed a refund transaction
 		for _, effect := range txnEffectsFromMessage.Embedded.Records {
 			if effect.GetType() == "account_debited" {
-				if effect.GetAccount() == s.stellarWallet.config.StellarFeeWallet {
+				if effect.GetAccount() == s.stellarWallet.Config.StellarFeeWallet {
 					continue
 				}
 
@@ -292,7 +284,7 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 		}
 
 		// check if the actual transaction already happened or not
-		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
+		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
@@ -303,19 +295,19 @@ func (s *SignerService) validateRefundTransaction(request StellarSignRequest, tx
 		}
 
 		// check if the deposit for this fee transaction actually happened
-		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
+		exists, err = s.stellarWallet.TransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
 		// if the transaction not exists, return with error
 		if !exists {
-			return ErrTransactionNotFound
+			return stellar.ErrTransactionNotFound
 		}
 	}
 	return nil
 }
 
-func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
 	log.Info("Validating fee transfer request...")
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
@@ -333,12 +325,13 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
-		if acc.Address() != s.stellarWallet.config.StellarFeeWallet {
-			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.stellarWallet.config.StellarFeeWallet)
+		//TODO: should this be fetched through the wallet?
+		if acc.Address() != s.stellarWallet.Config.StellarFeeWallet {
+			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.stellarWallet.Config.StellarFeeWallet)
 		}
 
 		// get the transaction hash
-		exists, err := s.stellarWallet.stellarTransactionStorage.TransactionExists(txn)
+		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
 		}
@@ -349,22 +342,22 @@ func (s *SignerService) validateFeeTransfer(request StellarSignRequest, txn *txn
 		}
 
 		// check if the deposit for this fee transaction actually happened
-		exists, err = s.stellarWallet.stellarTransactionStorage.TransactionWithMemoExists(txn)
+		exists, err = s.stellarWallet.TransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 		}
 		// if the transaction not exists, return with error
 		if !exists {
-			return ErrTransactionNotFound
+			return stellar.ErrTransactionNotFound
 		}
 
 		switch int64(paymentOperation.Amount) {
-		case IntToStroops(s.stellarWallet.depositFee):
+		case stellar.IntToStroops(s.depositFee):
 			return nil
 		case WithdrawFee:
 			return nil
 		default:
-			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, IntToStroops(s.stellarWallet.depositFee), WithdrawFee)
+			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, stellar.IntToStroops(s.depositFee), WithdrawFee)
 		}
 
 	}

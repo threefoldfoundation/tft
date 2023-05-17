@@ -1,99 +1,102 @@
-package bridge
+package stellar
 
 import (
 	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/stellar/go/amount"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/eth"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/multisig"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/state"
+
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/faults"
+
 	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 )
 
-const (
-	TFTMainnet = "TFT:GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47"
-	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
-	// TFTTest = "TFTXXX:GCRO7FLIU4LKELZBLGWOTQ7T64OKSU4O4OWATLHV3BFSVQZMJWWKRE5A"
-
-	stellarPrecision       = 1e7
-	stellarPrecisionDigits = 7
-	stellarPageLimit       = 100
-)
-
-// StellarWallet is the bridge wallet
+// Wallet is the bridge wallet
 // Payments will be funded and fees will be taken with this wallet
-type StellarWallet struct {
-	keypair                   *keypair.Full
-	config                    *StellarConfig
-	stellarTransactionStorage *StellarTransactionStorage
-	depositFee                int64
+type Wallet struct {
+	keypair            *keypair.Full
+	Config             *StellarConfig //TODO: should this be public?
+	TransactionStorage *TransactionStorage
+	depositFee         int64
+	withdrawFee        int64
 	signerWallet
 }
-
+type signersClient interface {
+	Sign(ctx context.Context, signRequest multisig.StellarSignRequest) ([]multisig.StellarSignResponse, error)
+}
 type signerWallet struct {
-	client         *SignersClient
+	client         signersClient
 	signatureCount int
 }
 
-func NewStellarWallet(ctx context.Context, config *StellarConfig, depositFee int64, stellarTransactionStorage *StellarTransactionStorage) (*StellarWallet, error) {
+// TODO: the context is not used here
+func NewWallet(ctx context.Context, config *StellarConfig, depositFee int64, withdrawFee int64, stellarTransactionStorage *TransactionStorage) (*Wallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
 		return nil, err
 	}
 
-	w := &StellarWallet{
-		keypair:                   kp,
-		config:                    config,
-		stellarTransactionStorage: stellarTransactionStorage,
-		depositFee:                depositFee,
+	w := &Wallet{
+		keypair:            kp,
+		Config:             config,
+		TransactionStorage: stellarTransactionStorage,
+		depositFee:         depositFee,
+		withdrawFee:        withdrawFee,
 	}
 
 	return w, nil
 }
 
-func (w *StellarWallet) GetAddress() string {
+func (w *Wallet) GetAddress() string {
 	return w.keypair.Address()
 }
 
-func (w *StellarWallet) newSignerClient(ctx context.Context, host host.Host, router routing.PeerRouting, relay *peer.AddrInfo) error {
-	account, err := w.GetAccountDetails(w.GetAddress())
+func (w *Wallet) GetSigningRequirements() (cosigners []string, requiredSignatures int, err error) {
+	account, err := w.getAccountDetails()
 	if err != nil {
-		return err
+		return
 	}
-	var keys []string
+	cosigners = make([]string, 0, len(account.Signers))
 	for _, signer := range account.Signers {
-		if signer.Key == w.keypair.Address() {
+		if signer.Key == w.GetAddress() {
 			continue
 		}
-		keys = append(keys, signer.Key)
+		cosigners = append(cosigners, signer.Key)
 	}
+	requiredSignatures = int(account.Thresholds.MedThreshold)
 
-	log.Info("required Stellar signature count", "signatures", int(account.Thresholds.MedThreshold))
-	w.signatureCount = int(account.Thresholds.MedThreshold) - 1
+	return
+}
+func (w *Wallet) SetRequiredSignatures(requiredSignatures int) {
+	w.signatureCount = requiredSignatures - 1
+}
+func (w *Wallet) SetSignerClient(client signersClient) {
 
-	w.client, err = NewSignersClient(ctx, host, router, keys, relay)
-	if err != nil {
-		return err
-	}
-	return nil
+	w.client = client
 }
 
-func (w *StellarWallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
+// Sign returns a new Transaction instance which extends the current instance
+// with a signature from this wallet.
+func (w *Wallet) Sign(tx *txnbuild.Transaction) (*txnbuild.Transaction, error) {
+	return tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
+}
+
+func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
@@ -101,7 +104,7 @@ func (w *StellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 
 	txnBuild.Memo = txnbuild.MemoHash(txHash)
 
-	signReq := StellarSignRequest{
+	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
 		Receiver:           receiver,
 		Block:              blockheight,
@@ -111,7 +114,7 @@ func (w *StellarWallet) CreateAndSubmitPayment(ctx context.Context, target strin
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *StellarWallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
+func (w *Wallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
 		return err
@@ -127,7 +130,7 @@ func (w *StellarWallet) CreateAndSubmitRefund(ctx context.Context, target string
 
 	txnBuild.Memo = txnbuild.MemoReturn(memo)
 
-	signReq := StellarSignRequest{
+	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
 		Message:            message,
 	}
@@ -137,33 +140,29 @@ func (w *StellarWallet) CreateAndSubmitRefund(ctx context.Context, target string
 
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
 // only an amount and hash needs to be specified
-func (w *StellarWallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash common.Hash) error {
-	feeWalletAddress := w.keypair.Address()
-	if w.config.StellarFeeWallet != "" {
-		feeWalletAddress = w.config.StellarFeeWallet
-	}
+func (w *Wallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash [32]byte) error {
 
-	txnBuild, err := w.generatePaymentOperation(amount, feeWalletAddress, false)
+	txnBuild, err := w.generatePaymentOperation(amount, w.Config.StellarFeeWallet, false)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate payment operation")
 	}
 
 	txnBuild.Memo = txnbuild.MemoHash(txHash)
 
-	signReq := StellarSignRequest{
+	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
 	}
 
 	return w.submitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *StellarWallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
+func (w *Wallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
 	// if amount is zero, do nothing
 	if amount == 0 {
 		return txnbuild.TransactionParams{}, errors.New("invalid amount")
 	}
 
-	sourceAccount, err := w.GetAccountDetails(w.GetAddress())
+	sourceAccount, err := w.getAccountDetails()
 	if err != nil {
 		return txnbuild.TransactionParams{}, errors.Wrap(err, "failed to get source account")
 	}
@@ -173,7 +172,7 @@ func (w *StellarWallet) generatePaymentOperation(amount uint64, destination stri
 	var paymentOperations []txnbuild.Operation
 	paymentOP := txnbuild.Payment{
 		Destination: destination,
-		Amount:      big.NewRat(int64(amount), stellarPrecision).FloatString(stellarPrecisionDigits),
+		Amount:      big.NewRat(int64(amount), Precision).FloatString(PrecisionDigits),
 		Asset: txnbuild.CreditAsset{
 			Code:   asset[0],
 			Issuer: asset[1],
@@ -184,8 +183,8 @@ func (w *StellarWallet) generatePaymentOperation(amount uint64, destination stri
 
 	if includeWithdrawFee {
 		feePaymentOP := txnbuild.Payment{
-			Destination: w.config.StellarFeeWallet,
-			Amount:      big.NewRat(WithdrawFee, stellarPrecision).FloatString(stellarPrecisionDigits),
+			Destination: w.Config.StellarFeeWallet,
+			Amount:      big.NewRat(w.withdrawFee, Precision).FloatString(PrecisionDigits),
 			Asset: txnbuild.CreditAsset{
 				Code:   asset[0],
 				Issuer: asset[1],
@@ -199,7 +198,7 @@ func (w *StellarWallet) generatePaymentOperation(amount uint64, destination stri
 		Operations:           paymentOperations,
 		Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(300)},
 		SourceAccount:        &sourceAccount,
-		BaseFee:              stellarPrecision,
+		BaseFee:              Precision,
 		IncrementSequenceNum: true,
 	}
 
@@ -208,26 +207,21 @@ func (w *StellarWallet) generatePaymentOperation(amount uint64, destination stri
 
 // submitTransaction gathers signatures from cosigners if required and submits the transaction to the Stellar network
 // If there already is a transaction with the same memo hash, no new transaction is created and submitted.
-func (w *StellarWallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq StellarSignRequest) error {
+func (w *Wallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq multisig.StellarSignRequest) (err error) {
 	tx, err := txnbuild.NewTransaction(txn)
 	if err != nil {
 		return errors.Wrap(err, "failed to build transaction")
 	}
 
 	// check if the actual transaction to be submitted already happened on the stellar network
-	exists, err := w.stellarTransactionStorage.TransactionWithMemoExists(tx)
+	exists, err := w.TransactionStorage.TransactionWithMemoExists(tx)
 	if err != nil {
 		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
 	}
 	// if the transaction exists, return with nil error
 	if exists {
 		log.Info("Transaction with this hash already executed, skipping now..")
-		return nil
-	}
-
-	client, err := w.GetHorizonClient()
-	if err != nil {
-		return errors.Wrap(err, "failed to get horizon client")
+		return
 	}
 
 	// Only try to request signatures if there are signatures required
@@ -244,7 +238,7 @@ func (w *StellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 		}
 
 		if len(signatures) < w.signatureCount {
-			return fmt.Errorf("received %d signatures, needed %d", len(signatures), w.signatureCount)
+			return fmt.Errorf("received %d signatures, need %d", len(signatures), w.signatureCount)
 		}
 
 		for _, signature := range signatures {
@@ -258,13 +252,16 @@ func (w *StellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 
 	tx, err = tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
 	if err != nil {
-		if hError, ok := err.(*horizonclient.Error); ok {
-			log.Error("Error submitting tx", "extras", hError.Problem.Extras)
-		}
+		log.Error("Failed to sign transaction", "error", err)
 		return errors.Wrap(err, "failed to sign transaction with keypair")
 	}
 
 	// Submit the transaction
+
+	client, err := w.GetHorizonClient()
+	if err != nil {
+		return errors.Wrap(err, "failed to get horizon client")
+	}
 	txResult, err := client.SubmitTransaction(tx)
 	if err != nil {
 		if hError, ok := err.(*horizonclient.Error); ok {
@@ -275,17 +272,17 @@ func (w *StellarWallet) submitTransaction(ctx context.Context, txn txnbuild.Tran
 	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
 
 	// Store the transaction in the database
-	w.stellarTransactionStorage.StoreTransaction(txResult)
+	w.TransactionStorage.StoreTransaction(txResult)
 
-	return nil
+	return
 }
 
-func (w *StellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
-	if totalAmount <= uint64(WithdrawFee) {
+func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
+	if totalAmount <= uint64(w.withdrawFee) {
 		log.Warn("Deposited amount is smaller than the withdraw fee, not refunding", "tx", tx.Hash)
 		return
 	}
-	amount := totalAmount - uint64(WithdrawFee)
+	amount := totalAmount - uint64(w.withdrawFee)
 	log.Warn("Calling refund")
 
 	err := w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
@@ -302,19 +299,19 @@ func (w *StellarWallet) refundDeposit(ctx context.Context, totalAmount uint64, t
 }
 
 // mint handler
-type mint func(ERC20Address, *big.Int, string) error
+type mint func(eth.ERC20Address, *big.Int, string) error
 
 // MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
 // mint function when a deposit is made
-func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *ChainPersistency) error {
+func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, persistency *state.ChainPersistency) error {
 	transactionHandler := func(tx hProtocol.Transaction) {
 		if !tx.Successful {
 			return
 		}
 		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
-		totalAmount, err := w.getAmountFromTx(tx.Hash, w.keypair.Address())
+		totalAmount, err := w.GetAmountFromTx(tx.Hash, w.GetAddress())
 		if err != nil || totalAmount == 0 {
 			return
 		}
@@ -329,7 +326,7 @@ func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		depositedAmount := big.NewInt(totalAmount)
 		log.Info("memo", "m", tx.Memo)
 
-		ethAddress, err := GetErc20AddressFromB64(tx.Memo)
+		ethAddress, err := eth.GetErc20AddressFromB64(tx.Memo)
 		if err != nil {
 			log.Warn("error decoding transaction memo, refunding", "error", err.Error())
 			w.refundDeposit(ctx, uint64(totalAmount), tx)
@@ -339,7 +336,7 @@ func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 		err = mintFn(ethAddress, depositedAmount, tx.Hash)
 		for err != nil {
 			log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
-			if err == errInsufficientDepositAmount {
+			if err == faults.ErrInsufficientDepositAmount {
 				log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", totalAmount)
 				w.refundDeposit(ctx, uint64(totalAmount), tx)
 				return
@@ -353,26 +350,24 @@ func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 			}
 		}
 
-		if w.config.StellarFeeWallet != "" {
-			log.Info("Trying to transfer the fees generated to the fee wallet", "address", w.config.StellarFeeWallet)
+		log.Info("ransferring the fee to the fee wallet", "address", w.Config.StellarFeeWallet)
 
-			// convert tx hash string to bytes
-			parsedMessage, err := hex.DecodeString(tx.Hash)
-			if err != nil {
+		// convert tx hash string to bytes
+		parsedMessage, err := hex.DecodeString(tx.Hash)
+		if err != nil {
+			return
+		}
+		var memo [32]byte
+		copy(memo[:], parsedMessage)
+
+		err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
+		for err != nil {
+			log.Error("error sending fee to the fee wallet", "err", err.Error())
+			select {
+			case <-ctx.Done():
 				return
-			}
-			var memo [32]byte
-			copy(memo[:], parsedMessage)
-
-			err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
-			for err != nil {
-				log.Error("error sending fee to the fee wallet", "err", err.Error())
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(10 * time.Second):
-					err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
-				}
+			case <-time.After(10 * time.Second):
+				err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
 			}
 		}
 
@@ -380,7 +375,7 @@ func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 
 		// save cursor
 		cursor := tx.PagingToken()
-		err = persistency.saveStellarCursor(cursor)
+		err = persistency.SaveStellarCursor(cursor)
 		if err != nil {
 			log.Error("error while saving cursor:", err.Error())
 			return
@@ -403,8 +398,11 @@ func (w *StellarWallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn 
 	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
 }
 
-func (w *StellarWallet) getAmountFromTx(txHash string, forAccount string) (int64, error) {
-	effects, err := w.getTransactionEffects(txHash)
+// TODO: is this called from a place where we really only have the transaction hash
+// instead of the entire transaction
+// If the entire transaction is available, there is no need to call horizon
+func (w *Wallet) GetAmountFromTx(txHash string, forAccount string) (int64, error) {
+	effects, err := w.GetTransactionEffects(txHash)
 	if err != nil {
 		log.Error("error while fetching transaction effects:", err.Error())
 		return 0, err
@@ -434,21 +432,21 @@ func (w *StellarWallet) getAmountFromTx(txHash string, forAccount string) (int64
 	return totalAmount, nil
 }
 
-// GetAccountDetails gets account details based an a Stellar address
-func (w *StellarWallet) GetAccountDetails(address string) (account hProtocol.Account, err error) {
+// getAccountDetails gets theaccount details of the account being scanned
+func (w *Wallet) getAccountDetails() (account hProtocol.Account, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return hProtocol.Account{}, err
 	}
-	ar := horizonclient.AccountRequest{AccountID: address}
+	ar := horizonclient.AccountRequest{AccountID: w.GetAddress()}
 	account, err = client.AccountDetail(ar)
 	if err != nil {
-		return hProtocol.Account{}, errors.Wrapf(err, "failed to get account details for account: %s", address)
+		return hProtocol.Account{}, errors.Wrapf(err, "failed to get account details for account: %s", w.GetAddress())
 	}
 	return account, nil
 }
 
-func (w *StellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) (err error) {
+func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor string, handler func(op hProtocol.Transaction)) (err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return
@@ -479,67 +477,13 @@ func (w *StellarWallet) StreamBridgeStellarTransactions(ctx context.Context, cur
 
 }
 
-func fetchTransactions(ctx context.Context, client *horizonclient.Client, address string, cursor string, handler func(op hProtocol.Transaction)) error {
-	timeouts := 0
-	opRequest := horizonclient.TransactionRequest{
-		ForAccount:    address,
-		IncludeFailed: false,
-		Cursor:        cursor,
-		Limit:         stellarPageLimit,
-	}
-
-	for {
-		if ctx.Err() != nil {
-			return nil
-		}
-
-		response, err := client.Transactions(opRequest)
-		if err != nil {
-			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "pagelimit", opRequest.Limit, "error", err)
-			horizonError, ok := err.(*horizonclient.Error)
-			if ok && (horizonError.Response.StatusCode == http.StatusGatewayTimeout || horizonError.Response.StatusCode == http.StatusServiceUnavailable) {
-				timeouts++
-				if timeouts == 1 {
-					opRequest.Limit = 5
-				} else if timeouts > 1 {
-					opRequest.Limit = 1
-				}
-
-				log.Info("Request timed out, lowering pagelimit", "pagelimit", opRequest.Limit)
-			}
-
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(5 * time.Second):
-				continue
-			}
-
-		}
-		for _, tx := range response.Embedded.Records {
-			handler(tx)
-			opRequest.Cursor = tx.PagingToken()
-		}
-
-		if timeouts > 0 {
-			log.Info("Fetching transaction succeeded, resetting page limit and timeouts")
-			opRequest.Limit = stellarPageLimit
-			timeouts = 0
-		}
-
-		if len(response.Embedded.Records) == 0 {
-			return nil
-		}
-
-	}
-
+func (w *Wallet) ScanBridgeAccount() error {
+	return w.TransactionStorage.ScanBridgeAccount()
 }
 
-func (w *StellarWallet) ScanBridgeAccount() error {
-	return w.stellarTransactionStorage.ScanBridgeAccount()
-}
-
-func (w *StellarWallet) getTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
+// TODO: is this function really needed?
+// It does an horizon call while the place where this is called from might have the entire transaction present
+func (w *Wallet) GetTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return
@@ -553,51 +497,18 @@ func (w *StellarWallet) getTransactionEffects(txHash string) (effects horizoneff
 }
 
 // GetHorizonClient gets the horizon client based on the wallet's network
-func (w *StellarWallet) GetHorizonClient() (*horizonclient.Client, error) {
-	return GetHorizonClient(w.config.StellarNetwork)
+func (w *Wallet) GetHorizonClient() (*horizonclient.Client, error) {
+	return GetHorizonClient(w.Config.StellarNetwork)
 }
 
 // GetNetworkPassPhrase gets the Stellar network passphrase based on the wallet's network
-func (w *StellarWallet) GetNetworkPassPhrase() string {
-	return GetNetworkPassPhrase(w.config.StellarNetwork)
+func (w *Wallet) GetNetworkPassPhrase() string {
+	return GetNetworkPassPhrase(w.Config.StellarNetwork)
 }
 
-func (w *StellarWallet) GetAssetCodeAndIssuer() []string {
-	switch w.config.StellarNetwork {
-	case "testnet":
-		return strings.Split(TFTTest, ":")
-	case "production":
+func (w *Wallet) GetAssetCodeAndIssuer() []string {
+	if w.Config.StellarNetwork == "production" {
 		return strings.Split(TFTMainnet, ":")
-	default:
-		return strings.Split(TFTTest, ":")
 	}
-}
-
-// GetHorizonClient gets an horizon client for a specific network
-func GetHorizonClient(network string) (*horizonclient.Client, error) {
-	switch network {
-	case "testnet":
-		return horizonclient.DefaultTestNetClient, nil
-	case "production":
-		return horizonclient.DefaultPublicNetClient, nil
-	default:
-		return nil, errors.New("network is not supported")
-	}
-}
-
-// GetNetworkPassPhrase gets the Stellar network passphrase based on a network input
-func GetNetworkPassPhrase(ntwrk string) string {
-	switch ntwrk {
-	case "testnet":
-		return network.TestNetworkPassphrase
-	case "production":
-		return network.PublicNetworkPassphrase
-	default:
-		return network.TestNetworkPassphrase
-	}
-}
-
-// IntToStroops converts units to stroops (1 TFT = 1000000 stroops)
-func IntToStroops(x int64) int64 {
-	return x * stellarPrecision
+	return strings.Split(TFTTest, ":")
 }

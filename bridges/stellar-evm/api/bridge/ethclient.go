@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"math/big"
@@ -191,25 +190,6 @@ func IsNoPeerErr(err error) bool {
 		return false
 	}
 	return err.Error() == light.ErrNoPeers.Error()
-}
-
-func GetErc20AddressFromB64(input string) (ERC20Address, error) {
-	data, err := base64.StdEncoding.DecodeString(input)
-	if err != nil {
-		log.Warn("error decoding base64 input", "error", err.Error())
-		return ERC20Address{}, err
-	}
-
-	// if the user sent an invalid memo, return the funds
-	if len(data) != 20 {
-		log.Warn("length should be 20 bytes")
-		return ERC20Address{}, err
-	}
-
-	var ethAddress ERC20Address
-	copy(ethAddress[0:20], data)
-
-	return ethAddress, nil
 }
 
 // GetBalanceInfo returns bridge ethereum address and balance

@@ -18,7 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
-	"github.com/threefoldfoundation/tft/bridges/stellar-evm/p2p"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/multisig"
 	"github.com/threefoldtech/libp2p-relay/client"
 )
 
@@ -102,7 +102,7 @@ type SignersClient struct {
 }
 
 type response struct {
-	answer *StellarSignResponse
+	answer *multisig.StellarSignResponse
 	err    error
 }
 
@@ -111,29 +111,19 @@ type ethResponse struct {
 	err    error
 }
 
-// NewSignersClient creates a signer client with given stellar addresses
-// the addresses are going to be used to get libp2p ID where we connect
-// to and ask them to sign
-func NewSignersClient(ctx context.Context, host host.Host, router routing.PeerRouting, addresses []string, relay *peer.AddrInfo) (*SignersClient, error) {
-	var ids []peer.ID
-	for _, address := range addresses {
-		id, err := p2p.GetPeerIDFromStellarAddress(address)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get peer info")
-		}
-		ids = append(ids, id)
-	}
+// NewSignersClient creates a signer client to ask cosigners to sign
+func NewSignersClient(host host.Host, router routing.PeerRouting, cosigners []peer.ID, relay *peer.AddrInfo) *SignersClient {
 
 	return &SignersClient{
 		client: gorpc.NewClient(host, Protocol),
 		host:   host,
 		router: router,
-		peers:  ids,
+		peers:  cosigners,
 		relay:  relay,
-	}, nil
+	}
 }
 
-func (s *SignersClient) Sign(ctx context.Context, signRequest StellarSignRequest) ([]StellarSignResponse, error) {
+func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSignRequest) ([]multisig.StellarSignResponse, error) {
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -154,7 +144,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest StellarSignRequest
 
 	}
 
-	var results []StellarSignResponse
+	var results []multisig.StellarSignResponse
 
 	for len(responseChannels) > 0 {
 		if ctx.Err() != nil {
@@ -200,14 +190,14 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest StellarSignRequest
 	return results, nil
 }
 
-func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest StellarSignRequest) (*StellarSignResponse, error) {
+func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multisig.StellarSignRequest) (*multisig.StellarSignResponse, error) {
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
 	}
 
-	var response StellarSignResponse
+	var response multisig.StellarSignResponse
 	if err := s.client.CallContext(ctx, id, "SignerService", "Sign", &signRequest, &response); err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 
 	"github.com/stellar/go/strkey"
 )
@@ -27,5 +28,16 @@ func GetPeerIDFromStellarAddress(address string) (peerID peer.ID, err error) {
 	}
 
 	peerID, err = peer.IDFromPublicKey(libp2pPubKey)
+	return
+}
+func GetPeerIDsFromStellarAddresses(addresses []string) (ids []peer.ID, err error) {
+	ids = make([]peer.ID, 0, len(addresses))
+	for _, address := range addresses {
+		id, err := GetPeerIDFromStellarAddress(address)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get peer info")
+		}
+		ids = append(ids, id)
+	}
 	return
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	flag "github.com/spf13/pflag"
 	"github.com/threefoldfoundation/tft/bridges/stellar-evm/api/bridge"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/stellar"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -18,7 +19,7 @@ import (
 func main() {
 
 	var bridgeCfg bridge.BridgeConfig
-	var stellarCfg bridge.StellarConfig
+	var stellarCfg stellar.StellarConfig
 	var ethCfg bridge.EthConfig
 	var bridgeMasterAddress string
 
@@ -82,13 +83,13 @@ func main() {
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	txStorage := bridge.NewStellarTransactionStorage(stellarCfg.StellarNetwork, bridgeMasterAddress)
+	txStorage := stellar.NewTransactionStorage(stellarCfg.StellarNetwork, bridgeMasterAddress)
 	err = txStorage.ScanBridgeAccount()
 	if err != nil {
 		panic(err)
 	}
 
-	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg, bridgeCfg.DepositFee, txStorage)
+	stellarWallet, err := stellar.NewWallet(ctx, &stellarCfg, bridgeCfg.DepositFee, bridge.WithdrawFee, txStorage)
 	if err != nil {
 		panic(err)
 	}
@@ -111,7 +112,7 @@ func main() {
 
 	// Start the signer server
 	if bridgeCfg.Follower {
-		err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet)
+		err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet, bridgeCfg.DepositFee)
 		if err != nil {
 			panic(err)
 		}

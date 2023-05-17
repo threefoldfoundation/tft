@@ -20,10 +20,6 @@ import (
 	tfeth "github.com/threefoldfoundation/tft/bridges/stellar-evm/eth"
 )
 
-const ERC20AddressLength = 20
-
-type ERC20Address [ERC20AddressLength]byte
-
 const (
 	// retryDelay is the delay to retry calls when there are no peers
 	retryDelay = time.Second * 15
@@ -426,7 +422,7 @@ func (bridge *BridgeContract) transferFunds(recipient common.Address, amount *bi
 	return err
 }
 
-func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
+func (bridge *BridgeContract) Mint(receiver tfeth.ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
 	err := bridge.mint(receiver, amount, txID, signatures)
 	for IsNoPeerErr(err) {
 		log.Warn("no peers while trying to mint, retrying...")
@@ -436,7 +432,7 @@ func (bridge *BridgeContract) Mint(receiver ERC20Address, amount *big.Int, txID 
 	return err
 }
 
-func (bridge *BridgeContract) mint(receiver ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
+func (bridge *BridgeContract) mint(receiver tfeth.ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
 	log.Info("Calling mint function in contract")
 	if amount == nil {
 		return errors.New("invalid amount")
