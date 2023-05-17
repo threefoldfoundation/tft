@@ -103,11 +103,13 @@ type SignersClient struct {
 
 type response struct {
 	answer *multisig.StellarSignResponse
+	peer   peer.ID
 	err    error
 }
 
 type ethResponse struct {
 	answer *EthSignResponse
+	peer   peer.ID
 	err    error
 }
 
@@ -138,7 +140,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 
 			select {
 			case <-ctxWithTimeout.Done():
-			case ch <- response{answer: answer, err: err}:
+			case ch <- response{answer: answer, peer: peerID, err: err}:
 			}
 		}(addr, respCh)
 
@@ -157,8 +159,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 			case reply := <-responseChannel:
 				receivedFrom = i
 				if reply.err != nil {
-					log.Error("failed to get signature from", "err", reply.err.Error())
-
+					log.Error("failed to get signature", "peerID", reply.peer, "err", reply.err.Error())
 				} else {
 					if reply.answer != nil {
 						log.Info("got a valid reply from a signer")
@@ -194,7 +195,7 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multis
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
-		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
+		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id)
 	}
 
 	var response multisig.StellarSignResponse
@@ -220,7 +221,7 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 
 			select {
 			case <-ctxWithTimeout.Done():
-			case ch <- ethResponse{answer: answer, err: err}:
+			case ch <- ethResponse{answer: answer, peer: peerID, err: err}:
 			}
 		}(addr, respCh)
 
@@ -239,8 +240,7 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 			case reply := <-responseChannel:
 				receivedFrom = i
 				if reply.err != nil {
-					log.Error("failed to get signature from", "err", reply.err.Error())
-
+					log.Error("failed to get signature", "peerID", reply.peer, "err", reply.err.Error())
 				} else {
 					if reply.answer != nil {
 						log.Info("got a valid reply from a signer")
