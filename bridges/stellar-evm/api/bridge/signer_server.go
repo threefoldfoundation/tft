@@ -149,9 +149,15 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 	} else {
 		// If the signrequest is not a withdrawal request and a refund request
 		// then it's most likely a transfer to fee wallet transaction
+		log.Info("Validating fee transfer signing request")
 		err := s.validateFeeTransfer(request, txn)
 		if err != nil {
-			return err
+			if err == ErrTransactionAlreadyExists {
+				log.Info("A Fee transfer with this memo already exists")
+				return err
+			}
+			log.Error("An error occurred while validating a fee transfer request", "err", err)
+			return errors.New("Error")
 		}
 	}
 
@@ -307,7 +313,7 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 }
 
 func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
-	log.Info("Validating fee transfer request...")
+
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
 		if err != nil {
@@ -315,7 +321,7 @@ func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest,
 		}
 
 		if opXDR.Body.Type != xdr.OperationTypePayment {
-			continue
+			return fmt.Errorf("transaction contains non payment operations")
 		}
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
@@ -330,6 +336,8 @@ func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest,
 		}
 
 		// get the transaction hash
+		// TODO: this does not make sense, ok, we do not need to sign but if the transaction already exists,
+		//  it can never be submitted to the network anyway (sequence and such)
 		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
@@ -340,15 +348,16 @@ func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest,
 			return ErrTransactionAlreadyExists
 		}
 
-		// check if the deposit for this fee transaction actually happened
+		// Check if a fee transfer for this already happened
 		exists, err = s.stellarWallet.TransactionStorage.TransactionWithMemoExists(txn)
 		if err != nil {
-			return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+			return errors.Wrap(err, "failed to check transaction storage for transaction with memo")
 		}
-		// if the transaction not exists, return with error
-		if !exists {
-			return stellar.ErrTransactionNotFound
+		if exists {
+			return ErrTransactionAlreadyExists
 		}
+
+		// TODO: check if the deposit/withdraw for this fee transaction actually happened
 
 		switch int64(paymentOperation.Amount) {
 		case stellar.IntToStroops(s.depositFee):
