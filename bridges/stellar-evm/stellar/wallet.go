@@ -111,31 +111,32 @@ func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amou
 		Message:            message,
 	}
 
-	return w.submitTransaction(ctx, txnBuild, signReq)
+	return w.signAndSubmitTransaction(ctx, txnBuild, signReq)
 }
 
-func (w *Wallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, message string, includeWithdrawFee bool) error {
+// CreateAndSubmitRefund refunds a deposit for the transaction txToRefund ( hexadecimal representation of the transaction hash)
+func (w *Wallet) CreateAndSubmitRefund(ctx context.Context, target string, amount uint64, txToRefund string, includeWithdrawFee bool) (err error) {
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
-		return err
+		return
 	}
 
-	parsedMessage, err := hex.DecodeString(message)
+	txToRefundAsBytes, err := hex.DecodeString(txToRefund)
 	if err != nil {
-		return err
+		return
+	}
+	if len(txToRefundAsBytes) != 32 {
+		return errors.New("A stellar transaction hash should be 32 bytes")
 	}
 
-	var memo [32]byte
-	copy(memo[:], parsedMessage)
-
-	txnBuild.Memo = txnbuild.MemoReturn(memo)
+	txnBuild.Memo = txnbuild.MemoReturn([32]byte(txToRefundAsBytes))
 
 	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
-		Message:            message,
+		Message:            txToRefund,
 	}
 
-	return w.submitTransaction(ctx, txnBuild, signReq)
+	return w.signAndSubmitTransaction(ctx, txnBuild, signReq)
 }
 
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
@@ -153,7 +154,7 @@ func (w *Wallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, t
 		RequiredSignatures: w.signatureCount,
 	}
 
-	return w.submitTransaction(ctx, txnBuild, signReq)
+	return w.signAndSubmitTransaction(ctx, txnBuild, signReq)
 }
 
 func (w *Wallet) generatePaymentOperation(amount uint64, destination string, includeWithdrawFee bool) (txnbuild.TransactionParams, error) {
@@ -205,22 +206,27 @@ func (w *Wallet) generatePaymentOperation(amount uint64, destination string, inc
 	return txnBuild, nil
 }
 
-// submitTransaction gathers signatures from cosigners if required and submits the transaction to the Stellar network
+// signAndSubmitTransaction gathers signatures from cosigners if required and submits the transaction to the Stellar network
 // If there already is a transaction with the same memo hash, no new transaction is created and submitted.
-func (w *Wallet) submitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq multisig.StellarSignRequest) (err error) {
+func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.TransactionParams, signReq multisig.StellarSignRequest) (err error) {
 	tx, err := txnbuild.NewTransaction(txn)
 	if err != nil {
 		return errors.Wrap(err, "failed to build transaction")
 	}
 
 	// check if the actual transaction to be submitted already happened on the stellar network
-	exists, err := w.TransactionStorage.TransactionWithMemoExists(tx)
+	memo, err := ExtractMemoFromTx(tx)
 	if err != nil {
-		return errors.Wrap(err, "failed to check transaction storage for existing transaction hash")
+		log.Error("Failed to extract memo", "err", err)
+		return err
 	}
-	// if the transaction exists, return with nil error
+	exists, err := w.TransactionStorage.TransactionWithMemoExists(memo)
+	if err != nil {
+		return errors.Wrapf(err, "failed to check if transaction exists with memo %s", memo)
+	}
+
 	if exists {
-		log.Info("Transaction with this hash already executed, skipping now..")
+		log.Info("Transaction with this memo already executed, skipping now")
 		return
 	}
 

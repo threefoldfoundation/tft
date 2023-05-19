@@ -27,7 +27,7 @@ const (
 	// pushing eth transaction to the stellar network
 	EthBlockDelay = 3
 	// Withdrawing from smartchain to Stellar fee
-	WithdrawFee      = int64(1 * stellar.Precision)
+	WithdrawFee      = int64(1 * stellar.Precision) //WithdrawFeeof 1 TFT in Stroops
 	BridgeNetwork    = "stellar"
 	EthMessagePrefix = "\x19Ethereum Signed Message:\n32"
 )

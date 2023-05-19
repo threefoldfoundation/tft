@@ -2,13 +2,18 @@ package stellar
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/xdr"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -17,7 +22,7 @@ const (
 	TFTMainnet = "TFT:GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47"
 	TFTTest    = "TFT:GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
 
-	Precision       = 1e7
+	Precision       = int64(1e7)
 	PrecisionDigits = 7
 	PageLimit       = 100 // TODO: should this be public?
 )
@@ -49,6 +54,12 @@ func GetNetworkPassPhrase(ntwrk string) string {
 // IntToStroops converts units to stroops (1 TFT = 1000000 stroops)
 func IntToStroops(x int64) int64 {
 	return x * Precision
+}
+
+// IntToStroops converts units to stroops (1 TFT = 1000000 stroops)
+func DecimalToStroops(x decimal.Decimal) int64 {
+	stroops := x.Mul(decimal.NewFromInt(Precision))
+	return stroops.IntPart()
 }
 
 func fetchTransactions(ctx context.Context, client *horizonclient.Client, address string, cursor string, handler func(op hProtocol.Transaction)) error {
@@ -105,4 +116,30 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 
 	}
 
+}
+
+func ExtractMemoFromTx(txn *txnbuild.Transaction) (memoAsHex string, err error) {
+	memo := txn.Memo()
+
+	if memo == nil {
+		return
+	}
+
+	txMemo, err := txn.Memo().ToXDR()
+	if err != nil {
+		return
+	}
+
+	switch txMemo.Type {
+	case xdr.MemoTypeMemoHash:
+		hashMemo := txn.Memo().(txnbuild.MemoHash)
+		memoAsHex = hex.EncodeToString(hashMemo[:])
+	case xdr.MemoTypeMemoReturn:
+		hashMemo := txn.Memo().(txnbuild.MemoReturn)
+		memoAsHex = hex.EncodeToString(hashMemo[:])
+	default:
+		err = fmt.Errorf("transaction memo type not supported")
+	}
+
+	return
 }

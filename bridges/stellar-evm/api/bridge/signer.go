@@ -162,7 +162,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 					log.Error("failed to get signature", "peerID", reply.peer, "err", reply.err.Error())
 				} else {
 					if reply.answer != nil {
-						log.Info("got a valid reply from a signer")
+						log.Info("got a valid reply", "peerID", reply.peer)
 						results = append(results, *reply.answer)
 					}
 				}

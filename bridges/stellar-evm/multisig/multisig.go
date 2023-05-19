@@ -7,7 +7,7 @@ type StellarSignRequest struct {
 	RequiredSignatures int
 	Receiver           common.Address //TODO: How can this be an Ethereum common.Address ?
 	Block              uint64
-	Message            string
+	Message            string //Contains the deposit transaction hash in case of a refund
 }
 
 type StellarSignResponse struct {

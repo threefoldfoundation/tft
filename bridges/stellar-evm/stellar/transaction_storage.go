@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stellar/go/clients/horizonclient"
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/go/xdr"
 )
 
 type TransactionStorage struct {
@@ -58,12 +56,12 @@ func (s *TransactionStorage) GetTransactionWithId(txid string) (tx *hProtocol.Tr
 // TransactionExists checks if a transaction exists on the stellar network
 // it hashes the transaction and checks if the hash is in the list of known transactions
 // this can be used to check if a transaction was already submitted to the stellar network
-func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (bool, error) {
+func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
-	err := s.ScanBridgeAccount()
+	err = s.ScanBridgeAccount()
 	if err != nil {
-		return false, nil
+		return
 	}
 
 	// check if the actual transaction already happened or not
@@ -76,14 +74,9 @@ func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (bool,
 	return ok, nil
 }
 
-// TransactionWithMemoExists checks if a transaction with the given memo exists on the stellar network and also scans the bridge account for new transactions
-func (s *TransactionStorage) TransactionWithMemoExists(txn *txnbuild.Transaction) (exists bool, err error) {
-	memo, err := extractMemoFromTx(txn)
-	if err != nil || memo == "" {
-		return
-	}
-
-	log.Debug("checking if transaction with memo exists in the cache..", "memo", memo)
+// TransactionWithMemoExists checks if a transaction with the given memo exists
+func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool, err error) {
+	log.Debug("checking if transaction with memo exists in the cache", "memo", memo)
 	_, exists = s.sentTransactionMemos[memo]
 	return
 }
@@ -133,32 +126,6 @@ func (s *TransactionStorage) ScanBridgeAccount() error {
 	log.Debug("start fetching stellar transactions", "account", s.addressToScan, "cursor", s.stellarCursor)
 	//TODO: we should not use the background context here
 	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
-}
-
-func extractMemoFromTx(txn *txnbuild.Transaction) (txMemoString string, err error) {
-	memo := txn.Memo()
-
-	if memo == nil {
-		return "", nil
-	}
-
-	txMemo, err := txn.Memo().ToXDR()
-	if err != nil {
-		return "", err
-	}
-
-	switch txMemo.Type {
-	case xdr.MemoTypeMemoHash:
-		hashMemo := txn.Memo().(txnbuild.MemoHash)
-		txMemoString = hex.EncodeToString(hashMemo[:])
-	case xdr.MemoTypeMemoReturn:
-		hashMemo := txn.Memo().(txnbuild.MemoReturn)
-		txMemoString = hex.EncodeToString(hashMemo[:])
-	default:
-		return "", fmt.Errorf("transaction hash type not supported")
-	}
-
-	return
 }
 
 // GetHorizonClient gets the horizon client based on the transaction storage's network
