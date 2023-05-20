@@ -20,7 +20,7 @@ import (
 
 	"github.com/threefoldfoundation/tft/bridges/stellar-evm/faults"
 
-	horizoneffects "github.com/stellar/go/protocols/horizon/effects"
+	"github.com/stellar/go/protocols/horizon/effects"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 )
@@ -168,15 +168,15 @@ func (w *Wallet) generatePaymentOperation(amount uint64, destination string, inc
 		return txnbuild.TransactionParams{}, errors.Wrap(err, "failed to get source account")
 	}
 
-	asset := w.GetAssetCodeAndIssuer()
+	assetCode, issuer := w.GetAssetCodeAndIssuer()
 
 	var paymentOperations []txnbuild.Operation
 	paymentOP := txnbuild.Payment{
 		Destination: destination,
 		Amount:      big.NewRat(int64(amount), Precision).FloatString(PrecisionDigits),
 		Asset: txnbuild.CreditAsset{
-			Code:   asset[0],
-			Issuer: asset[1],
+			Code:   assetCode,
+			Issuer: issuer,
 		},
 		SourceAccount: sourceAccount.AccountID,
 	}
@@ -187,8 +187,8 @@ func (w *Wallet) generatePaymentOperation(amount uint64, destination string, inc
 			Destination: w.Config.StellarFeeWallet,
 			Amount:      big.NewRat(w.withdrawFee, Precision).FloatString(PrecisionDigits),
 			Asset: txnbuild.CreditAsset{
-				Code:   asset[0],
-				Issuer: asset[1],
+				Code:   assetCode,
+				Issuer: issuer,
 			},
 			SourceAccount: sourceAccount.AccountID,
 		}
@@ -226,7 +226,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 
 	if exists {
-		log.Info("Transaction with this memo already executed, skipping now")
+		log.Info("Transaction with this memo already executed, skipping")
 		return
 	}
 
@@ -283,17 +283,18 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 	return
 }
 
-func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, tx hProtocol.Transaction) {
+// sender is the account that made the deposit
+func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, sender string, tx hProtocol.Transaction) {
 	if totalAmount <= uint64(w.withdrawFee) {
-		log.Warn("Deposited amount is smaller than the withdraw fee, not refunding", "tx", tx.Hash)
+		log.Warn("Deposited amount is less than the withdraw fee, not refunding", "tx", tx.Hash)
 		return
 	}
 	amount := totalAmount - uint64(w.withdrawFee)
-	log.Warn("Calling refund")
+	log.Info("Calling refund")
 
-	err := w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
+	err := w.CreateAndSubmitRefund(ctx, sender, amount, tx.Hash, true)
 	for err != nil {
-		log.Error("error while trying to refund user", "err", err.Error(), "amount", totalAmount)
+		log.Error("error while refunding", "err", err.Error(), "amount", StroopsToDecimal(int64(totalAmount)))
 		select {
 		case <-ctx.Done():
 			return
@@ -317,14 +318,15 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 		}
 		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
 
-		totalAmount, err := w.GetAmountFromTx(tx.Hash, w.GetAddress())
+		//TODO: this does an horizon call while we have the transaction here
+		totalAmount, sender, err := w.GetDepositAmountAndSender(tx.Hash, w.GetAddress())
 		if err != nil || totalAmount == 0 {
 			return
 		}
 
 		if totalAmount <= IntToStroops(w.depositFee) {
 			log.Warn("Deposited amount is less than the depositfee, refunding")
-			w.refundDeposit(ctx, uint64(totalAmount), tx)
+			w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 			return
 		}
 
@@ -334,17 +336,18 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 
 		ethAddress, err := eth.GetErc20AddressFromB64(tx.Memo)
 		if err != nil {
-			log.Warn("error decoding transaction memo, refunding", "error", err.Error())
-			w.refundDeposit(ctx, uint64(totalAmount), tx)
+			log.Warn("error converting transaction memo to an Ethereum address, refunding", "error", err.Error())
+			w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 			return
 		}
 
 		err = mintFn(ethAddress, depositedAmount, tx.Hash)
 		for err != nil {
 			log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
+			//TODO: we already checked this above
 			if err == faults.ErrInsufficientDepositAmount {
-				log.Warn("User is trying to swap less than the fee amount, refunding now", "amount", totalAmount)
-				w.refundDeposit(ctx, uint64(totalAmount), tx)
+				log.Warn("User is trying to swap less than the fee amount, refunding", "amount", totalAmount)
+				w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 				return
 			}
 
@@ -407,23 +410,34 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 // TODO: is this called from a place where we really only have the transaction hash
 // instead of the entire transaction
 // If the entire transaction is available, there is no need to call horizon
-func (w *Wallet) GetAmountFromTx(txHash string, forAccount string) (int64, error) {
-	effects, err := w.GetTransactionEffects(txHash)
+func (w *Wallet) GetDepositAmountAndSender(txHash string, bridgeAccount string) (depositedAmount int64, sender string, err error) {
+	transactionEffects, err := w.GetTransactionEffects(txHash)
 	if err != nil {
 		log.Error("error while fetching transaction effects:", err.Error())
-		return 0, err
+		return
 	}
+	assetCode, issuer := w.GetAssetCodeAndIssuer()
 
-	asset := w.GetAssetCodeAndIssuer()
+	for _, effect := range transactionEffects.Embedded.Records {
 
-	var totalAmount int64
-	for _, effect := range effects.Embedded.Records {
-		if effect.GetAccount() != forAccount {
-			continue
+		if effect.GetType() == effects.EffectTypeNames[effects.EffectAccountDebited] {
+			// Only TFT payments matter, Assume normal payments
+
+			debitedEffect := effect.(effects.AccountDebited)
+			if debitedEffect.Asset.Code != assetCode && debitedEffect.Asset.Issuer != issuer {
+				continue
+			}
+			//Normally a payment to the feebump service and the deposit payment are done by the same account
+			sender = effect.GetAccount()
 		}
-		if effect.GetType() == "account_credited" {
-			creditedEffect := effect.(horizoneffects.AccountCredited)
-			if creditedEffect.Asset.Code != asset[0] && creditedEffect.Asset.Issuer != asset[1] {
+		if effect.GetType() == effects.EffectTypeNames[effects.EffectAccountCredited] {
+
+			if effect.GetAccount() != bridgeAccount {
+				// only payments to the bridgeaccount matter
+				continue
+			}
+			creditedEffect := effect.(effects.AccountCredited)
+			if creditedEffect.Asset.Code != assetCode && creditedEffect.Asset.Issuer != issuer {
 				continue
 			}
 			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
@@ -431,11 +445,11 @@ func (w *Wallet) GetAmountFromTx(txHash string, forAccount string) (int64, error
 				continue
 			}
 
-			totalAmount += parsedAmount
+			depositedAmount += parsedAmount
 		}
 	}
 
-	return totalAmount, nil
+	return
 }
 
 // getAccountDetails gets theaccount details of the account being scanned
@@ -489,7 +503,7 @@ func (w *Wallet) ScanBridgeAccount() error {
 
 // TODO: is this function really needed?
 // It does an horizon call while the place where this is called from might have the entire transaction present
-func (w *Wallet) GetTransactionEffects(txHash string) (effects horizoneffects.EffectsPage, err error) {
+func (w *Wallet) GetTransactionEffects(txHash string) (transactionEffects effects.EffectsPage, err error) {
 	client, err := w.GetHorizonClient()
 	if err != nil {
 		return
@@ -498,7 +512,7 @@ func (w *Wallet) GetTransactionEffects(txHash string) (effects horizoneffects.Ef
 	effectsReq := horizonclient.EffectRequest{
 		ForTransaction: txHash,
 	}
-	effects, err = client.Effects(effectsReq)
+	transactionEffects, err = client.Effects(effectsReq)
 	return
 }
 
@@ -512,9 +526,12 @@ func (w *Wallet) GetNetworkPassPhrase() string {
 	return GetNetworkPassPhrase(w.Config.StellarNetwork)
 }
 
-func (w *Wallet) GetAssetCodeAndIssuer() []string {
+func (w *Wallet) GetAssetCodeAndIssuer() (assetCode, issuer string) {
+	var assetCodeAndIssuerAsSlice []string
 	if w.Config.StellarNetwork == "production" {
-		return strings.Split(TFTMainnet, ":")
+		assetCodeAndIssuerAsSlice = strings.Split(TFTMainnet, ":")
+	} else {
+		assetCodeAndIssuerAsSlice = strings.Split(TFTTest, ":")
 	}
-	return strings.Split(TFTTest, ":")
+	return assetCodeAndIssuerAsSlice[0], assetCodeAndIssuerAsSlice[1]
 }

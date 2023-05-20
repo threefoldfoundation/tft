@@ -62,6 +62,12 @@ func DecimalToStroops(x decimal.Decimal) int64 {
 	return stroops.IntPart()
 }
 
+// IntToStroops converts stroops to units to (1 TFT = 1000000 stroops)
+func StroopsToDecimal(stroops int64) decimal.Decimal {
+	decimalStroops := decimal.NewFromInt(stroops)
+	return decimalStroops.Div(decimal.NewFromInt(Precision))
+}
+
 func fetchTransactions(ctx context.Context, client *horizonclient.Client, address string, cursor string, handler func(op hProtocol.Transaction)) error {
 	timeouts := 0
 	opRequest := horizonclient.TransactionRequest{

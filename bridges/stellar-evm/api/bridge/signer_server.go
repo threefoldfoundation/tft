@@ -89,7 +89,7 @@ func (s *SignerService) SignMint(ctx context.Context, request EthSignRequest, re
 	}
 
 	// Validate amount
-	depositedAmount, err := s.stellarWallet.GetAmountFromTx(request.TxId, s.bridgeMasterAddress)
+	depositedAmount, _, err := s.stellarWallet.GetDepositAmountAndSender(request.TxId, s.bridgeMasterAddress)
 	if err != nil {
 		return err
 	}
