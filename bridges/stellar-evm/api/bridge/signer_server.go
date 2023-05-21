@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -143,8 +144,12 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 		log.Info("Validating withdrawal signing request")
 		err := s.validateWithdrawal(request, txn)
 		if err != nil {
+			if errors.Is(err, ErrInvalidTransaction) {
+				log.Warn("Withdrawal validation error", "err", err)
+				return err
+			}
 			log.Error("An error occurred while validating a withdrawal signing request", "err", err)
-			return err
+			return errors.New("Error") //Internal errors should not be exposed externally
 		}
 	} else if request.Message != "" {
 		// If the signrequest has a message attached we know it's a refund transaction
@@ -199,9 +204,27 @@ func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, 
 	if !withdraw.Next() {
 		return fmt.Errorf("no withdraw event found")
 	}
+	ethereumTransactionHash, _ := strings.CutPrefix(withdraw.Event.Raw.TxHash.Hex(), "0x")
 
 	amount := withdraw.Event.Tokens.Int64()
-	log.Info("validating withdrawal", "amount", stellar.StroopsToDecimal(amount), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
+	log.Info("validating withdrawal", "amount", stellar.StroopsToDecimal(amount), "receiver", withdraw.Event.BlockchainAddress, "tx", ethereumTransactionHash)
+	memo, err := stellar.ExtractMemoFromTx(txn)
+	if err != nil {
+		log.Warn("Unable to extract the memo from the supplied transaction", "err", err)
+		return errors.Wrap(ErrInvalidTransaction, "Unable to extract the memo from the supplied transaction")
+	}
+	if memo != ethereumTransactionHash {
+		log.Warn("The supplied memo and the ethereum transaction do not match", "memo", memo, "tx", ethereumTransactionHash)
+		return errors.Wrap(ErrInvalidTransaction, "The supplied memo and the ethereum transaction do not match")
+	}
+	withdrawalAlreadyExecuted, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
+	if err != nil {
+		return err
+	}
+	if withdrawalAlreadyExecuted {
+		return errors.Wrap(ErrInvalidTransaction, "Withdrawal already executed")
+	}
+
 	amount -= WithdrawFee
 	if len(txn.Operations()) != 2 {
 		return errors.Wrap(ErrInvalidTransaction, "a withdraw tx needs to contain 2 payment operations")
@@ -238,16 +261,6 @@ func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, 
 
 		if int64(paymentOperation.Amount) != amount {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
-		}
-		//TODO: This does not make sense
-		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
-		if err != nil {
-			return errors.Wrap(err, "failed to check if transaction exists")
-		}
-
-		if exists {
-			log.Info("Transaction with this hash already executed, skipping validating withdraw now..")
-			return ErrTransactionAlreadyExists
 		}
 	}
 	if !feePaymentPresent {
