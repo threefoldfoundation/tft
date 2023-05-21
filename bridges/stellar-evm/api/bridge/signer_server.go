@@ -292,8 +292,7 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 	var destinationAccount string
 	var refundAmountWithoutPenalty int64
 	var penaltyPayment bool
-	// In case the deposited amount==1, there is only a payment to the feewallet
-	// If it is bigger, there are 2 payment operations, 1 to the feewallet and 1 to the account that made the deposit
+	// There are 2 payment operations, 1 to the feewallet and 1 to the account that made the deposit
 	if len(txn.Operations()) > 2 {
 		return errors.Wrap(ErrInvalidTransaction, "The refund transaction has too many operations")
 	}
@@ -366,65 +365,50 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 
 func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
 
-	for _, op := range txn.Operations() {
-		opXDR, err := op.BuildXDR()
-		if err != nil {
-			return fmt.Errorf("failed to build operation xdr")
-		}
-
-		if opXDR.Body.Type != xdr.OperationTypePayment {
-			return fmt.Errorf("transaction contains non payment operations")
-		}
-
-		paymentOperation, ok := opXDR.Body.GetPaymentOp()
-		if !ok {
-			return fmt.Errorf("transaction contains non payment operations")
-		}
-
-		acc := paymentOperation.Destination.ToAccountId()
-		//TODO: should this be fetched through the wallet?
-		if acc.Address() != s.stellarWallet.Config.StellarFeeWallet {
-			return fmt.Errorf("destination is not correct, got %s, need fee wallet %s", acc.Address(), s.stellarWallet.Config.StellarFeeWallet)
-		}
-
-		// get the transaction hash
-		// TODO: this does not make sense, ok, we do not need to sign but if the transaction already exists,
-		//  it can never be submitted to the network anyway (sequence and such)
-		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
-		if err != nil {
-			return errors.Wrap(err, "failed to check if transaction exists")
-		}
-
-		if exists {
-			log.Info("Transaction with this hash already executed, skipping validating fee transfer now..")
-			return ErrTransactionAlreadyExists
-		}
-
-		// Check if a fee transfer for this already happened
-		memo, err := stellar.ExtractMemoFromTx(txn)
-		if err != nil {
-			log.Warn("Failed to extract memo", "err", err)
-			return ErrInvalidTransaction
-		}
-		alreadyExists, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
-		if err != nil {
-			return err
-		}
-		if alreadyExists {
-			return ErrTransactionAlreadyExists
-		}
-
-		// TODO: check if the deposit/withdraw for this fee transaction actually happened
-
-		switch int64(paymentOperation.Amount) {
-		case stellar.IntToStroops(s.depositFee):
-			return nil
-		case WithdrawFee:
-			return nil
-		default:
-			return fmt.Errorf("amount is not correct, received %d, need %d or %d", paymentOperation.Amount, stellar.IntToStroops(s.depositFee), WithdrawFee)
-		}
-
+	// Check if a fee transfer for this already happened
+	memo, err := stellar.ExtractMemoFromTx(txn)
+	if err != nil {
+		log.Warn("Failed to extract memo", "err", err)
+		return ErrInvalidTransaction
 	}
+	alreadyExists, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
+	if err != nil {
+		return err
+	}
+	if alreadyExists {
+		return ErrTransactionAlreadyExists
+	}
+
+	//A Fee transfer only has 1 operation
+	if len(txn.Operations()) != 1 {
+		return errors.Wrap(ErrInvalidTransaction, "The transaction should have exactly 1 operation")
+	}
+
+	op := txn.Operations()[0]
+	opXDR, err := op.BuildXDR()
+	if err != nil {
+		return errors.Wrap(ErrInvalidTransaction, "failed to build operation xdr")
+	}
+
+	if opXDR.Body.Type != xdr.OperationTypePayment {
+		return errors.Wrap(ErrInvalidTransaction, "transaction contains non payment operations")
+	}
+
+	paymentOperation, ok := opXDR.Body.GetPaymentOp()
+	if !ok {
+		return errors.Wrap(ErrInvalidTransaction, "transaction contains non payment operations")
+	}
+
+	acc := paymentOperation.Destination.ToAccountId()
+	//TODO: should this be fetched through the wallet?
+	if acc.Address() != s.stellarWallet.Config.StellarFeeWallet {
+		return errors.Wrapf(ErrInvalidTransaction, "destination is not correct, got %s, need fee wallet %s", acc.Address(), s.stellarWallet.Config.StellarFeeWallet)
+	}
+
+	if int64(paymentOperation.Amount) != stellar.IntToStroops(s.depositFee) {
+		return errors.Wrapf(ErrInvalidTransaction, "amount is not correct, received %d, need %d", stellar.StroopsToDecimal(int64(paymentOperation.Amount)), s.depositFee)
+	}
+
+	// TODO: check if the deposit for this fee transaction actually happened and is valid
 	return nil
 }
