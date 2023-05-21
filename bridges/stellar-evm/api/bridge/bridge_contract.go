@@ -449,6 +449,7 @@ func (bridge *BridgeContract) mint(receiver tfeth.ERC20Address, amount *big.Int,
 	}
 	// newGas := big.NewInt(10 * gas.Int64())
 
+	//TODO: better have a context ourselves instead of using the Background context as parent
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*6)
 	defer cancel()
 	opts := &bind.TransactOpts{

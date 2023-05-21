@@ -89,7 +89,7 @@ func main() {
 		panic(err)
 	}
 
-	stellarWallet, err := stellar.NewWallet(ctx, &stellarCfg, bridgeCfg.DepositFee, bridge.WithdrawFee, txStorage)
+	stellarWallet, err := stellar.NewWallet(&stellarCfg, bridgeCfg.DepositFee, bridge.WithdrawFee, txStorage)
 	if err != nil {
 		panic(err)
 	}

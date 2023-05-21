@@ -43,8 +43,7 @@ type signerWallet struct {
 	signatureCount int
 }
 
-// TODO: the context is not used here
-func NewWallet(ctx context.Context, config *StellarConfig, depositFee int64, withdrawFee int64, stellarTransactionStorage *TransactionStorage) (*Wallet, error) {
+func NewWallet(config *StellarConfig, depositFee int64, withdrawFee int64, stellarTransactionStorage *TransactionStorage) (*Wallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
 
 	if err != nil {
@@ -330,7 +329,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			return
 		}
 
-		log.Info("deposited amount", "a", totalAmount)
+		log.Info("deposited amount", "a", StroopsToDecimal(totalAmount))
 		depositedAmount := big.NewInt(totalAmount)
 		log.Info("memo", "m", tx.Memo)
 
@@ -359,16 +358,18 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			}
 		}
 
-		log.Info("ransferring the fee to the fee wallet", "address", w.Config.StellarFeeWallet)
+		log.Info("Transferring the fee to the fee wallet", "address", w.Config.StellarFeeWallet)
 
 		// convert tx hash string to bytes
 		parsedMessage, err := hex.DecodeString(tx.Hash)
 		if err != nil {
+			log.Error("Error hex decoding transaction hash", "err", err)
 			return
 		}
 		var memo [32]byte
 		copy(memo[:], parsedMessage)
 
+		//TODO: a context is there for a reason
 		err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
 		for err != nil {
 			log.Error("error sending fee to the fee wallet", "err", err.Error())
