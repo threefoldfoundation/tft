@@ -200,16 +200,17 @@ func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, 
 		return fmt.Errorf("no withdraw event found")
 	}
 
-	amount := withdraw.Event.Tokens.Uint64()
-	log.Info("validating withdrawal", "amount", amount, "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
-	amount -= uint64(WithdrawFee)
+	amount := withdraw.Event.Tokens.Int64()
+	log.Info("validating withdrawal", "amount", stellar.StroopsToDecimal(amount), "receiver", withdraw.Event.BlockchainAddress, "network", withdraw.Event.Network)
+	amount -= WithdrawFee
 	if len(txn.Operations()) != 2 {
-		return fmt.Errorf("a withdraw tx needs to contain 2 payment operations")
+		return errors.Wrap(ErrInvalidTransaction, "a withdraw tx needs to contain 2 payment operations")
 	}
+	feePaymentPresent := false
 	for _, op := range txn.Operations() {
 		opXDR, err := op.BuildXDR()
 		if err != nil {
-			return fmt.Errorf("failed to build operation xdr")
+			return errors.Wrap(ErrInvalidTransaction, "failed to build operation xdr")
 		}
 
 		if opXDR.Body.Type != xdr.OperationTypePayment {
@@ -218,26 +219,27 @@ func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, 
 
 		paymentOperation, ok := opXDR.Body.GetPaymentOp()
 		if !ok {
-			return fmt.Errorf("transaction contains non payment operations")
+			return errors.Wrap(ErrInvalidTransaction, "transaction contains non payment operations")
 		}
 
 		acc := paymentOperation.Destination.ToAccountId()
 
 		if acc.Address() == s.stellarWallet.Config.StellarFeeWallet {
 			if int64(paymentOperation.Amount) != WithdrawFee {
-				return errors.New("the withdraw fee is incorrect")
+				return errors.Wrap(ErrInvalidTransaction, "the withdraw fee is incorrect")
 			}
+			feePaymentPresent = true
 			continue
 		}
 
 		if acc.Address() != withdraw.Event.BlockchainAddress {
-			return fmt.Errorf("destination is not correct, got %s, need %s", acc.Address(), withdraw.Event.BlockchainAddress)
+			return errors.Wrapf(ErrInvalidTransaction, "destination is not correct, got %s, need %s", acc.Address(), withdraw.Event.BlockchainAddress)
 		}
 
-		if int64(paymentOperation.Amount) != int64(amount) {
+		if int64(paymentOperation.Amount) != amount {
 			return fmt.Errorf("amount is not correct, received %d, need %d", paymentOperation.Amount, xdr.Int64(withdraw.Event.Tokens.Int64()))
 		}
-
+		//TODO: This does not make sense
 		exists, err := s.stellarWallet.TransactionStorage.TransactionExists(txn)
 		if err != nil {
 			return errors.Wrap(err, "failed to check if transaction exists")
@@ -247,6 +249,9 @@ func (s *SignerService) validateWithdrawal(request multisig.StellarSignRequest, 
 			log.Info("Transaction with this hash already executed, skipping validating withdraw now..")
 			return ErrTransactionAlreadyExists
 		}
+	}
+	if !feePaymentPresent {
+		return errors.Wrap(ErrInvalidTransaction, "No withdraw fee payment")
 	}
 
 	return nil
