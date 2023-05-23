@@ -23,6 +23,8 @@ import (
 const (
 	// retryDelay is the delay to retry calls when there are no peers
 	retryDelay = time.Second * 15
+	// backOffMin is the minimum backoff time when retrying opening subscriptions
+	backOffMax = time.Second * 5
 	gasLimit   = 210000
 )
 
@@ -180,7 +182,7 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 	// channel to receive head updates from client on
 	heads := make(chan *types.Header, 16)
 
-	sub := event.Resubscribe(2*time.Second, func(ctx context.Context) (event.Subscription, error) {
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.ethc.SubscribeNewHead(context.Background(), heads)
 		if err != nil {
 			log.Error("Failed to subscribe to head events", "err", err)
@@ -204,7 +206,7 @@ func (bridge *BridgeContract) SubscribeTransfers() error {
 	sink := make(chan *tokenv1.TokenTransfer)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 
-	sub := event.Resubscribe(2*time.Second, func(ctx context.Context) (event.Subscription, error) {
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.tftContract.filter.WatchTransfer(opts, sink, nil, nil)
 		if err != nil {
 			log.Error("Failed to subscribe to transfer events", "err", err)
@@ -230,7 +232,7 @@ func (bridge *BridgeContract) SubscribeMint() error {
 	sink := make(chan *tokenv1.TokenMint)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 
-	sub := event.Resubscribe(2*time.Second, func(ctx context.Context) (event.Subscription, error) {
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.tftContract.filter.WatchMint(opts, sink, nil, nil)
 		if err != nil {
 			log.Error("Failed to subscribe to transfer events", "err", err)
@@ -304,7 +306,7 @@ func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHe
 	sink := make(chan *tokenv1.TokenWithdraw)
 	watchOpts := &bind.WatchOpts{Context: context.Background(), Start: nil}
 
-	sub := event.Resubscribe(2*time.Second, func(ctx context.Context) (event.Subscription, error) {
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
 		if err != nil {
 			log.Error("Subscribing to withdraw events failed", "err", err)
