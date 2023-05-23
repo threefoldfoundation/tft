@@ -11,9 +11,11 @@ yarn
 yarn start
 ```
 
+If you're having node > v16, `export NODE_OPTIONS=--openssl-legacy-provider` first as webpack 4 uses node's md4 hashes.
+
 ## Open Dapp
 
-Browse to [http://localhost:3000](http://localhost:3000) and connect your wallet, if you have TFT on binance chain, you should see them on the screen.
+Browse to [http://localhost:3000](http://localhost:3000) and connect your wallet, if you have TFT on the Ethereum chain, you should see them on the screen.
 
 ## Deployed instances
 

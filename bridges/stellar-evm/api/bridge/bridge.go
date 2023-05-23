@@ -14,17 +14,20 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
-	"github.com/threefoldfoundation/tft/bridge/stellar/contracts/tokenv1"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/contracts/tokenv1"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/eth"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/faults"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/p2p"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/state"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/stellar"
 )
-
-var errInsufficientDepositAmount = errors.New("deposited amount is <= Fee")
 
 const (
 	// EthBlockDelay is the amount of blocks to wait before
 	// pushing eth transaction to the stellar network
 	EthBlockDelay = 3
 	// Withdrawing from smartchain to Stellar fee
-	WithdrawFee      = int64(1 * stellarPrecision)
+	WithdrawFee      = int64(1 * stellar.Precision) //WithdrawFeeof 1 TFT in Stroops
 	BridgeNetwork    = "stellar"
 	EthMessagePrefix = "\x19Ethereum Signed Message:\n32"
 )
@@ -33,11 +36,12 @@ const (
 // stellar transactions, and handles them
 type Bridge struct {
 	bridgeContract   *BridgeContract
-	wallet           *stellarWallet
-	blockPersistency *ChainPersistency
+	wallet           *stellar.Wallet
+	blockPersistency *state.ChainPersistency
 	mut              sync.Mutex
 	config           *BridgeConfig
 	synced           bool
+	signersClient    *SignersClient
 }
 
 type BridgeConfig struct {
@@ -52,20 +56,34 @@ type BridgeConfig struct {
 }
 
 // NewBridge creates a new Bridge.
-func NewBridge(ctx context.Context, wallet *stellarWallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
-	blockPersistency := newChainPersistency(config.PersistencyFile)
+func NewBridge(ctx context.Context, wallet *stellar.Wallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
+	blockPersistency := state.NewChainPersistency(config.PersistencyFile)
 
-	// Only create the singer client if the bridge is running in master mode
+	bridge = &Bridge{
+		bridgeContract:   contract,
+		blockPersistency: blockPersistency,
+		wallet:           wallet,
+		config:           config,
+	}
+	// Only create the signer client if the bridge is running in master mode
 	if !config.Follower {
 		relayAddrInfo, addrErr := peer.AddrInfoFromString(config.Relay)
 		if err != nil {
 			return nil, addrErr
 		}
-
-		err = wallet.newSignerClient(ctx, host, router, relayAddrInfo)
+		cosigners, requiredSignatures, err := wallet.GetSigningRequirements()
 		if err != nil {
-			return
+			return nil, err
 		}
+		log.Info("required Stellar signature count", "signatures", requiredSignatures)
+		wallet.SetRequiredSignatures(requiredSignatures)
+		cosignerPeerIDs, err := p2p.GetPeerIDsFromStellarAddresses(cosigners)
+		if err != nil {
+			return nil, err
+		}
+		bridge.signersClient = NewSignersClient(host, router, cosignerPeerIDs, relayAddrInfo)
+
+		wallet.SetSignerClient(bridge.signersClient)
 	}
 
 	if config.RescanBridgeAccount {
@@ -73,17 +91,10 @@ func NewBridge(ctx context.Context, wallet *stellarWallet, contract *BridgeContr
 		// setting the cursor to 0 will trigger the bridge
 		// to scan for every transaction ever made on the bridge account
 		// and mint accordingly
-		err = blockPersistency.saveStellarCursor("0")
+		err = blockPersistency.SaveStellarCursor("0")
 		if err != nil {
 			return
 		}
-	}
-
-	bridge = &Bridge{
-		bridgeContract:   contract,
-		blockPersistency: blockPersistency,
-		wallet:           wallet,
-		config:           config,
 	}
 
 	return
@@ -97,7 +108,7 @@ func (bridge *Bridge) Close() error {
 	return nil
 }
 
-func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID string) (err error) {
+func (bridge *Bridge) mint(receiver eth.ERC20Address, depositedAmount *big.Int, txID string) (err error) {
 	if !bridge.synced {
 		return errors.New("bridge is not synced, retry later")
 	}
@@ -113,11 +124,11 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 		return
 	}
 
-	depositFeeBigInt := big.NewInt(IntToStroops(bridge.config.DepositFee))
+	depositFeeBigInt := big.NewInt(stellar.IntToStroops(bridge.config.DepositFee))
 
 	if depositedAmount.Cmp(depositFeeBigInt) <= 0 {
 		log.Error("Deposited amount is <= Fee, should be returned", "amount", depositedAmount, "txID", txID)
-		return errInsufficientDepositAmount
+		return faults.ErrInsufficientDepositAmount
 	}
 	amount := &big.Int{}
 	amount = amount.Sub(depositedAmount, depositFeeBigInt)
@@ -128,7 +139,7 @@ func (bridge *Bridge) mint(receiver ERC20Address, depositedAmount *big.Int, txID
 	}
 	log.Debug("required signature count", "count", requiredSignatureCount)
 
-	res, err := bridge.wallet.client.SignMint(context.Background(), EthSignRequest{
+	res, err := bridge.signersClient.SignMint(context.Background(), EthSignRequest{
 		Receiver: common.BytesToAddress(receiver[:]),
 		Amount:   amount.Int64(),
 		TxId:     txID,
@@ -307,7 +318,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 				}
 
-				err = bridge.blockPersistency.saveHeight(head.Number.Uint64())
+				err = bridge.blockPersistency.SaveHeight(head.Number.Uint64())
 				if err != nil {
 					log.Error("error occured saving blockheight", "error", err)
 				}
@@ -323,7 +334,8 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error) {
 	// if a withdraw was made to the bridge fee wallet or the bridge address, soak the funds and return
-	if we.blockchain_address == bridge.wallet.config.StellarFeeWallet || we.blockchain_address == bridge.wallet.keypair.Address() {
+	//TODO: Should these adresses be fetched through the wallet?
+	if we.blockchain_address == bridge.wallet.Config.StellarFeeWallet || we.blockchain_address == bridge.wallet.GetAddress() {
 		log.Warn("Received a withdrawal with destination which is either the fee wallet or the bridge wallet, skipping...")
 		return nil
 	}
@@ -333,22 +345,18 @@ func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error
 	amount := we.amount.Uint64()
 
 	if amount == 0 {
-		log.Error("Can not withdraw an amount of 0", "ethTx", hash)
+		log.Warn("Can not withdraw an amount of 0", "ethTx", hash)
 		return
 	}
 
 	if amount <= uint64(WithdrawFee) {
-		log.Warn("Withdrawn amount is less than the withdraw fee, sending the amount to the fee wallet", "amount", amount)
-		err = bridge.wallet.CreateAndSubmitFeepayment(ctx, amount, hash)
-		if err != nil {
-			log.Error(fmt.Sprintf("failed to create fee payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
-			return err
-		}
-		return nil
+		log.Warn("Withdrawn amount is less than the withdraw fee, skip it", "amount", stellar.StroopsToDecimal(int64(amount)))
+		return
 	}
 
 	amount -= uint64(WithdrawFee)
-	includeWithdrawFee := bridge.wallet.config.StellarFeeWallet != ""
+	//TODO: Should this adress be fetched through the wallet?
+	includeWithdrawFee := bridge.wallet.Config.StellarFeeWallet != ""
 	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", includeWithdrawFee)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))

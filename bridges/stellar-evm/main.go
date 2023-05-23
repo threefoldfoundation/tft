@@ -10,7 +10,8 @@ import (
 
 	"github.com/multiformats/go-multiaddr"
 	flag "github.com/spf13/pflag"
-	"github.com/threefoldfoundation/tft/bridge/stellar/api/bridge"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/api/bridge"
+	"github.com/threefoldfoundation/tft/bridges/stellar-evm/stellar"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -18,21 +19,21 @@ import (
 func main() {
 
 	var bridgeCfg bridge.BridgeConfig
-	var stellarCfg bridge.StellarConfig
+	var stellarCfg stellar.StellarConfig
 	var ethCfg bridge.EthConfig
 	var bridgeMasterAddress string
 
-	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "eth network name (defines storage directory name)")
+	flag.StringVar(&ethCfg.EthNetworkName, "ethnetwork", "eth-mainnet", "ethereum network name")
 	flag.StringVar(&ethCfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
 	flag.StringVar(&ethCfg.ContractAddress, "contract", "", "token contract address")
 
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
 
-	flag.StringVar(&ethCfg.EthPrivateKey, "ethkey", "", "ethereum account json")
+	flag.StringVar(&ethCfg.EthPrivateKey, "ethkey", "", "ethereum account private key")
 
 	flag.StringVar(&stellarCfg.StellarSeed, "secret", "", "stellar secret")
 	flag.StringVar(&stellarCfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
-	// Fee wallet address where fees are held
+	// Stellar account where fees are sent to
 	flag.StringVar(&stellarCfg.StellarFeeWallet, "feewallet", "", "stellar fee wallet address")
 
 	flag.BoolVar(&bridgeCfg.RescanBridgeAccount, "rescan", false, "if true is provided, we rescan the bridge stellar account and mint all transactions again")
@@ -52,7 +53,9 @@ func main() {
 
 	flag.Parse()
 
-	//TODO cfg.Validate()
+	if err := stellarCfg.Validate(); err != nil {
+		panic(err)
+	}
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 	if debug {
@@ -70,17 +73,23 @@ func main() {
 		panic(err)
 	}
 
-	ipfs, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", host.ID().Pretty()))
+	partialMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", host.ID()))
 	if err != nil {
 		panic(err)
 	}
 
 	for _, addr := range host.Addrs() {
-		full := addr.Encapsulate(ipfs)
+		full := addr.Encapsulate(partialMA)
 		log.Info("p2p node address", "address", full.String())
 	}
 
-	stellarWallet, err := bridge.NewStellarWallet(ctx, &stellarCfg, bridgeCfg.DepositFee)
+	txStorage := stellar.NewTransactionStorage(stellarCfg.StellarNetwork, bridgeMasterAddress)
+	err = txStorage.ScanBridgeAccount()
+	if err != nil {
+		panic(err)
+	}
+
+	stellarWallet, err := stellar.NewWallet(&stellarCfg, bridgeCfg.DepositFee, bridge.WithdrawFee, txStorage)
 	if err != nil {
 		panic(err)
 	}
@@ -101,14 +110,9 @@ func main() {
 		panic(err)
 	}
 
+	// Start the signer server
 	if bridgeCfg.Follower {
-		signer, err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet)
-		if err != nil {
-			panic(err)
-		}
-
-		// Initially scan bridge account for stellar transactions
-		err = signer.StellarTransactionStorage.ScanBridgeAccount()
+		err := bridge.NewSignerServer(host, bridgeMasterAddress, contract, stellarWallet, bridgeCfg.DepositFee)
 		if err != nil {
 			panic(err)
 		}

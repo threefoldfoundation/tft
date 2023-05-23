@@ -1,4 +1,4 @@
-package bridge
+package state
 
 import (
 	"encoding/json"
@@ -14,14 +14,14 @@ type ChainPersistency struct {
 	location string
 }
 
-// newChainPersistency creates new ChainPersistency object and returns a reference to it.
-func newChainPersistency(location string) *ChainPersistency {
+// NewChainPersistency creates new ChainPersistency object and returns a reference to it.
+func NewChainPersistency(location string) *ChainPersistency {
 	return &ChainPersistency{
 		location: location,
 	}
 }
 
-func (b *ChainPersistency) saveHeight(height uint64) error {
+func (b *ChainPersistency) SaveHeight(height uint64) error {
 	blockheight, err := b.GetHeight()
 	if err != nil {
 		return err
@@ -31,7 +31,7 @@ func (b *ChainPersistency) saveHeight(height uint64) error {
 	return b.Save(blockheight)
 }
 
-func (b *ChainPersistency) saveStellarCursor(cursor string) error {
+func (b *ChainPersistency) SaveStellarCursor(cursor string) error {
 	blockheight, err := b.GetHeight()
 	if err != nil {
 		return err
