@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
@@ -148,4 +149,8 @@ func ExtractMemoFromTx(txn *txnbuild.Transaction) (memoAsHex string, err error) 
 	}
 
 	return
+}
+
+func IsValidStellarAddress(address string) bool {
+	return strkey.IsValidEd25519PublicKey(address)
 }

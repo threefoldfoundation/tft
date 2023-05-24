@@ -95,10 +95,14 @@ func (w *Wallet) Sign(tx *txnbuild.Transaction) (*txnbuild.Transaction, error) {
 	return tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
 }
 
-func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) error {
+func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) (err error) {
+	if !IsValidStellarAddress(target) {
+		log.Warn("Invalid address, skipping payment", "address", target)
+		return
+	}
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
 	if err != nil {
-		return err
+		return
 	}
 
 	txnBuild.Memo = txnbuild.MemoHash(txHash)
