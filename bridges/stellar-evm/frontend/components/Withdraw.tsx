@@ -93,7 +93,6 @@ export function Withdraw({ open, handleClose, balance, submitWithdraw }) {
       >
         <DialogTitle id="alert-dialog-title">{"Swap TFT on Ethereum for TFT on Stellar"}</DialogTitle>
         <div className={styles.container}>
-          <span>Fill in this form to withdraw tokens back to Stellar</span>
           <FormControl>
             <InputLabel htmlFor="StellarAddress">Stellar Address</InputLabel>
             <Input
