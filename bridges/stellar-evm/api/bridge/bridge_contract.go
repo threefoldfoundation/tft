@@ -23,6 +23,9 @@ import (
 const (
 	// retryDelay is the delay to retry calls when there are no peers
 	retryDelay = time.Second * 15
+	// backOffMin is the minimum backoff time when retrying opening subscriptions
+	backOffMax = time.Second * 5
+	gasLimit   = 210000
 )
 
 // BridgeContract exposes a higher lvl api for specific contract bindings. In case of proxy contracts,
@@ -178,11 +181,17 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 	log.Info("Subscribing to eth headers")
 	// channel to receive head updates from client on
 	heads := make(chan *types.Header, 16)
+
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
+		sub, err := bridge.ethc.SubscribeNewHead(context.Background(), heads)
+		if err != nil {
+			log.Error("Failed to subscribe to head events", "err", err)
+			return nil, err
+		}
+		return sub, nil
+	})
+
 	// subscribe to head upates
-	sub, err := bridge.ethc.SubscribeNewHead(context.Background(), heads)
-	if err != nil {
-		log.Error("Failed to subscribe to head events", "err", err)
-	}
 	defer sub.Unsubscribe()
 
 	for head := range heads {
@@ -196,14 +205,20 @@ func (bridge *BridgeContract) Loop(ch chan<- *types.Header) {
 func (bridge *BridgeContract) SubscribeTransfers() error {
 	sink := make(chan *tokenv1.TokenTransfer)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
-	sub, err := bridge.tftContract.filter.WatchTransfer(opts, sink, nil, nil)
-	if err != nil {
-		return err
-	}
+
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
+		sub, err := bridge.tftContract.filter.WatchTransfer(opts, sink, nil, nil)
+		if err != nil {
+			log.Error("Failed to subscribe to transfer events", "err", err)
+			return nil, err
+		}
+		return sub, nil
+	})
+
 	defer sub.Unsubscribe()
 	for {
 		select {
-		case err = <-sub.Err():
+		case err := <-sub.Err():
 			return err
 		case transfer := <-sink:
 			log.Debug("Noticed transfer event", "from", transfer.From, "to", transfer.To, "amount", transfer.Tokens)
@@ -216,14 +231,20 @@ func (bridge *BridgeContract) SubscribeTransfers() error {
 func (bridge *BridgeContract) SubscribeMint() error {
 	sink := make(chan *tokenv1.TokenMint)
 	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
-	sub, err := bridge.tftContract.filter.WatchMint(opts, sink, nil, nil)
-	if err != nil {
-		return err
-	}
+
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
+		sub, err := bridge.tftContract.filter.WatchMint(opts, sink, nil, nil)
+		if err != nil {
+			log.Error("Failed to subscribe to transfer events", "err", err)
+			return nil, err
+		}
+		return sub, nil
+	})
+
 	defer sub.Unsubscribe()
 	for {
 		select {
-		case err = <-sub.Err():
+		case err := <-sub.Err():
 			return err
 		case mint := <-sink:
 			log.Info("Noticed mint event", "receiver", mint.Receiver, "amount", mint.Tokens, "TFT tx id", mint.Txid)
@@ -284,15 +305,20 @@ func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHe
 	log.Info("Subscribing to withdraw events", "start height", startHeight)
 	sink := make(chan *tokenv1.TokenWithdraw)
 	watchOpts := &bind.WatchOpts{Context: context.Background(), Start: nil}
-	sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
-	if err != nil {
-		log.Error("Subscribing to withdraw events failed", "err", err)
-		return err
-	}
+
+	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
+		sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
+		if err != nil {
+			log.Error("Subscribing to withdraw events failed", "err", err)
+			return nil, err
+		}
+		return sub, nil
+	})
+
 	defer sub.Unsubscribe()
 	for {
 		select {
-		case err = <-sub.Err():
+		case err := <-sub.Err():
 			return err
 		case withdraw := <-sink:
 			if withdraw.Raw.Removed {
@@ -392,36 +418,6 @@ func (bridge *BridgeContract) FilterWithdraw(wc chan<- WithdrawEvent, startHeigh
 	return nil
 }
 
-// TransferFunds transfers funds from one address to another
-func (bridge *BridgeContract) TransferFunds(recipient common.Address, amount *big.Int) error {
-	err := bridge.transferFunds(recipient, amount)
-	for IsNoPeerErr(err) {
-		log.Warn("no peers while trying to transfer funds, retrying...")
-		time.Sleep(retryDelay)
-		err = bridge.transferFunds(recipient, amount)
-	}
-	return err
-}
-
-func (bridge *BridgeContract) transferFunds(recipient common.Address, amount *big.Int) error {
-	if amount == nil {
-		return errors.New("invalid amount")
-	}
-	accountAddress, err := bridge.ethc.AccountAddress()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	opts := &bind.TransactOpts{
-		Context: ctx, From: accountAddress,
-		Signer: bridge.getSignerFunc(),
-		Value:  nil, Nonce: nil, GasLimit: 0, GasPrice: nil,
-	}
-	_, err = bridge.tftContract.transactor.Transfer(opts, recipient, amount)
-	return err
-}
-
 func (bridge *BridgeContract) Mint(receiver tfeth.ERC20Address, amount *big.Int, txID string, signatures []tokenv1.Signature) error {
 	err := bridge.mint(receiver, amount, txID, signatures)
 	for IsNoPeerErr(err) {
@@ -447,7 +443,6 @@ func (bridge *BridgeContract) mint(receiver tfeth.ERC20Address, amount *big.Int,
 	if err != nil {
 		return err
 	}
-	// newGas := big.NewInt(10 * gas.Int64())
 
 	//TODO: better have a context ourselves instead of using the Background context as parent
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*6)
@@ -455,7 +450,7 @@ func (bridge *BridgeContract) mint(receiver tfeth.ERC20Address, amount *big.Int,
 	opts := &bind.TransactOpts{
 		Context: ctx, From: accountAddress,
 		Signer: bridge.getSignerFunc(),
-		Value:  nil, Nonce: nil, GasLimit: 1000000, GasPrice: gas,
+		Value:  nil, Nonce: nil, GasLimit: gasLimit, GasPrice: gas,
 	}
 
 	log.Info("Submitting transaction to token contract", "tokenaddress", bridge.networkConfig.ContractAddress)
@@ -522,19 +517,6 @@ func (bridge *BridgeContract) getSignerFunc() bind.SignerFn {
 		networkID := int64(bridge.networkConfig.NetworkID)
 		return bridge.ethc.SignTx(tx, big.NewInt(networkID))
 	}
-}
-
-func (bridge *BridgeContract) TokenBalance(address common.Address) (*big.Int, error) {
-	log.Debug("Calling TokenBalance function in contract")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	opts := &bind.CallOpts{Context: ctx}
-	return bridge.tftContract.caller.BalanceOf(opts, common.Address(address))
-}
-
-func (bridge *BridgeContract) EthBalance() (*big.Int, error) {
-	err := bridge.Refresh(nil) // force a refresh
-	return bridge.balance, err
 }
 
 func (bridge *BridgeContract) CreateTokenSignature(receiver common.Address, amount int64, txid string) (tokenv1.Signature, error) {
