@@ -2,7 +2,7 @@
 
 ## Ethereum
 
-## Token address
+### Token address
 
 0x395E925834996e558bdeC77CD648435d620AfB5b
 
@@ -22,6 +22,6 @@ See the Official safe ui: <https://app.safe.global/home?safe=eth:0x1533A6f9cd869
 
 `GARQ6KUXUCKDPIGI7NPITDN55J23SVR5RJ5RFOOU3ZPLMRJYOQRNMOIJ`
 
-## Bridge Ethereum account that  executes the mint transactions
+## Bridge Ethereum account that executes the mint transactions
 
 `0x9a6c7df7d35973d4e19148553da7aea5daf4f99e`

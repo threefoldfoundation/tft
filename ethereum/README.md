@@ -2,7 +2,6 @@
 
 TFT is implemented as a wrapped asset on [Ethereum](https://ethereum.org/en/).
 
-This is work in progress and TFT is not available on Ethereum yet.
+The token contract address is `0x395E925834996e558bdeC77CD648435d620AfB5b`
 
-For details of the contract adresses like the one providing the multisig see [addresses](./addresses.md).
-
+For details of the contract adresses see [addresses](./addresses.md).
