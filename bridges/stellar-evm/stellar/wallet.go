@@ -274,6 +274,18 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 	txResult, err := client.SubmitTransaction(tx)
 	if err != nil {
 		if hError, ok := err.(*horizonclient.Error); ok {
+			resultcodes, err := hError.ResultCodes()
+			if err != nil {
+				log.Error("Unable to extract result codes from horizon error")
+			} else {
+
+				for _, resultcode := range resultcodes.OperationCodes {
+					if resultcode == "op_no_destination" {
+						log.Warn("Invalid address, skipping")
+						return nil
+					}
+				}
+			}
 			log.Error("Error submitting tx", "extras", hError.Problem.Extras)
 		}
 		return errors.Wrap(err, "error submitting transaction")
