@@ -284,6 +284,10 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 						log.Warn("Invalid address, skipping")
 						return nil
 					}
+					if resultcode == "op_no_trust" {
+						log.Warn("Destination address has no TFT trustline, skipping")
+						return nil
+					}
 				}
 			}
 			log.Error("Error submitting tx", "extras", hError.Problem.Extras)
