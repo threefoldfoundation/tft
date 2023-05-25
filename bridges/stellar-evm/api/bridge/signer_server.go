@@ -165,15 +165,15 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 		}
 	} else {
 		// If the signrequest is not a withdrawal request and a refund request
-		// then it's most likely a transfer to fee wallet transaction
+		// then it's most likely a transfer to fee wallet transaction from a deposit
 		log.Info("Validating fee transfer signing request")
-		err := s.validateFeeTransfer(request, txn)
+		err := s.validateDepositFeeTransfer(request, txn)
 		if err != nil {
 			if errors.Is(err, ErrInvalidTransaction) {
 				log.Info("Fee transfer validation error", "err", err)
 				return err
 			}
-			log.Error("An error occurred while validating a fee transfer signing request", "err", err)
+			log.Error("An error occurred while validating a deposit fee transfer signing request", "err", err)
 			return errors.New("Error") //Internal errors should not be exposed externally
 		}
 	}
@@ -363,7 +363,7 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 	return nil
 }
 
-func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateDepositFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) (err error) {
 
 	// Check if a fee transfer for this already happened
 	memo, err := stellar.ExtractMemoFromTx(txn)
@@ -373,7 +373,7 @@ func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest,
 	}
 	alreadyExists, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
 	if err != nil {
-		return err
+		return
 	}
 	if alreadyExists {
 		return ErrTransactionAlreadyExists
@@ -408,7 +408,13 @@ func (s *SignerService) validateFeeTransfer(request multisig.StellarSignRequest,
 	if int64(paymentOperation.Amount) != stellar.IntToStroops(s.depositFee) {
 		return errors.Wrapf(ErrInvalidTransaction, "amount is not correct, received %d, need %d", stellar.StroopsToDecimal(int64(paymentOperation.Amount)), s.depositFee)
 	}
-
-	// TODO: check if the deposit for this fee transaction actually happened and is valid
-	return nil
+	//Validate the deposit transaction that triggered this deposit fee transfer
+	depositedAmount, _, err := s.stellarWallet.GetDepositAmountAndSender(memo, s.bridgeMasterAddress)
+	if err != nil {
+		return
+	}
+	if depositedAmount <= s.depositFee {
+		return errors.Wrap(ErrInvalidFeePayment, "The amount of the deposit is smaller than the deposit fee")
+	}
+	return
 }

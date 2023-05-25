@@ -428,6 +428,8 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 	return w.StreamBridgeStellarTransactions(ctx, blockHeight.StellarCursor, transactionHandler)
 }
 
+// GetDepositAmountAndSender returns the amount of TFT received by the bridge account in stroops
+// and the account that sent it.
 // TODO: is this called from a place where we really only have the transaction hash
 // instead of the entire transaction
 // If the entire transaction is available, there is no need to call horizon
