@@ -232,7 +232,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
 			}
 		}
 
-		// Check that there sre enough signatures
+		// Check that there are enough signatures
 		if (cumulativePower < _signaturesRequired) {
 			revert InsufficientSignatures(cumulativePower, _signaturesRequired);
 		}
@@ -240,9 +240,7 @@ contract TFT is OwnedUpgradeableTokenStorage {
 	}
 
     // -----------------------------------------------------------------------
-    // Mint tokens. Although minting tokens to a withdraw address
-    // is just an expensive tft transaction, it is possible, so after minting
-    // attemt to withdraw.
+    // Mint tokens.
     // -----------------------------------------------------------------------
     function mintTokens(address receiver, uint tokens, string memory txid, Signature[] calldata _signatures) public {
         // check if the txid is already known
