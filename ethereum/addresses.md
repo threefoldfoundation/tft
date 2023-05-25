@@ -24,4 +24,4 @@ See the Official safe ui: <https://app.safe.global/home?safe=eth:0x1533A6f9cd869
 
 ## Bridge Ethereum account that executes the mint transactions
 
-`0x9a6c7df7d35973d4e19148553da7aea5daf4f99e`
+[0x9a6c7df7d35973d4e19148553da7aea5daf4f99e](https://etherscan.io/address/0x9a6c7df7d35973d4e19148553da7aea5daf4f99e)
