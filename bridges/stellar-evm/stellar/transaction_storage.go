@@ -76,6 +76,10 @@ func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exist
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists
 func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool, err error) {
+	err = s.ScanBridgeAccount()
+	if err != nil {
+		return
+	}
 	log.Debug("checking if transaction with memo exists in the cache", "memo", memo)
 	_, exists = s.sentTransactionMemos[memo]
 	return
