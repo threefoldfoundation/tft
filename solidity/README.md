@@ -1,6 +1,6 @@
 # TFT solidity implementation
 
-The Solidity code is in the [contract](./contract) subdirectory
+The Solidity code is in the [contracts](./contracts) subdirectory
 
 ## Withdraw flow
 
@@ -11,7 +11,7 @@ As such, there are currently 4 methods which might trigger a withdraw:
 - [transferFrom](./contract/tokenV0.sol#L110)
 - [mintTokens](./contract/tokenV0.sol#L147)
 
-When a withdraw occurs,  a [withdraw event](./contract/tokenV0.sol#L40) is raised. The event includes the address from which the balance is withdrawn, as well as the amount of tokens which have been withdrawn, also the destination blockchain address and destination blockchain network is included. A bridge can listen to these events and return the tokens on the target blockchain to the target blockchain address and network.
+When a withdraw occurs, a [withdraw event](./contract/tokenV0.sol#L40) is raised. The event includes the address from which the balance is withdrawn, as well as the amount of tokens which have been withdrawn, also the destination blockchain address and destination blockchain network is included. A bridge can listen to these events and return the tokens on the target blockchain to the target blockchain address and network.
 
 High level, the withdraw flow works as follows:
 
