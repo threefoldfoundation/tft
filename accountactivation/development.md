@@ -2,4 +2,4 @@
 
 ## Testnet
 
-Contract address at the Sepolia network: `0x72cb75652CB21c42604BB6B9C464387B7a64a0b2`.
+Contract address at the Sepolia network: [0x72cb75652CB21c42604BB6B9C464387B7a64a0b2](https://sepolia.etherscan.io/address/0x72cb75652CB21c42604BB6B9C464387B7a64a0b2).

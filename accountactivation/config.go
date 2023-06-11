@@ -7,11 +7,9 @@ import (
 )
 
 type Config struct {
-	EthNetworkName   string
 	EthUrl           string
-	EthPrivateKey    string
 	ContractAddress  string
-	RescanFromHeight int64
+	RescanFromHeight uint64
 	PersistencyFile  string
 	StellarNetwork   string // stellar network
 	StellarSecret    string // secret of the stellar account that activates new accounts

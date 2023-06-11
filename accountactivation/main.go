@@ -9,22 +9,21 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/threefoldfoundation/tft/accountactivation/eth"
 	"github.com/threefoldfoundation/tft/accountactivation/stellar"
 )
 
 func main() {
 	var cfg Config
 
-	flag.StringVar(&cfg.EthNetworkName, "ethnetwork", "eth-mainnet", "ethereum network name")
 	flag.StringVar(&cfg.EthUrl, "ethurl", "ws://localhost:8551", "ethereum rpc url")
 	flag.StringVar(&cfg.ContractAddress, "contract", "", "token contract address")
 
 	flag.StringVar(&cfg.PersistencyFile, "persistency", "./state.json", "file where last seen blockheight is stored")
 
-	flag.StringVar(&cfg.StellarNetwork, "secret", "", "secret of the stellar account that activates new accounts")
+	flag.StringVar(&cfg.StellarSecret, "secret", "", "secret of the stellar account that activates new accounts")
 	flag.StringVar(&cfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
-
-	flag.Int64Var(&cfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")
+	flag.Uint64Var(&cfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")
 
 	var debug bool
 	flag.BoolVar(&debug, "debug", false, "sets debug level log output")
@@ -43,9 +42,6 @@ func main() {
 
 	log.Info("Ethereum node", "url", cfg.EthUrl)
 
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	activationAccountAddress, err := stellar.AccountAdressFromSecret(cfg.StellarSecret)
 	if err != nil {
 		panic(err)
@@ -57,6 +53,21 @@ func main() {
 		panic(err)
 	}
 
+	cw, err := eth.NewContractWatcher(cfg.EthUrl, cfg.ContractAddress, cfg.PersistencyFile)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		err := cw.Start(ctx, cfg.RescanFromHeight)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	sigs := make(chan os.Signal, 1)
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -65,10 +76,7 @@ func main() {
 	sig := <-sigs
 	log.Info("signal", "signal", sig)
 	cancel()
-	//err = br.Close()
-	if err != nil {
-		panic(err)
-	}
+	cw.Close()
 	log.Info("exiting")
 	time.Sleep(time.Second * 5)
 }
