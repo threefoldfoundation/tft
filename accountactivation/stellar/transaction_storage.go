@@ -30,10 +30,11 @@ func NewTransactionStorage(network, addressToScan string) *TransactionStorage {
 }
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists
-func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool, err error) {
-	err = s.ScanAccount()
-	if err != nil {
-		return
+func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool) {
+	err := s.ScanAccount()
+	for err != nil {
+		log.Warn("Failed to Scan the activation account", "err", err)
+		err = s.ScanAccount()
 	}
 	log.Debug("checking if transaction with memo exists in the cache", "memo", memo)
 	_, exists = s.TransactionMemos[memo]

@@ -2,9 +2,7 @@ package stellar
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -13,8 +11,6 @@ import (
 	"github.com/stellar/go/network"
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/go/xdr"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -107,28 +103,6 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 
 	}
 
-}
-
-func ExtractMemoFromTx(txn *txnbuild.Transaction) (memoAsHex string, err error) {
-	memo := txn.Memo()
-
-	if memo == nil {
-		return
-	}
-
-	txMemo, err := txn.Memo().ToXDR()
-	if err != nil {
-		return
-	}
-
-	if txMemo.Type == xdr.MemoTypeMemoHash {
-		hashMemo := txn.Memo().(txnbuild.MemoHash)
-		memoAsHex = hex.EncodeToString(hashMemo[:])
-	} else {
-		err = fmt.Errorf("transaction memo type not supported")
-	}
-
-	return
 }
 
 func IsValidStellarAddress(address string) bool {

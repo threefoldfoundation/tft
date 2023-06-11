@@ -6,10 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/threefoldfoundation/tft/accountactivation/eth"
+	"github.com/threefoldfoundation/tft/accountactivation/state"
 	"github.com/threefoldfoundation/tft/accountactivation/stellar"
 )
 
@@ -52,8 +52,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	cw, err := eth.NewContractWatcher(cfg.EthUrl, cfg.ContractAddress, cfg.PersistencyFile)
+	blockPersistency := state.NewChainPersistency(cfg.PersistencyFile)
+	activationRequests := make(chan eth.AccounActivationRequest)
+	cw, err := eth.NewContractWatcher(cfg.EthUrl, cfg.ContractAddress, blockPersistency, activationRequests)
 	if err != nil {
 		panic(err)
 	}
@@ -67,6 +68,8 @@ func main() {
 			panic(err)
 		}
 	}()
+	wallet := stellar.NewWallet(cfg.StellarSecret, cfg.StellarNetwork)
+	go handleRequests(ctx, wallet, txStorage, activationRequests)
 
 	sigs := make(chan os.Signal, 1)
 
@@ -78,5 +81,4 @@ func main() {
 	cancel()
 	cw.Close()
 	log.Info("exiting")
-	time.Sleep(time.Second * 5)
 }
