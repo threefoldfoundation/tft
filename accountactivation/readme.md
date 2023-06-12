@@ -8,6 +8,8 @@ The [accountactivation smart contract](../solidity/contracts/accountactivation.s
 
 The cost to activate an account needs to be added to the call and is sent to the `beneficiary` address set in the contract. This cost can be requested with the `networkCost` method.
 
+Contract address: [0xE04a9665bbA9B7954572802A9864dD1d03326792](https://etherscan.io/address/0xE04a9665bbA9B7954572802A9864dD1d03326792)
+
 ## Stellar
 
 ## Transactions
