@@ -46,7 +46,7 @@ type Bridge struct {
 
 type BridgeConfig struct {
 	RescanBridgeAccount bool
-	RescanFromHeight    int64
+	RescanFromHeight    int64 //TODO: change to uint64
 	PersistencyFile     string
 	Follower            bool
 	Relay               string
@@ -56,6 +56,7 @@ type BridgeConfig struct {
 }
 
 // NewBridge creates a new Bridge.
+// TODO: context is not used
 func NewBridge(ctx context.Context, wallet *stellar.Wallet, contract *BridgeContract, config *BridgeConfig, host host.Host, router routing.PeerRouting) (bridge *Bridge, err error) {
 	blockPersistency := state.NewChainPersistency(config.PersistencyFile)
 
@@ -101,10 +102,11 @@ func NewBridge(ctx context.Context, wallet *stellar.Wallet, contract *BridgeCont
 }
 
 // Close bridge
+// TODO: drop the error return value
 func (bridge *Bridge) Close() error {
 	bridge.mut.Lock()
 	bridge.bridgeContract.ethc.Close()
-	defer bridge.mut.Unlock()
+	defer bridge.mut.Unlock() //TODO: move this directly after the Lock()
 	return nil
 }
 
@@ -259,7 +261,9 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				}
 			}()
 		}
-
+		// TODO bug: currentblock is not taken into account and if it would be passed,
+		// blocks in past don't work anyway so if the chain progressed between getting the current block
+		// and the start of the watching, events are lost if there are any.
 		go func() {
 			err := bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
 			if err != nil {

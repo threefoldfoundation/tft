@@ -45,6 +45,7 @@ type LightClientConfig struct {
 	GenesisBlock  *core.Genesis
 }
 
+// TODO: better move this to eth package
 type Signature struct {
 	V uint8
 	R [32]byte
@@ -135,6 +136,7 @@ func (c *EthClient) Sign(data []byte) ([]byte, error) {
 }
 
 // AbiEncodeArgs encodes the arguments for the mint function
+// TODO: better move this to eth package
 func AbiEncodeArgs(addr common.Address, amount *big.Int, txid string) ([]byte, error) {
 	addressTy, err := abi.NewType("address", "address", nil)
 	if err != nil {

@@ -24,6 +24,7 @@ const (
 	// retryDelay is the delay to retry calls when there are no peers
 	retryDelay = time.Second * 15
 	// backOffMin is the minimum backoff time when retrying opening subscriptions
+	// TODO: wrong docstring
 	backOffMax = time.Second * 5
 	gasLimit   = 210000
 )
@@ -72,8 +73,6 @@ func NewBridgeContract(ethConfig *EthConfig) (*BridgeContract, error) {
 	if ethConfig.ContractAddress != "" {
 		log.Info("Overriding default token contract", "address", ethConfig.ContractAddress)
 		networkConfig.ContractAddress = common.HexToAddress(ethConfig.ContractAddress)
-		// TODO: validate ABI of contract,
-		//       see https://github.com/threefoldtech/rivine-extension-erc20/issues/3
 	}
 
 	ethc, err := NewEthClient(LightClientConfig{
@@ -99,6 +98,7 @@ func NewBridgeContract(ethConfig *EthConfig) (*BridgeContract, error) {
 	}, nil
 }
 
+// TODO: better to just pass the contractaddress instead of the entire configuration
 func createTft20Contract(networkConfig tfeth.NetworkConfiguration, client *ethclient.Client) (*Contract, error) {
 	log.Info("Creating token contract binding", "address", networkConfig.ContractAddress)
 	filter, err := tokenv1.NewTokenFilterer(networkConfig.ContractAddress, client)
@@ -230,7 +230,7 @@ func (bridge *BridgeContract) SubscribeTransfers() error {
 // and prints out info about any mint as it happened
 func (bridge *BridgeContract) SubscribeMint() error {
 	sink := make(chan *tokenv1.TokenMint)
-	opts := &bind.WatchOpts{Context: context.Background(), Start: nil}
+	opts := &bind.WatchOpts{Context: context.TODO(), Start: nil}
 
 	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.tftContract.filter.WatchMint(opts, sink, nil, nil)
@@ -304,7 +304,8 @@ func (w WithdrawEvent) BlockHeight() uint64 {
 func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHeight uint64) error {
 	log.Info("Subscribing to withdraw events", "start height", startHeight)
 	sink := make(chan *tokenv1.TokenWithdraw)
-	watchOpts := &bind.WatchOpts{Context: context.Background(), Start: nil}
+	//TODO: bug: startHeight is not taken into account but a test in another program shows it does not work anyway
+	watchOpts := &bind.WatchOpts{Context: context.TODO(), Start: nil}
 
 	sub := event.Resubscribe(backOffMax, func(ctx context.Context) (event.Subscription, error) {
 		sub, err := bridge.WatchWithdraw(watchOpts, sink, nil)
@@ -345,6 +346,7 @@ func (bridge *BridgeContract) SubscribeWithdraw(wc chan<- WithdrawEvent, startHe
 // Solidity: e Withdraw(receiver indexed address, tokens uint256)
 //
 // This method is copied from the generated bindings and slightly modified, so we can add logic to stay backwards compatible with the old withdraw event signature
+// TODO: is the copy still needed or can we simply use the generated bindings?
 func (bridge *BridgeContract) WatchWithdraw(opts *bind.WatchOpts, sink chan<- *tokenv1.TokenWithdraw, receiver []common.Address) (event.Subscription, error) {
 
 	var receiverRule []interface{}
@@ -439,13 +441,12 @@ func (bridge *BridgeContract) mint(receiver tfeth.ERC20Address, amount *big.Int,
 		return err
 	}
 
-	gas, err := bridge.ethc.SuggestGasPrice(context.Background())
+	gas, err := bridge.ethc.SuggestGasPrice(context.TODO())
 	if err != nil {
 		return err
 	}
 
-	//TODO: better have a context ourselves instead of using the Background context as parent
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*6)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Minute*6)
 	defer cancel()
 	opts := &bind.TransactOpts{
 		Context: ctx, From: accountAddress,
