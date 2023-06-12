@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +13,8 @@ import (
 	"github.com/threefoldfoundation/tft/accountactivation/state"
 	"github.com/threefoldfoundation/tft/accountactivation/stellar"
 )
+
+var Version = "development"
 
 func main() {
 	var cfg Config
@@ -24,12 +27,19 @@ func main() {
 	flag.StringVar(&cfg.StellarSecret, "secret", "", "secret of the stellar account that activates new accounts")
 	flag.StringVar(&cfg.StellarNetwork, "network", "testnet", "stellar network, testnet or production")
 	flag.Uint64Var(&cfg.RescanFromHeight, "rescanHeight", 0, "if provided, the bridge will rescan all withdraws from the given height")
-
+	version := flag.Bool("version", false, "Print the version and exit")
 	var debug bool
 	flag.BoolVar(&debug, "debug", false, "sets debug level log output")
 
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s (version %s):\n", os.Args[0], Version)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
-
+	if *version {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 	if err := cfg.Validate(); err != nil {
 		panic(err)
 	}
@@ -40,6 +50,7 @@ func main() {
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(logLevel, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
+	log.Info("starting AccountActivation", "version", Version)
 	log.Info("Ethereum node", "url", cfg.EthUrl)
 
 	activationAccountAddress, err := stellar.AccountAdressFromSecret(cfg.StellarSecret)
