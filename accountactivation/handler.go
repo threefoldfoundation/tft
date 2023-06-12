@@ -8,10 +8,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/threefoldfoundation/tft/accountactivation/eth"
+	"github.com/threefoldfoundation/tft/accountactivation/state"
 	"github.com/threefoldfoundation/tft/accountactivation/stellar"
 )
 
-func handleRequests(ctx context.Context, wallet stellar.Wallet, txStorage *stellar.TransactionStorage, activationRequests chan eth.AccounActivationRequest) {
+func handleRequests(ctx context.Context, wallet stellar.Wallet, txStorage *stellar.TransactionStorage, blockPersistency *state.ChainPersistency, activationRequests chan eth.AccounActivationRequest) {
 loop:
 	for {
 		select {
@@ -42,6 +43,10 @@ loop:
 				case <-time.After(time.Second * 10): //timeout
 				}
 				err = wallet.ActivateAccount(r.Account, r.EthereumTransaction)
+			}
+			if err := blockPersistency.SaveHeight(r.BlockNumber); err != nil {
+				// log but ignore
+				log.Error("Failed to save blocknumber", "err", err)
 			}
 
 		case <-ctx.Done():

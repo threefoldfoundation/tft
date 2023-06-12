@@ -69,7 +69,7 @@ func main() {
 		}
 	}()
 	wallet := stellar.NewWallet(cfg.StellarSecret, cfg.StellarNetwork)
-	go handleRequests(ctx, wallet, txStorage, activationRequests)
+	go handleRequests(ctx, wallet, txStorage, blockPersistency, activationRequests)
 
 	sigs := make(chan os.Signal, 1)
 
