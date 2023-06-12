@@ -2,6 +2,12 @@
 
 Activate accounts on the Stellar network by paying for it from Ethereum.
 
+## Ethereum
+
+The [accountactivation smart contract](../solidity/contracts/accountactivation.sol) has an `ActivateAccount` method which takes a network (currently only `stellar`) and an account parameter.
+
+The cost to activate an account needs to be added to the call and is sent to the `beneficiary` address set in the contract. This cost can be requested with the `networkCost` method.
+
 ## Stellar
 
 ## Transactions
