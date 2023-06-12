@@ -19,8 +19,6 @@ type TransactionStorage struct {
 	stellarCursor    string
 }
 
-var ErrTransactionNotFound = errors.New("transaction not found")
-
 func NewTransactionStorage(network, addressToScan string) *TransactionStorage {
 	return &TransactionStorage{
 		network:          network,
