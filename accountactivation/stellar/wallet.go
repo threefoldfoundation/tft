@@ -1,9 +1,9 @@
 package stellar
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 )
 
@@ -79,6 +79,6 @@ func (w *Wallet) ActivateAccount(account string, memoHash [32]byte) (err error) 
 		}
 		return
 	}
-	log.Info("Activated account", "StellarTx", resp.ID)
+	log.Info("Activated account", "account", account, "StellarTx", resp.ID)
 	return
 }

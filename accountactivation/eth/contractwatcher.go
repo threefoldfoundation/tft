@@ -67,10 +67,11 @@ func (cw *ContractWatcher) Start(ctx context.Context, watchFromHeight uint64) (e
 	}
 	log.Info("Watching for ActivateAccount events", "start", watchFromHeight)
 	waitABit := func(ctx context.Context) {
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done(): //context cancelled
 			return
+		case <-time.After(time.Second * 5): //timeout
 		}
-		time.Sleep(time.Second * 5)
 	}
 	for {
 		if ctx.Err() != nil {
@@ -83,11 +84,11 @@ func (cw *ContractWatcher) Start(ctx context.Context, watchFromHeight uint64) (e
 			waitABit(ctx)
 			continue
 		}
-		if watchFromHeight >= currentBlock {
+		if watchFromHeight > currentBlock {
 			waitABit(ctx)
 			continue
 		}
-
+		log.Debug("Searching for ActivateAccount events", "start", watchFromHeight, "end", currentBlock)
 		it, err := cw.ContractFilterer.FilterActivateAccount(&bind.FilterOpts{
 			Context: ctx,
 			Start:   watchFromHeight,
@@ -108,7 +109,7 @@ func (cw *ContractWatcher) Start(ctx context.Context, watchFromHeight uint64) (e
 				BlockNumber:         it.Event.Raw.BlockNumber,
 			}
 		}
-		watchFromHeight = currentBlock
+		watchFromHeight = currentBlock + 1
 		waitABit(ctx)
 	}
 
