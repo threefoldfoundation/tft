@@ -4,7 +4,7 @@
 
 - Solidity compiler (solc): [Installing the Solidity Compiler](https://docs.soliditylang.org/en/develop/installing-solidity.html#binary-packages)
 
-## Install depdencies
+## Install dependencies
 
 ```sh
 yarn
@@ -39,7 +39,7 @@ npx hardhat run scripts/deploy.js
 node scripts/deployProd.js <private key> <provider url> <network id>
 ```
 
-The provider url is the ws or wss url of the Etherum node you are connecting to.
+The provider url is the ws or wss url of the Ethereum node you are connecting to.
 
 Network id:
 
