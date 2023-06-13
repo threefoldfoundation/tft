@@ -41,4 +41,4 @@ curl -O https://raw.githubusercontent.com/threefoldfoundation/helmcharts/main/in
 helm repo index . --merge index.yaml --url https://github.com/threefoldfoundation/tft/releases/download/$(git describe --abbrev=0 --tags)
 ```
 
-Upload the helm package in the release and the replace the `index.yaml` file in github at `threefoldfoundation/helmcharts/index.yaml`.
+Upload the helm package in the release and replace the `index.yaml` file in github at `threefoldfoundation/helmcharts/index.yaml`.
