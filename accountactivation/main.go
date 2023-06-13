@@ -59,7 +59,7 @@ func main() {
 	}
 	txStorage := stellar.NewTransactionStorage(cfg.StellarNetwork, activationAccountAddress)
 	log.Info("Loading memo's from previous activation transactions", "account", activationAccountAddress)
-	err = txStorage.ScanAccount()
+	err = txStorage.ScanAccount(context.Background())
 	if err != nil {
 		panic(err)
 	}

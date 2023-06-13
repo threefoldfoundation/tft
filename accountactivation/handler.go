@@ -22,13 +22,16 @@ loop:
 				continue loop
 			}
 			memo := hex.EncodeToString(r.EthereumTransaction.Bytes())
-			alreadyHandled := txStorage.TransactionWithMemoExists(memo)
-
+			alreadyHandled, err := txStorage.TransactionWithMemoExists(ctx, memo)
+			if err != nil { // Only a canceled context can cause this.
+				return
+			}
 			if alreadyHandled {
 				log.Info("Transaction with this memo already executed, skipping")
 				continue loop
 			}
-			err := wallet.ActivateAccount(r.Account, r.EthereumTransaction)
+
+			err = wallet.ActivateAccount(r.Account, r.EthereumTransaction)
 			for err != nil {
 				//Errors which should just be ignored
 				if errors.Is(err, stellar.ErrAccountAlreadyExists) || errors.Is(err, stellar.ErrInvalidAddress) {

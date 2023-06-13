@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/log"
 	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/errors"
 )
 
 type TransactionStorage struct {
@@ -28,11 +28,15 @@ func NewTransactionStorage(network, addressToScan string) *TransactionStorage {
 }
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists
-func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool) {
-	err := s.ScanAccount()
+// Will return a context.Canceled error if the context is canceled
+func (s *TransactionStorage) TransactionWithMemoExists(ctx context.Context, memo string) (exists bool, err error) {
+	err = s.ScanAccount(ctx)
 	for err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		log.Warn("Failed to Scan the activation account", "err", err)
-		err = s.ScanAccount()
+		err = s.ScanAccount(ctx)
 	}
 	log.Debug("checking if transaction with memo exists in the cache", "memo", memo)
 	_, exists = s.TransactionMemos[memo]
@@ -53,17 +57,17 @@ func (s *TransactionStorage) StoreTransaction(tx hProtocol.Transaction) {
 				log.Error("Unable to base64 decode a transaction memo", "tx", tx.Hash)
 				// Something is really wrong, bail out
 				panic(err)
-			} else {
-				memoAsHex := hex.EncodeToString(bytes)
-				log.Debug("Remembering memo of transaction", "tx", tx.Hash, "memo", memoAsHex)
-				s.TransactionMemos[memoAsHex] = true
 			}
+			memoAsHex := hex.EncodeToString(bytes)
+			log.Debug("Remembering memo of transaction", "tx", tx.Hash, "memo", memoAsHex)
+			s.TransactionMemos[memoAsHex] = true
+
 		}
 
 	}
 }
 
-func (s *TransactionStorage) ScanAccount() error {
+func (s *TransactionStorage) ScanAccount(ctx context.Context) error {
 	if s.addressToScan == "" {
 		return errors.New("no account set, aborting now")
 	}
@@ -81,5 +85,5 @@ func (s *TransactionStorage) ScanAccount() error {
 
 	log.Debug("fetching stellar transactions", "account", s.addressToScan, "cursor", s.stellarCursor)
 
-	return fetchTransactions(context.TODO(), client, s.addressToScan, s.stellarCursor, transactionHandler)
+	return fetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
