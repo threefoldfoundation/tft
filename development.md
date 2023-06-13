@@ -86,7 +86,7 @@ In Remix when you compile a contract you can select ABI button (this will copy t
 
 Save the contents to a file.
 
-### Prequisites
+### Prerequisites
 
 - [abigen](https://github.com/binance-chain/bsc#building-the-source)
 
