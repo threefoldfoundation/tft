@@ -29,7 +29,7 @@ To most important functions and events of this multisig contract are:
 
 These function will generate events that we can pick up in our bridge deamon in order to make this depositing / withdrawing from and to stellar an automated system.
 
-We can create a multisig contract deployment with X amount of owners. When the multisig contract is deployed we can make the contract owner of our token contract. When we have verified that the transaction is successfull we can start to create a new multisig transaction to remove the initial contract owner (the single signature account). When all the accounts on the multisig wallet have signed this transaction, the initial contract owner will be removed and then only the multisig wallet is an owner of the contract.
+We can create a multisig contract deployment with X amount of owners. When the multisig contract is deployed we can make the contract owner of our token contract. When we have verified that the transaction is successful we can start to create a new multisig transaction to remove the initial contract owner (the single signature account). When all the accounts on the multisig wallet have signed this transaction, the initial contract owner will be removed and then only the multisig wallet is an owner of the contract.
 
 A frontend for this multisig wallet can be found here: [gnosis wallet](https://wallet.gnosis.pm/) allows us to create a multisig wallet.
 
@@ -55,15 +55,15 @@ The bridge is a daemon that has 2 different running modes:
 
 ### Bridge mode
 
-To improve security because we are dealing with user funds we have chosen to work with Multisignature transactions on both Stellar and the taget Smart Chain.
+To improve security because we are dealing with user funds we have chosen to work with Multisignature transactions on both Stellar and the target Smart Chain.
 
 A master bridge is a bridge that will initiate all transactions (deposits/withdraws) and will wait for signatures / confirmation of follower (signer) bridges. All bridges (master/followers) will run with a key that is part of the multisig contract on the target smart chain.
 
 ### It scans its stellar address to look for incoming transactions
 
-The bridge monitors a central stellar account that is goverened by the threefoldfoundation. When a user sends an amount of TFT to that stellar account, the bridge will pick up this transaction. In the memo text of this transaction is the base64 encoded smart chain address of the receiver (which is first hex decoded).
+The bridge monitors a central stellar account that is governed by the threefoldfoundation. When a user sends an amount of TFT to that stellar account, the bridge will pick up this transaction. In the memo text of this transaction is the base64 encoded smart chain address of the receiver (which is first hex decoded).
 
-The bridge checks the amount that are transfered and the target on the smart chain and mints the tokens on the smart chain accordingly. To mint, the bridge calls the `mint` function on the smart contract.
+The bridge checks the amount that are transferred and the target on the smart chain and mints the tokens on the smart chain accordingly. To mint, the bridge calls the `mint` function on the smart contract.
 
 There is replay protection in place, a mint is based on the following:
 
@@ -71,9 +71,9 @@ There is replay protection in place, a mint is based on the following:
 - Target Smart Chain address
 - Value (number of tokens)
 
-When the mint occurs, the transaction ID is saved to the contract's storage. It also checks if this transction ID exists, if it exists the contract does not mint. This is the counter double mint.
+When the mint occurs, the transaction ID is saved to the contract's storage. It also checks if this transaction ID exists, if it exists the contract does not mint. This is the counter double mint.
 
-Flow: a user will deposit funds into the master bridge wallet, this wallet is [Multignature Stellar Wallet](https://developers.stellar.org/docs/glossary/multisig/). The master will initiate the minting transaction on the smart chain by calling the multisig contract `SubmitTransaction` call with the encoded `Mint` call of our token contract. Follower bridges will listen on Submission events on the multisig contract and confirm the transaction accordingly. Once enough confirmations have been submitted, the multisig contract will call the token contract `Mint` function and the funds will be minted on the target smart chain.
+Flow: a user will deposit funds into the master bridge wallet, this wallet is [Multignature Stellar Wallet](https://developers.stellar.org/docs/glossary/multisig/). The master will initiate the minting transaction on the smart chain by calling the multisig contract `SubmitTransaction` call with the encoded `Mint` call of our token contract. Follower bridges will listen to Submission events on the multisig contract and confirm the transaction accordingly. Once enough confirmations have been submitted, the multisig contract will call the token contract `Mint` function and the funds will be minted on the target smart chain.
 
 ### It reads events from the contract and looks for `withdraw` events
 
