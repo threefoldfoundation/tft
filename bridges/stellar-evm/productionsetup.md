@@ -8,6 +8,6 @@ Prepare Stellar accounts for the master and the cosigners ( by different people 
 
 If the multisig is defined as a x out of y, make sure no-one can access x secrets, if not add an extra signer, increasing x and y.
 
-if x==y, add at least one extra signer, increasing y. These should not run an active cosigner but if someone looses the signer secret or no longer wants to co-operate, the funds on the Stellar vault are lost.
+if x==y, add at least one extra signer, increasing y. These should not run an active cosigner but if someone loses the signer secret or no longer wants to co-operate, the funds on the Stellar vault are lost.
 
 Set the tresholds of the Stellar account to x and the master weight to 0.

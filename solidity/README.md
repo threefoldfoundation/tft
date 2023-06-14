@@ -31,7 +31,7 @@ When a `mintTokens` or `upgradeTo` must happen, one of the owners of the multisi
 
 This is particulary good for a token bridge. Calls to `mintTokens` can happen in a fair and distributed manner without requiring human intervention.
 
-We also harden security of the token contract in the case that one of the keys are compromised. If that happens we can identity which key that is and remove that key as an owner of the multisig contract and replace it with another.
+We also harden security of the token contract in the case that one of the keys are compromised. If that happens we can identify which key that is and remove that key as an owner of the multisig contract and replace it with another.
 
 ### Building
 
@@ -51,7 +51,7 @@ To solve this we made two crucial design choices:
 ### Setup
 
 The problem with a contract proxy is that the proxy does not actually call the implementing contract. Instead,
-it loads the function code and executes it in it's own storage space. This means that the storage needs to be
+it loads the function code and executes it in its own storage space. This means that the storage needs to be
 defined in the proxy as well, and the storage layout needs to be the same.
 
 ![contract hierarchy diagram](setup.svg)
@@ -60,8 +60,8 @@ The two main contracts here are Proxy and tokenV0..Vx
 
 **tokenV0..Vx** are the actual upgradeable implementations
 
-**Proxy** is the contract that will be called by the users. It delegates all calls to the current tokenV0..Vx implementation. The method are not defined here , every call it receives is delegated so if the implementation adds functionality, this contract does not have to be upgraded.
-This way , the address of the deployed TokenProxy never changes.
+**Proxy** is the contract that will be called by the users. It delegates all calls to the current tokenV0..Vx implementation. The method are not defined here, every call it receives is delegated so if the implementation adds functionality, this contract does not have to be upgraded.
+This way, the address of the deployed TokenProxy never changes.
 
 helper contracts:
 
