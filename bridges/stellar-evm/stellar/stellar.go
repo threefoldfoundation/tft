@@ -57,13 +57,13 @@ func IntToStroops(x int64) int64 {
 	return x * Precision
 }
 
-// IntToStroops converts units to stroops (1 TFT = 1000000 stroops)
+// DecimalToStroops converts units to stroops (1 TFT = 1000000 stroops)
 func DecimalToStroops(x decimal.Decimal) int64 {
 	stroops := x.Mul(decimal.NewFromInt(Precision))
 	return stroops.IntPart()
 }
 
-// IntToStroops converts stroops to units to (1 TFT = 1000000 stroops)
+// StroopsToDecimal converts stroops to units (1 TFT = 1000000 stroops)
 func StroopsToDecimal(stroops int64) decimal.Decimal {
 	decimalStroops := decimal.NewFromInt(stroops)
 	return decimalStroops.Div(decimal.NewFromInt(Precision))
