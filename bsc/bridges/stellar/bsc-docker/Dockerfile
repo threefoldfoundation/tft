@@ -10,7 +10,7 @@ RUN apt-get update -y \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN if [ "${TARGETARCH}" = "arm64" ]; then geth_binary="geth_linux_arm64"; else geth_binary="geth_linux"; fi && \ 
+RUN if [ "${TARGETARCH}" = "arm64" ]; then geth_binary="geth-linux-arm64"; else geth_binary="geth_linux"; fi && \ 
   curl https://api.github.com/repositories/265775217/releases/tags/v1.2.5 | jq -c ".assets[] | select( .browser_download_url | contains(\"${network}.zip\") or contains(\"$geth_binary\")) | .browser_download_url" | xargs -n1 curl -LOJ && \
   unzip ${network}.zip -d / && \
   sed -i 's/^HTTPHost.*/HTTPHost = "0.0.0.0"/' /config.toml && \
