@@ -313,12 +313,12 @@ func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, sender s
 
 	err := w.CreateAndSubmitRefund(ctx, sender, amount, tx.Hash, true)
 	for err != nil {
-		log.Error("error while refunding", "err", err.Error(), "amount", StroopsToDecimal(int64(totalAmount)))
+		log.Error("error while refunding", "err", err.Error(), "amount", StroopsToDecimal(int64(totalAmount)), "tx", tx.Hash)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(10 * time.Second):
-			err = w.CreateAndSubmitRefund(ctx, tx.Account, amount, tx.Hash, true)
+			err = w.CreateAndSubmitRefund(ctx, sender, amount, tx.Hash, true)
 		}
 	}
 

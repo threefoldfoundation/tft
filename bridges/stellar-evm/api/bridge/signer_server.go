@@ -356,7 +356,7 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 		}
 
 		if stellar.DecimalToStroops(depositedAmount) != (refundAmountWithoutPenalty + WithdrawFee) {
-			return errors.Wrap(ErrInvalidTransaction, "The refunded amount does not match the deposit")
+			return errors.Wrapf(ErrInvalidTransaction, "The refunded amount %s does not match the deposit %s minus the penalty", stellar.StroopsToDecimal(refundAmountWithoutPenalty), depositedAmount)
 		}
 	}
 
