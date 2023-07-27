@@ -17,14 +17,16 @@ Upload the [contract](../solidity/contract) folder to the remix Editor.
 
 ### 2: Compile the token contract
 
-Select `tokenV0.sol` and switch to the 2nd tab in left Menu. Execute `compile` action.
+Select `tokenV1.sol` and switch to the 2nd tab in left Menu. Execute `compile` action.
+
+**Remark:** Solidity version 0.8.20 introduces the PUSH0(0x5f) opcode which is only supported on ETH mainnet and not on any other chains. Use version 0.8.19 or target the `paris` evm.
 
 ### 3: Deploy token contract
 
 If you compiled the token contract, select the 3th tab in left Menu and select following:
 
 - Use `Injected WEB3` if using metamask
-- In the contract dropdown, select `TFT - tokenV0.sol`
+- In the contract dropdown, select `TFT - tokenV1.sol`
 - Click `deploy`
 - Execute transaction on metamask
 

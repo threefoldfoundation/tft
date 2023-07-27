@@ -28,7 +28,7 @@ base64.b64encode(b).decode("utf-8")
 
 - From Stellar to Ethereum:
 
-   To cover the costs of the bridge, a fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
+   To cover the costs of the bridge, a default fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
 
    Make sure the  amount received on the bridge's Stellar address is larger than the Fee..
 
@@ -38,4 +38,4 @@ base64.b64encode(b).decode("utf-8")
 
 ## Refunds
 
-When the supplied memo text of a deposit transaction can not be decoded to a valid Ethereum address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge  more expensive.
+When the supplied memo text of a deposit transaction can not be decoded to a valid Ethereum address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge more expensive.
