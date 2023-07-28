@@ -22,13 +22,19 @@ jobs:
       - name: compress accountactivation
         run: cd dist && tar -czf accountactivation_linux_amd64.tar.gz accountactivation
 
+      - name: build stellar-evm bridge
+        run: cd bridges/stellar-evm && GOOS=linux GOARCH=amd64 go build -ldflags="-X 'main.Version=${{ github.ref }}'" -o ../../dist/
+
+      - name: compress stellar-evm bridge
+        run: cd dist && tar -czf stellarevmbridge_linux_amd64.tar.gz stellar-evm
+
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Upload accountactivation release binary
+      - name: Upload accountactivation binary
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -36,4 +42,15 @@ jobs:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./dist/accountactivation_linux_amd64.tar.gz
           asset_name: accountactivation_linux_amd64.tar.gz
+          asset_content_type: application/gzip
+
+
+      - name: Upload stellar-evm bridge binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./dist/stellarevmbridge_linux_amd64.tar.gz
+          asset_name: stellarevmbridge_linux_amd64.tar.gz
           asset_content_type: application/gzip

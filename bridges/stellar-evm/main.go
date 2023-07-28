@@ -16,8 +16,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var Version = "development"
+
 func main() {
 
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(Version)
+		return
+	}
 	var bridgeCfg bridge.BridgeConfig
 	var stellarCfg stellar.StellarConfig
 	var ethCfg bridge.EthConfig
