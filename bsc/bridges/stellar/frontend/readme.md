@@ -11,6 +11,8 @@ yarn
 yarn start
 ```
 
+If you're having node > v16, `export NODE_OPTIONS=--openssl-legacy-provider` first as webpack 4 uses node's md4 hashes.
+
 ## Connect metamask to binance chain testnet
 
 [binance academy](https://academy.binance.com/nl/articles/connecting-metamask-to-binance-smart-chain)
