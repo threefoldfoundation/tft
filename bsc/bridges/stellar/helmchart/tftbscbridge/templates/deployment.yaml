@@ -90,8 +90,8 @@ spec:
               mountPath: /storage
         {{ end }}
         - name: lightnode
-          image: threefolddev/bnbchain-main:1.2.5
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.bscNodeImage.repository }}:{{ .Values.bscNodeImage.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.bscNodeImage.pullPolicy }}
           ports:
             - name: ws
               containerPort: 8546
