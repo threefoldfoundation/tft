@@ -5,9 +5,6 @@ metadata:
   labels:
     {{- include "tftbscbridge.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "tftbscbridge.selectorLabels" . | nindent 6 }}
@@ -34,21 +31,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # ports:
-          #   - name: http
-          #     containerPort: 80
-          #     protocol: TCP
           env:
           - name: STELLAR_SECRET
             value: {{ .Values.stellar_secret }}
-          - name: ACCOUNT_JSON
-            value: /etc/eth-bridge/account_json
-          - name: ACCOUNT_PASSWORD
-            value: {{ .Values.account_password }}
+          - name: ETH_KEY
+            value: {{ .Values.eth_key }}
           - name: CONTRACT_ADDRESS
             value: {{ .Values.contract_address }}
-          - name: MS_CONTRACT_ADDRESS
-            value: {{ .Values.ms_contract_address }}
           - name: ETH_NETWORK
             value: {{ .Values.eth_network }}
           - name: BRIDGE_MASTER_ADDRESS
@@ -63,10 +52,13 @@ spec:
             value: {{ .Values.rescan_height | quote }}
           - name: DEPOSIT_FEE
             value: {{ .Values.deposit_fee | quote }}
+          - name: RELAY_URL
+            value: {{ .Values.relay_url | quote }}
+          - name: RELAY_PSK
+            value: {{ .Values.relay_psk | quote }}
           args: [
             "--secret", "$(STELLAR_SECRET)",
-            "--account", "$(ACCOUNT_JSON)",
-            "--password", "$(ACCOUNT_PASSWORD)",
+            "--ethkey", "$(ETH_KEY)",
             "--ethnetwork", "$(ETH_NETWORK)",
             "--contract", "$(CONTRACT_ADDRESS)",
             "--mscontract", "$(MS_CONTRACT_ADDRESS)",
@@ -79,7 +71,12 @@ spec:
             "--feewallet", "$(STELLAR_FEE_WALLET)",
             "--persistency", "/storage/node.json",
             "--rescanHeight", "$(RESCAN_HEIGHT)",
-            "--depositFee", "$(DEPOSIT_FEE)"
+            "--depositFee", "$(DEPOSIT_FEE)",
+            "--relay", "$(RELAY_URL)",
+            "--psk", "$(RELAY_PSK)",
+            {{ if .Values.rescan }}
+            "--rescan=true",
+            {{ end}}
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -107,12 +104,6 @@ spec:
         - name: tftbscbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:
             claimName: {{if .Values.volume.existingpersistentVolumeClaim }} {{.Values.volume.existingpersistentVolumeClaim}} {{ else }} tftbscbridge-volume-claim-{{ .Release.Name }} {{ end }}
-        - name: config-volume
-          configMap:
-            name: {{ template "tftbscbridge.fullname" . }}
-            items:
-              - key: account_json
-                path: account_json
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

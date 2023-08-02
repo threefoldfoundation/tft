@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: stellarbridge
+  repository: ghcr.io/threefoldfoundation/tft-stellar-evm-bridge
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -48,9 +48,8 @@ stellar_secret: "SDPYTGXR5AVMRC7RPGHICR33A76QUAJPJA344DM3TIATZ6PUBMGPVWE4"
 # testnet or production
 network: "testnet"
 
-# json content for the account json file
-account_json: |-
-account_password: "test123"
+# Eth key
+eth_key: "0x..."
 # smart-chain-testnet or smart-chain-mainnet
 eth_network: "smart-chain-testnet"
 # production: 0x8f0FB159380176D324542b3a7933F0C2Fd0c2bbf
@@ -60,8 +59,12 @@ ms_contract_address: "0x6B5507633eBa86E202b1385d47415d6e2c51937D"
 # production: GBFFWXWBZDILJJAMSINHPJEUJKB3H4UYXRWNB4COYQAF7UUQSWSBUXW5
 bridge_master_address: "GAAIZXWNMODKAPITN7E2CSYOJUWJSKGE6CYGYZFEZI7ZBNLD5WXABB2V"
 # production: GAB73WDASF6VKA6IVJQT5DTNG64CILPMAZH4OHXKXPKA4WOBNNXCFJZQ
-# stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
+stellar_fee_wallet: "GBC3XAFKPN6RDL4MEDZCYS3GOP3ANRCHRY5722UUJ52RVVODVMMWAGTJ"
 is_follower: false
+
+relay_url: ""
+relay_psk: ""
+
 eth_url: "/storage/geth.ipc"
 
 # Rescan from a certain blockheight
@@ -69,7 +72,7 @@ eth_url: "/storage/geth.ipc"
 rescan_height: 100
 
 # Deposit fee in TFT
-deposit_fee: 50
+deposit_fee: 200
 
 # If enabled, the bridge daemon will also start
 # It's recommended to delete the pod (helm uninstall)
