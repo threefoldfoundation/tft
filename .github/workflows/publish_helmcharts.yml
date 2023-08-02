@@ -1,4 +1,4 @@
-name: Publish Docker images
+name: Publish Helm charts
 
 on:
   release:

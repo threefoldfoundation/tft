@@ -52,7 +52,7 @@ jobs:
         with:
           push: true
           no-cache: true
-          context: bsc/bridges/stellar/bsc-docker
+          context: bsc/bsc-docker
           tags: ${{ steps.metatbscchain.outputs.tags }}
           labels: ${{ steps.metatbscchain.outputs.labels }}
       
