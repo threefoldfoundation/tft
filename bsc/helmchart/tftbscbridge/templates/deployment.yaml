@@ -81,8 +81,6 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: config-volume
-              mountPath: /etc/eth-bridge
             - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage
         {{ end }}
