@@ -61,7 +61,6 @@ spec:
             "--ethkey", "$(ETH_KEY)",
             "--ethnetwork", "$(ETH_NETWORK)",
             "--contract", "$(CONTRACT_ADDRESS)",
-            "--mscontract", "$(MS_CONTRACT_ADDRESS)",
             "--master", "$(BRIDGE_MASTER_ADDRESS)",
             "--network","$(STELLAR_NETWORK)",
             "--ethurl", "$(ETH_URL)",
