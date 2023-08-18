@@ -4,7 +4,7 @@ Token address on Binance Smart Chain Testnet: [0xDC5a9199e2604A6BF4A99A583034506
 
 You can add the token address to a Web3 compatible wallet. If you are using Metamask, check out following [guide](https://academy.binance.com/en/articles/connecting-metamask-to-binance-smart-chain) on how to connect Metamask to Binance Smart Chain Testnet or Mainnet.
 
-If you have setup Metamask for Binance Chain Testnet, use the [bnb-faucet](https://testnet.binance.org/faucet-smart) to fund your account with some Testnet BNB's.
+If you have setup Metamask for Binance Chain Testnet, use the [bnb-faucet](https://testnet.binance.org/faucet-smart) or [sepolia faucet](https://sepolia-faucet.pk910.de) for the sepolia testnet to fund your account with some Testnet BNB's.
 (You need BNB in order to deploy the contract on BSC)
 
 ## Deploy the contract yourself

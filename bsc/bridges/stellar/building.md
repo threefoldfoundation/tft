@@ -1,6 +1,4 @@
-# Building the bridge
-
-## Building the frontend docker image
+# Building the bridge frontend docker image
 
 In the `frontend` folder execute
 
