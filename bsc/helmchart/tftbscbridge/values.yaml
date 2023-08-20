@@ -12,7 +12,7 @@ image:
 bscNodeImage:
   repository: ghcr.io/threefoldfoundation/bscchain-mainnet
   pullPolicy: IfNotPresent
-  tag: "1.4.3"
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""
