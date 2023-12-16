@@ -363,8 +363,5 @@ func (bridge *Bridge) withdraw(ctx context.Context, we WithdrawEvent) (err error
 	//TODO: Should this adress be fetched through the wallet?
 	includeWithdrawFee := bridge.wallet.Config.StellarFeeWallet != ""
 	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", includeWithdrawFee)
-	if err != nil {
-		log.Error(fmt.Sprintf("failed to create payment for withdrawal to %s, %s", we.blockchain_address, err.Error()))
-	}
 	return
 }
