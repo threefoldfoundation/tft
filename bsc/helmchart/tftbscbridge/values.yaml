@@ -64,7 +64,7 @@ relay_psk: ""
 eth_url: "ws://xxx.xx.xx.xx:8546"
 
 # Rescan from a certain blockheight
-# If set to 0, it will just take the current blockheight from the lightnode
+# If set to 0, it will just take the current blockheight
 rescan_height: 100
 
 # Deposit fee in TFT

@@ -39,4 +39,20 @@ jobs:
               asset_name: tftbscbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
               asset_content_type: application/gzip
 
+
+      - name: Package tftethbridge chart
+        uses: WyriHaximus/github-action-helm3@v3
+        with:
+          exec: helm package -d packagedcharts --app-version ${{ steps.semver.outputs.non-prefixed }} --version ${{ steps.semver.outputs.non-prefixed }} ethereum/helmchart/tftethbridge
+
+      - name: Upload tftethbridge packaged chart
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+            GITHUB_TOKEN: ${{ github.token }}
+        with:
+            upload_url: ${{ steps.get_release.outputs.upload_url }}
+            asset_path: packagedcharts/tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+            asset_name: tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+            asset_content_type: application/gzip
+
       
