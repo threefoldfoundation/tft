@@ -1,4 +1,4 @@
-FROM golang:1.20 as BUILDER
+FROM golang:1.21 as BUILDER
 WORKDIR /go/src/github.com/threefoldfoundation/tft/bridges/stellar-evm
 COPY ./ ./
 RUN go build -ldflags '-w -s -extldflags "-static"'
