@@ -56,7 +56,7 @@ type SignerService struct {
 }
 
 func NewSignerServer(host host.Host, bridgeMasterAddress string, bridgeContract *BridgeContract, stellarWallet *stellar.Wallet, depositFee int64) error {
-	log.Info("server started", "identity", host.ID().Pretty())
+	log.Info("server started", "identity", host.ID())
 	partialMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", host.ID()))
 	if err != nil {
 		return err

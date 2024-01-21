@@ -276,7 +276,7 @@ func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest Et
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
-		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id.Pretty())
+		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id)
 	}
 
 	var response EthSignResponse
