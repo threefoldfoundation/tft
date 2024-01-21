@@ -25,7 +25,6 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        {{ if .Values.enable_bridge }}
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -79,21 +78,6 @@ spec:
           ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: tftbscbridge-storage-{{ .Release.Name }}
-              mountPath: /storage
-        {{ end }}
-        - name: lightnode
-          image: "{{ .Values.bscNodeImage.repository }}:{{ .Values.bscNodeImage.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.bscNodeImage.pullPolicy }}
-          ports:
-            - name: ws
-              containerPort: 8546
-              protocol: TCP
-          args: [
-            "--syncmode=light",
-            "--ws"
-          ]
           volumeMounts:
             - name: tftbscbridge-storage-{{ .Release.Name }}
               mountPath: /storage

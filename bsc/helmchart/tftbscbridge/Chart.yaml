@@ -2,5 +2,7 @@ apiVersion: v2
 name: tftbscbridge
 description: TFT stellar-bsc bridge
 type: application
+# These versions are set during the packaging of a release
+# No need to manually update them
 version: 0.2.7
 appVersion: "1.4.1"

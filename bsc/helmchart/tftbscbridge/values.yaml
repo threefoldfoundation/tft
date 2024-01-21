@@ -9,11 +9,6 @@ image:
   pullPolicy: IfNotPresent
   tag: ""
 
-bscNodeImage:
-  repository: ghcr.io/threefoldfoundation/bscchain-mainnet
-  pullPolicy: IfNotPresent
-  tag: ""
-
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -65,7 +60,8 @@ is_follower: false
 relay_url: ""
 relay_psk: ""
 
-eth_url: "/storage/geth.ipc"
+# Required ws url of the bsc node
+eth_url: "ws://xxx.xx.xx.xx:8546"
 
 # Rescan from a certain blockheight
 # If set to 0, it will just take the current blockheight from the lightnode
@@ -73,11 +69,6 @@ rescan_height: 100
 
 # Deposit fee in TFT
 deposit_fee: 200
-
-# If enabled, the bridge daemon will also start
-# It's recommended to delete the pod (helm uninstall)
-# before setting this to true and redeploying
-enable_bridge: true
 
 resources:
   {}

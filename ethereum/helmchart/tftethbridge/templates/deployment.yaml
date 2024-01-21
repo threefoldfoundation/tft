@@ -25,7 +25,6 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        {{ if .Values.enable_bridge }}
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -86,7 +85,6 @@ spec:
           volumeMounts:
             - name: tftethbridge-storage-{{ .Release.Name }}
               mountPath: /storage
-        {{ end }}
       volumes:
         - name: tftethbridge-storage-{{ .Release.Name }}
           persistentVolumeClaim:

@@ -39,20 +39,4 @@ jobs:
           tags: ${{ steps.metatstellarevmbridge.outputs.tags }}
           labels: ${{ steps.metatstellarevmbridge.outputs.labels }}
 
-      - name: Extract metadata for bscchain-mainnet docker
-        id: metatbscchain 
-        uses: docker/metadata-action@v4
-        with:
-          images: ghcr.io/threefoldfoundation/bscchain-mainnet
-          tags: |
-              type=semver,pattern={{version}}
-
-      - name: Build and push the  bscchain-mainnet container
-        uses: docker/build-push-action@v3
-        with:
-          push: true
-          no-cache: true
-          context: bsc/bsc-docker
-          tags: ${{ steps.metatbscchain.outputs.tags }}
-          labels: ${{ steps.metatbscchain.outputs.labels }}
       

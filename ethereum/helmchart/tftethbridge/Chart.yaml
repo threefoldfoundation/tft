@@ -2,5 +2,7 @@ apiVersion: v2
 name: tftethbridge
 description: TFT stellar-ethereum bridge
 type: application
+# These versions are set during the packaging of a release
+# No need to manually update them
 version: 0.3.7
 appVersion: "1.4.1"

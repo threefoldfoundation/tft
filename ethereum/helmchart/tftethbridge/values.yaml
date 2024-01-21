@@ -70,11 +70,6 @@ deposit_fee: 1000
 
 rescan: false
 
-# If enabled, the bridge daemon will also start
-# It's recommended to delete the pod (helm uninstall)
-# before setting this to true and redeploying
-enable_bridge: true
-
 resources:
   {}
   # We usually recommend not to specify default resources and to leave this as a conscious
