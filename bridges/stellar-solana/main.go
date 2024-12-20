@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
 )
@@ -151,6 +152,7 @@ import (
 func main() {
 	sol, err := solana.New(context.Background(), "local")
 	if err != nil {
+		fmt.Println(err)
 		panic(err)
 	}
 
