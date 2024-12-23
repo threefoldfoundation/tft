@@ -4,9 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/programs/memo"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
+	confirm "github.com/gagliardetto/solana-go/rpc/sendAndConfirmTransaction"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -37,16 +40,77 @@ var (
 type Solana struct {
 	rpcClient *rpc.Client
 	wsClient  *ws.Client
+
+	account solana.PrivateKey
 }
 
 // New Solana client connected to the provided network
-func New(ctx context.Context, network string) (*Solana, error) {
+func New(ctx context.Context, network string, keyFile string) (*Solana, error) {
+	account, err := solana.PrivateKeyFromSolanaKeygenFile(keyFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load solana key file")
+	}
+
 	rpcClient, wsClient, err := getSolanaClient(ctx, network)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
 
-	return &Solana{rpcClient: rpcClient, wsClient: wsClient}, nil
+	return &Solana{rpcClient: rpcClient, wsClient: wsClient, account: account}, nil
+}
+
+// MintTokens tries to mint new tokens with the given mint context.
+func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
+	to := solana.PublicKeyFromBytes(info.To[:])
+
+	recent, err := sol.rpcClient.GetLatestBlockhash(ctx, rpc.CommitmentFinalized)
+	if err != nil {
+		return errors.Wrap(err, "failed to get latest finalized block hash")
+	}
+
+	var mint token.Mint
+	err = sol.rpcClient.GetAccountDataInto(ctx, tftAddress, &mint)
+	if err != nil {
+		return errors.Wrap(err, "failed to get token account info")
+	}
+
+	if mint.MintAuthority == nil {
+		return errors.New("can't mint token without mint authority")
+	}
+
+	spew.Dump(mint)
+
+	tx, err := solana.NewTransaction([]solana.Instruction{
+		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
+		token.NewMintToInstruction(info.Amount, tftAddress, to, *mint.MintAuthority, nil).Build(),
+	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
+	if err != nil {
+		return errors.Wrap(err, "failed to create mint transaction")
+	}
+
+	spew.Dump(tx)
+
+	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
+		if sol.account.PublicKey().Equals(key) {
+			return &sol.account
+		}
+
+		return nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to sign mint transaction")
+	}
+
+	spew.Dump(tx)
+
+	_, err = confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
+	if err != nil {
+		return errors.Wrap(err, "failed to submit mint transaction")
+	}
+
+	log.Info().Msg("Submitted mint tx")
+
+	return nil
 }
 
 // SubscribeTokenBurns creates a subscription for **NEW** token burn events on the current token. This does not return any previous burns.

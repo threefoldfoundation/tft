@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mr-tron/base58"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
 )
 
@@ -150,7 +151,21 @@ import (
 // }
 
 func main() {
-	sol, err := solana.New(context.Background(), "local")
+	sol, err := solana.New(context.Background(), "local", "/home/lee/.config/solana/id.json")
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+
+	v, err := base58.Decode("9fZ6TL7TkdVsodPWJd2UYyA9oTMD3PZ1FKw1PX7jhQjc")
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+	var t [32]byte
+
+	copy(t[:], v)
+	err = sol.MintTokens(context.Background(), solana.MintInfo{Amount: 10000000000, TxID: "thisIsATxID", To: t})
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
