@@ -6,6 +6,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
+	budget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/memo"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
@@ -36,6 +37,11 @@ var (
 	// systemSig is an (apparant) system generated signature
 	systemSig = solana.MustSignatureFromBase58("1111111111111111111111111111111111111111111111111111111111111111")
 )
+
+// Override the default "old" token program to the token program 2022
+func init() {
+	token.SetProgramID(tokenProgram2022)
+}
 
 type Solana struct {
 	rpcClient *rpc.Client
@@ -82,7 +88,9 @@ func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
 
 	tx, err := solana.NewTransaction([]solana.Instruction{
 		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
-		token.NewMintToInstruction(info.Amount, tftAddress, to, *mint.MintAuthority, nil).Build(),
+		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, nil).Build(),
+		// TODO: Compute actual limit
+		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
 		return errors.Wrap(err, "failed to create mint transaction")
@@ -135,12 +143,13 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to subscribe to token program errors")
 	}
-	defer sub.Unsubscribe()
 
 	ch := make(chan Burn, 10)
 	go func() {
 		// Close the channel in case the goroutine exits
 		defer close(ch)
+		// Also close the subscription in this case
+		defer sub.Unsubscribe()
 
 		for {
 			got, err := sub.Recv(ctx)
@@ -173,6 +182,9 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 				continue
 			}
 
+			spew.Dump(tx)
+
+			// TODO: Compute limit is optional
 			ixLen := len(tx.Message.Instructions)
 			if len(tx.Message.Instructions) != 3 {
 				log.Debug().Int("ixLen", ixLen).Str("signature", got.Value.Signature.String()).Msg("Skipping Tx which did not have the expected 3 instructions")

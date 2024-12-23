@@ -171,5 +171,14 @@ func main() {
 		panic(err)
 	}
 
-	sol.SubscribeTokenBurns(context.Background())
+	sub, err := sol.SubscribeTokenBurns(context.Background())
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+
+	}
+
+	for burn := range sub {
+		fmt.Println("Burning", burn.RawAmount(), "tokens with memo", burn.Memo())
+	}
 }
