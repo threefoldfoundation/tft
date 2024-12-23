@@ -87,10 +87,10 @@ func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
 	spew.Dump(mint)
 
 	tx, err := solana.NewTransaction([]solana.Instruction{
-		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
-		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, nil).Build(),
 		// TODO: Compute actual limit
 		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
+		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
+		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, nil).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
 		return errors.Wrap(err, "failed to create mint transaction")
