@@ -2,21 +2,16 @@ package solana
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
-
-	"github.com/gagliardetto/solana-go/programs/memo"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 )
-
-const ()
 
 var (
 	// ErrSolanaNetworkNotSupported is returned when an unknown Solana network name is requested
@@ -29,7 +24,11 @@ var (
 	memoProgram = solana.MustPublicKeyFromBase58("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
 
 	// tftAddress is the address of the tft token on chain, hardcoded for now
-	tftAddress = solana.MustPublicKeyFromBase58("tftu9NtpEyxfsT1ggw3e5ZEyctC8yYz4CVz9GyAyGV7")
+	// tftAddress = solana.MustPublicKeyFromBase58("tftu9NtpEyxfsT1ggw3e5ZEyctC8yYz4CVz9GyAyGV7")
+	tftAddress = solana.MustPublicKeyFromBase58("TFT7gjfh2yatov3nnuwHmG8pEU5Y9xAditVymo74iag")
+
+	// computeBudgetProgram is the address of the compute budget program
+	computeBudgetProgram = solana.MustPublicKeyFromBase58("ComputeBudget111111111111111111111111111111")
 
 	// systemSig is an (apparant) system generated signature
 	systemSig = solana.MustSignatureFromBase58("1111111111111111111111111111111111111111111111111111111111111111")
@@ -50,116 +49,137 @@ func New(ctx context.Context, network string) (*Solana, error) {
 	return &Solana{rpcClient: rpcClient, wsClient: wsClient}, nil
 }
 
-func (sol *Solana) SubscribeTokenBurns(ctx context.Context) error {
-	//sub, err := sol.wsClient.ProgramSubscribeWithOpts(tokenProgram2022, rpc.CommitmentFinalized, solana.EncodingBase64Zstd, nil)
+// SubscribeTokenBurns creates a subscription for **NEW** token burn events on the current token. This does not return any previous burns.
+func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error) {
+	// There isn't really a direct way to get just burns. Instead we do the following:
+	// - Subscribe to logs, which mention the token address
+	// - For every event, extract the signature. The signature can be used to load the full transaction.
+	// - It seems there are 3 log events being emitted
+	//    - The first one carries the systemSig, and should be ignored as we can't load a meaningfull transaction with this.
+	//    - The second one carries the actual signature. However if we immediately try and fetch the transaction with this signature,
+	//      there is a chance the transaction is not found.
+	//    - The third seems to be a duplicate of the second, but in the next slot. At this point in time, the signature can be used to
+	//      load the transaction.
+	//      TODO: Check if adding a small delay after receiving the second log but before fetching the tx causes it to succeed.
+	//
+	// - Once we have the tx, check if its a burn tx. Notice that we will __require__ a memo to be sent to identify the token destination.
+	//    - Validate there are 3 instruction in the TX:
+	//      - One will be the memo instruction, the data is the actual memo.
+	//      - One will be a token instruction. Try to parse this as a burn instruction to extract the value.
+	//      - One is compute budget, we don't care for this.
 	sub, err := sol.wsClient.LogsSubscribeMentions(tftAddress, rpc.CommitmentFinalized)
 	if err != nil {
-		return errors.Wrap(err, "failed to subscribe to token program errors")
+		return nil, errors.Wrap(err, "failed to subscribe to token program errors")
 	}
 	defer sub.Unsubscribe()
 
-	for {
-		got, err := sub.Recv(ctx)
-		if err != nil {
-			return err
-		}
-		// spew.Dump(got)
+	ch := make(chan Burn, 10)
+	go func() {
+		// Close the channel in case the goroutine exits
+		defer close(ch)
 
-		if got.Value.Signature.Equals(systemSig) {
-			fmt.Println()
-			fmt.Println("Skipping logs for system tx")
-			fmt.Println()
-			continue
-		}
+		for {
+			got, err := sub.Recv(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get new tx logs from subscription")
+				return
+			}
 
-		fmt.Println()
-		// fmt.Printf("%+#v\n", got)
-		fmt.Println()
-
-		// decodedBinary := got.Value.Account.Data.GetBinary()
-		logs := got.Value.Logs
-		for _, log := range logs {
-			fmt.Println(log)
-		}
-		// decodedBinary := got.Value.Logs
-		// if decodedBinary != nil {
-		// 	spew.Dump(decodedBinary)
-		// }
-
-		fmt.Println("Fetch tx with sig", got.Value.Signature)
-		res, err := sol.rpcClient.GetTransaction(ctx, got.Value.Signature, nil)
-		if err != nil {
-			if errors.Is(err, rpc.ErrNotFound) {
-				fmt.Println("Skipping tx which can't be found")
+			if got.Value.Signature.Equals(systemSig) {
+				log.Debug().Msg("Skipping logs for system tx")
 				continue
 			}
-			fmt.Println(err)
-			return err
-		}
 
-		spew.Dump(got)
-		fmt.Println("full res dump")
-		spew.Dump(res)
-
-		tx, err := res.Transaction.GetTransaction()
-		if err != nil {
-			fmt.Println("failed to decode transaction", err)
-			continue
-		}
-
-		for _, ix := range tx.Message.Instructions {
-			accounts, err := tx.AccountMetaList()
+			log.Debug().Str("signature", got.Value.Signature.String()).Msg("Fetch tx with sig")
+			res, err := sol.rpcClient.GetTransaction(ctx, got.Value.Signature, nil)
 			if err != nil {
-				fmt.Println("could not resolve account meta list", err)
-				break
-			}
-
-			switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
-			case memoProgram:
-				fmt.Println()
-				fmt.Println("Attempt to decode memo instruction")
-				fmt.Println()
-				// NOTE: for the memo program, data is the raw data and does not need to be decoded into an instruction
-				memoIx, err := memo.DecodeInstruction(accounts, ix.Data)
-				if err != nil {
-					fmt.Println()
-					fmt.Println("failed to decode memo instruction", string(ix.Data), err)
-					fmt.Println()
-					spew.Dump(ix)
-					break
-				}
-				spew.Dump(memoIx)
-			case tokenProgram2022:
-				fmt.Println()
-				fmt.Println("Attempt to decode token instruction")
-				fmt.Println()
-				tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
-				if err != nil {
-					fmt.Println("failed to decode token instruction", err)
-					spew.Dump(ix)
-					break
-				}
-
-				spew.Dump(tokenIx)
-				// At this point, verify its a burn
-				// TODO: it seems burnchecked is returned but maybe we also need to check for regular `burn`
-				burn, ok := tokenIx.Impl.(*token.BurnChecked)
-				if !ok {
-					// TODO: continue here in case there are multiple token ops in the same transaction? is that possible?
+				if errors.Is(err, rpc.ErrNotFound) {
+					// TODO: Considering we get the actual log twice, there might be a better way to handle this
+					log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx which can't be found")
 					continue
 				}
-				spew.Dump(burn)
-			default:
-
+				log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Could not fetch transaction")
+				// TODO: Perhaps we should retry here?
+				continue
 			}
-			// fmt.Println(ix)
-			// fmt.Println()
+
+			tx, err := res.Transaction.GetTransaction()
+			if err != nil {
+				log.Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode transaction")
+				continue
+			}
+
+			ixLen := len(tx.Message.Instructions)
+			if len(tx.Message.Instructions) != 3 {
+				log.Debug().Int("ixLen", ixLen).Str("signature", got.Value.Signature.String()).Msg("Skipping Tx which did not have the expected 3 instructions")
+				continue
+			}
+
+			memoText := ""
+			burnAmount := uint64(0)
+			tokenDecimals := uint8(0)
+			illegalOp := false
+
+		outer:
+			for _, ix := range tx.Message.Instructions {
+				accounts, err := tx.AccountMetaList()
+				if err != nil {
+					log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to resolve account meta list")
+					break
+				}
+
+				switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
+				case memoProgram:
+					// TODO: verify encoding
+					memoText = string(ix.Data)
+				case tokenProgram2022:
+					tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
+					if err != nil {
+						// TODO: Is this technically an error?
+						log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode token instruction")
+						illegalOp = true
+						break
+					}
+
+					// At this point, verify its a burn
+					// TODO: it seems burnchecked is returned but maybe we also need to check for regular `burn`
+					burn, ok := tokenIx.Impl.(*token.BurnChecked)
+					if !ok {
+						log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is not of type burnChecked")
+						// Since we validate IX len, if this is not a valid burn operation there can't be another one.
+						illegalOp = true
+						break outer
+					}
+					if burn.Amount == nil {
+						log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without an amount set")
+						illegalOp = true
+						break outer
+					}
+					if burn.Decimals == nil {
+						log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without decimals set")
+						illegalOp = true
+						break outer
+					}
+					burnAmount = *burn.Amount
+					tokenDecimals = *burn.Decimals
+				case computeBudgetProgram:
+				// Nothing really to do here, we only care that this is ineed a compute budget program ix
+				default:
+					// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
+					illegalOp = true
+					break outer
+
+				}
+			}
+
+			if memoText != "" && burnAmount != 0 && !illegalOp {
+				ch <- Burn{amount: burnAmount, decimals: tokenDecimals, memo: memoText}
+			}
 
 		}
+	}()
 
-	}
-
-	return nil
+	return ch, nil
 }
 
 // Close the client terminating all subscriptions and open connections
