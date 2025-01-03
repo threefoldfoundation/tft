@@ -1,13 +1,15 @@
 package multisig
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
+)
 
 type StellarSignRequest struct {
 	TxnXDR             string
 	RequiredSignatures int
-	Receiver           common.Address //TODO: How can this be an Ethereum common.Address ?
+	Receiver           solana.Address // TODO: Valid ?
 	Block              uint64
-	Message            string //Contains the deposit transaction hash in case of a refund
+	Message            string // Contains the deposit transaction hash in case of a refund
 }
 
 type StellarSignResponse struct {

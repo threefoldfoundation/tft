@@ -2,6 +2,7 @@ package solana
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -14,13 +15,11 @@ import (
 	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/time/rate"
 )
 
 var (
-	// ErrSolanaNetworkNotSupported is returned when an unknown Solana network name is requested
-	ErrSolanaNetworkNotSupported = errors.New("the provided network is not a valid Solana network")
-
 	// tokenProgram2022 is the address of the token program with extensions
 	tokenProgram2022 = solana.MustPublicKeyFromBase58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -36,6 +35,11 @@ var (
 
 	// systemSig is an (apparant) system generated signature
 	systemSig = solana.MustSignatureFromBase58("1111111111111111111111111111111111111111111111111111111111111111")
+
+	// ErrSolanaNetworkNotSupported is returned when an unknown Solana network name is requested
+	ErrSolanaNetworkNotSupported = errors.New("the provided network is not a valid Solana network")
+	// ErrBurnTxNotFound is returned when we are trying to find a burn transaction
+	ErrBurnTxNotFound = errors.New("burn transaction for the provided signature not found")
 )
 
 // Override the default "old" token program to the token program 2022
@@ -43,18 +47,37 @@ func init() {
 	token.SetProgramID(tokenProgram2022)
 }
 
+type (
+	// Address of an account on the solana network
+	Address = solana.PublicKey
+	// Signature of a transaction on the solana network
+	Signature = solana.Signature
+	// Transaction on the solana network
+	Transaction = solana.Transaction
+	// ShortTxID is a shortened (hashed) solana tx hash made to fit in 32 bytes. This is a one way conversion.
+	ShortTxID = [32]byte
+)
+
 type Solana struct {
 	rpcClient *rpc.Client
 	wsClient  *ws.Client
 
 	account solana.PrivateKey
+
+	// The address of the token to use
+	tokenAddress solana.PublicKey
 }
 
 // New Solana client connected to the provided network
-func New(ctx context.Context, network string, keyFile string) (*Solana, error) {
+func New(ctx context.Context, network string, keyFile string, tokenAddr string) (*Solana, error) {
 	account, err := solana.PrivateKeyFromSolanaKeygenFile(keyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load solana key file")
+	}
+
+	parsedTokenAddress, err := solana.PublicKeyFromBase58(tokenAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not parse token address")
 	}
 
 	rpcClient, wsClient, err := getSolanaClient(ctx, network)
@@ -62,7 +85,146 @@ func New(ctx context.Context, network string, keyFile string) (*Solana, error) {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
 
-	return &Solana{rpcClient: rpcClient, wsClient: wsClient, account: account}, nil
+	return &Solana{rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress}, nil
+}
+
+// Address of the solana wallet
+func (sol *Solana) Address() Address {
+	return sol.account.PublicKey()
+}
+
+// IsMintTxID checks if a transaction ID is a known mint transaction.
+//
+// In other words, this checks if a given stellar tx ID has been used as a memo on solana to mint new tokens.
+func (sol *Solana) IsMintTxID(ctx context.Context, txID string) (bool, error) {
+	return false, errors.New("TODO")
+}
+
+// GetRequiresSignatureCount to create a solana transaction
+func (sol *Solana) GetRequiresSignatureCount(ctx context.Context) (int64, error) {
+	var mint token.Mint
+	err := sol.rpcClient.GetAccountDataInto(ctx, sol.tokenAddress, &mint)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get token account info")
+	}
+
+	if mint.MintAuthority == nil {
+		return 0, errors.New("can't mint token without mint authority")
+	}
+
+	var ma token.Multisig
+	err = sol.rpcClient.GetAccountDataInto(ctx, *mint.MintAuthority, &ma)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get mint authority multisig info")
+	}
+
+	// TODO: is this correct to figure out if the mint is multisig?
+	if !ma.IsInitialized {
+		return 1, nil
+	}
+
+	return int64(ma.M), nil
+}
+
+func (sol *Solana) GetSigners(ctx context.Context) ([]Address, error) {
+	var mint token.Mint
+	err := sol.rpcClient.GetAccountDataInto(ctx, sol.tokenAddress, &mint)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get token account info")
+	}
+
+	if mint.MintAuthority == nil {
+		return nil, errors.New("can't mint token without mint authority")
+	}
+
+	var ma token.Multisig
+	err = sol.rpcClient.GetAccountDataInto(ctx, *mint.MintAuthority, &ma)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get mint authority multisig info")
+	}
+
+	// TODO: is this correct to figure out if the mint is multisig?
+	if !ma.IsInitialized {
+		return []Address{*mint.MintAuthority}, nil
+	}
+
+	addrs := make([]Address, 0, ma.N)
+	for _, signer := range ma.Signers {
+		addrs = append(addrs, signer)
+	}
+
+	return addrs, nil
+}
+
+func (sol *Solana) CreateTokenSignature(receiver [32]byte, amount int64, txID string) (Signature, error) {
+	return Signature{}, errors.New("TODO")
+}
+
+// GetBurnTransaction on the solona network with the provided txId
+func (sol *Solana) GetBurnTransaction(ctx context.Context, txID ShortTxID) (Burn, error) {
+	sigs, err := sol.listTransactionSigs(ctx)
+	if err != nil {
+		return Burn{}, errors.Wrap(err, "failed to load token transaction signatures")
+	}
+
+	for _, sig := range sigs {
+		if shortenTxID(sig) == txID {
+			txRes, err := sol.rpcClient.GetTransaction(ctx, sig, &rpc.GetTransactionOpts{
+				// This is the default commitment but set it explicitly to be sure
+				Commitment: rpc.CommitmentFinalized,
+			})
+			if err != nil {
+				return Burn{}, errors.Wrap(err, "failed to load burn transaction")
+			}
+			tx, err := txRes.Transaction.GetTransaction()
+			if err != nil {
+				return Burn{}, errors.Wrap(err, "failed to decode tranasction")
+			}
+			burn, err := burnFromTransaction(*tx)
+			if err != nil {
+				return Burn{}, errors.Wrap(err, "failed to parse burn transaction")
+			}
+			return burn, nil
+		}
+	}
+
+	return Burn{}, ErrBurnTxNotFound
+}
+
+// Converts a base58 encoded transaction signature to shorter 32 byte ShortTxId.
+func shortenTxID(sig Signature) ShortTxID {
+	// rawSig := solana.MustSignatureFromBase58(input)
+	return blake2b.Sum256(sig[:])
+}
+
+// listTransactionSigs for the token address.
+func (sol *Solana) listTransactionSigs(ctx context.Context) ([]Signature, error) {
+	sigs, err := sol.rpcClient.GetSignaturesForAddress(ctx, sol.tokenAddress)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load token signatures")
+	}
+
+	signatures := make([]Signature, 0, len(sigs))
+
+	for _, sig := range sigs {
+		// Skip transactions which errored
+		if sig.Err == nil {
+			signatures = append(signatures, sig.Signature)
+		}
+	}
+
+	return signatures, nil
+}
+
+// AddressFromHex decodes a hex encoded Solana address
+func AddressFromHex(encoded string) (Address, error) {
+	b, err := hex.DecodeString(encoded)
+	if err != nil {
+		return Address{}, errors.Wrap(err, "could not decode hex encoded address")
+	}
+	var address Address
+	copy(address[:], b)
+	return address, nil
 }
 
 // MintTokens tries to mint new tokens with the given mint context.
@@ -75,7 +237,7 @@ func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
 	}
 
 	var mint token.Mint
-	err = sol.rpcClient.GetAccountDataInto(ctx, tftAddress, &mint)
+	err = sol.rpcClient.GetAccountDataInto(ctx, sol.tokenAddress, &mint)
 	if err != nil {
 		return errors.Wrap(err, "failed to get token account info")
 	}
@@ -98,7 +260,7 @@ func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
 
 	spew.Dump(tx)
 
-	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
+	_, err = tx.PartialSign(func(key solana.PublicKey) *solana.PrivateKey {
 		if sol.account.PublicKey().Equals(key) {
 			return &sol.account
 		}

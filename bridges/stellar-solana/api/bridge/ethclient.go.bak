@@ -35,6 +35,16 @@ type EthConfig struct {
 	ContractAddress string
 }
 
+// SolanaConfig combines all configuration that can be used to interact with the solana nework
+type SolanaConfig struct {
+	// NetworkName of the solana network to connect to
+	NetworkName string
+	// KeyFile containing the private key of this signer
+	KeyFile string
+	// TokenAddress we want to bridge for
+	TokenAddress string
+}
+
 // LightClientConfig combines all configuration required for
 // creating and configuring a EthClient.
 type LightClientConfig struct {
@@ -77,7 +87,7 @@ func NewEthClient(lccfg LightClientConfig) (*EthClient, error) {
 		return nil, err
 	}
 
-	log.Debug("private key", "k", strings.Trim(lccfg.EthPrivateKey, "0x"))
+	log.Debug().Msg("private key", "k", strings.Trim(lccfg.EthPrivateKey, "0x"))
 	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(lccfg.EthPrivateKey, "0x"))
 	if err != nil {
 		return nil, err
@@ -113,11 +123,9 @@ func (c *EthClient) GetAddress() (common.Address, error) {
 	return crypto.PubkeyToAddress(*publicKeyECDSA), nil
 }
 
-var (
-	// ErrNoAccountLoaded is an error returned for all Light Client methods
-	// that require an account and for which no account is loaded.
-	ErrNoAccountLoaded = errors.New("no account was loaded into the light client")
-)
+// ErrNoAccountLoaded is an error returned for all Light Client methods
+// that require an account and for which no account is loaded.
+var ErrNoAccountLoaded = errors.New("no account was loaded into the light client")
 
 // AccountBalanceAt returns the balance for the account at the given block height.
 func (c *EthClient) AccountBalanceAt(ctx context.Context, blockNumber *big.Int) (*big.Int, error) {
@@ -197,7 +205,6 @@ func IsNoPeerErr(err error) bool {
 // GetBalanceInfo returns bridge ethereum address and balance
 func (c *EthClient) GetBalanceInfo() (*ERC20BalanceInfo, error) {
 	balance, err := c.BalanceAt(context.Background(), c.address, nil)
-
 	if err != nil {
 		return nil, err
 	}

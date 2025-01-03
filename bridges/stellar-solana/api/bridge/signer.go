@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/event"
@@ -16,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
+	"github.com/rs/zerolog/log"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/multisig"
@@ -107,8 +107,8 @@ type response struct {
 	err    error
 }
 
-type ethResponse struct {
-	answer *EthSignResponse
+type solanaResponse struct {
+	answer *SolanaResponse
 	peer   peer.ID
 	err    error
 }
@@ -158,10 +158,10 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 			case reply := <-responseChannel:
 				receivedFrom = i
 				if reply.err != nil {
-					log.Error("failed to get signature", "peerID", reply.peer, "err", reply.err.Error())
+					log.Error().Err(reply.err).Str("peerID", reply.peer.String()).Msg("failed to get signature")
 				} else {
 					if reply.answer != nil {
-						log.Info("got a valid reply", "peerID", reply.peer)
+						log.Info().Str("peerID", reply.peer.String()).Msg("got a valid reply")
 						results = append(results, *reply.answer)
 					}
 				}
@@ -205,28 +205,28 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multis
 	return &response, nil
 }
 
-func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest) ([]EthSignResponse, error) {
+func (s *SignersClient) SignMint(ctx context.Context, signRequest SolanaRequest) ([]SolanaResponse, error) {
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	responseChannels := make([]chan ethResponse, 0, len(s.peers))
+	responseChannels := make([]chan solanaResponse, 0, len(s.peers))
 	for _, addr := range s.peers {
-		respCh := make(chan ethResponse, 1)
+		respCh := make(chan solanaResponse, 1)
 		responseChannels = append(responseChannels, respCh)
-		go func(peerID peer.ID, ch chan ethResponse) {
+		go func(peerID peer.ID, ch chan solanaResponse) {
 			defer close(ch)
 			answer, err := s.signMint(ctxWithTimeout, peerID, signRequest)
 
 			select {
 			case <-ctxWithTimeout.Done():
-			case ch <- ethResponse{answer: answer, peer: peerID, err: err}:
+			case ch <- solanaResponse{answer: answer, peer: peerID, err: err}:
 			}
 		}(addr, respCh)
 
 	}
 
-	var results []EthSignResponse
+	var results []SolanaResponse
 
 	for len(responseChannels) > 0 {
 		if ctx.Err() != nil {
@@ -239,10 +239,10 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 			case reply := <-responseChannel:
 				receivedFrom = i
 				if reply.err != nil {
-					log.Error("failed to get signature", "peerID", reply.peer, "err", reply.err.Error())
+					log.Error().Err(reply.err).Str("peerID", reply.peer.String()).Msg("failed to get signature")
 				} else {
 					if reply.answer != nil {
-						log.Info("got a valid reply from a signer")
+						log.Info().Msg("got a valid reply from a signer")
 						results = append(results, *reply.answer)
 					}
 				}
@@ -271,14 +271,14 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 	return results, nil
 }
 
-func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest EthSignRequest) (*EthSignResponse, error) {
+func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest SolanaRequest) (*SolanaResponse, error) {
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id)
 	}
 
-	var response EthSignResponse
+	var response SolanaResponse
 	if err := s.client.CallContext(ctx, id, "SignerService", "SignMint", &signRequest, &response); err != nil {
 		return nil, err
 	}

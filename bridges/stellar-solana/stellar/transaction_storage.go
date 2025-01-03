@@ -5,11 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/rs/zerolog/log"
 	"github.com/stellar/go/clients/horizonclient"
 	hProtocol "github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
+	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
 )
 
 type TransactionStorage struct {
@@ -74,13 +75,18 @@ func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exist
 	return ok, nil
 }
 
+// TransactionWithShortTxIDExists checks if a transaction is already executed with the given short tx id as memo.
+func (s *TransactionStorage) TransactionWithShortTxIDExists(shortID solana.ShortTxID) (bool, error) {
+	return s.TransactionWithMemoExists(hex.EncodeToString(shortID[:]))
+}
+
 // TransactionWithMemoExists checks if a transaction with the given memo exists
 func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool, err error) {
 	err = s.ScanBridgeAccount()
 	if err != nil {
 		return
 	}
-	log.Debug("checking if transaction with memo exists in the cache", "memo", memo)
+	log.Debug().Str("memo", memo).Msg("checking if transaction with memo exists in the cache")
 	_, exists = s.sentTransactionMemos[memo]
 	return
 }
@@ -92,17 +98,17 @@ func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool
 func (s *TransactionStorage) StoreTransaction(tx hProtocol.Transaction) {
 	_, ok := s.transactions[tx.Hash]
 	if !ok {
-		log.Debug("storing transaction in the cache", "hash", tx.Hash)
+		log.Debug().Str("hash", tx.Hash).Msg("storing transaction in the cache")
 		s.transactions[tx.Hash] = tx
 		if tx.Account == s.addressToScan {
 			if tx.MemoType == "hash" || tx.MemoType == "return" {
 
 				bytes, err := base64.StdEncoding.DecodeString(tx.Memo)
 				if err != nil {
-					log.Error("Unable to base64 decode a transaction memo", "tx", tx.Hash)
+					log.Error().Str("tx", tx.Hash).Msg("Unable to base64 decode a transaction memo")
 				} else {
 					memoAsHex := hex.EncodeToString(bytes)
-					log.Debug("Remembering memo of transaction", "tx", tx.Hash, "memo", memoAsHex)
+					log.Debug().Str("tx", tx.Hash).Str("memo", memoAsHex).Msg("Remembering memo of transaction")
 					s.sentTransactionMemos[memoAsHex] = true
 				}
 
@@ -127,8 +133,8 @@ func (s *TransactionStorage) ScanBridgeAccount() error {
 		return err
 	}
 
-	log.Debug("start fetching stellar transactions", "account", s.addressToScan, "cursor", s.stellarCursor)
-	//TODO: we should not use the background context here
+	log.Debug().Str("account", s.addressToScan).Str("cursor", s.stellarCursor).Msg("start fetching stellar transactions")
+	// TODO: we should not use the background context here
 	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
 

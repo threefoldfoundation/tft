@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/rs/zerolog/log"
 	"github.com/stellar/go/amount"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	hProtocol "github.com/stellar/go/protocols/horizon"
-	"github.com/threefoldfoundation/tft/bridges/stellar-solana/eth"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/multisig"
+	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/state"
 
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/faults"
@@ -29,7 +28,7 @@ import (
 // Payments will be funded and fees will be taken with this wallet
 type Wallet struct {
 	keypair            *keypair.Full
-	Config             *StellarConfig //TODO: should this be public?
+	Config             *StellarConfig // TODO: should this be public?
 	TransactionStorage *TransactionStorage
 	depositFee         int64
 	withdrawFee        int64
@@ -45,7 +44,6 @@ type signerWallet struct {
 
 func NewWallet(config *StellarConfig, depositFee int64, withdrawFee int64, stellarTransactionStorage *TransactionStorage) (*Wallet, error) {
 	kp, err := keypair.ParseFull(config.StellarSeed)
-
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +79,12 @@ func (w *Wallet) GetSigningRequirements() (cosigners []string, requiredSignature
 
 	return
 }
+
 func (w *Wallet) SetRequiredSignatures(requiredSignatures int) {
 	w.signatureCount = requiredSignatures - 1
 }
-func (w *Wallet) SetSignerClient(client signersClient) {
 
+func (w *Wallet) SetSignerClient(client signersClient) {
 	w.client = client
 }
 
@@ -95,9 +94,9 @@ func (w *Wallet) Sign(tx *txnbuild.Transaction) (*txnbuild.Transaction, error) {
 	return tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
 }
 
-func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver common.Address, blockheight uint64, txHash common.Hash, message string, includeWithdrawFee bool) (err error) {
+func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver solana.Address, blockheight uint64, txHash solana.ShortTxID, message string, includeWithdrawFee bool) (err error) {
 	if !IsValidStellarAddress(target) {
-		log.Warn("Invalid address, skipping payment", "address", target)
+		log.Warn().Str("address", target).Msg("Invalid address, skipping payment")
 		return
 	}
 	txnBuild, err := w.generatePaymentOperation(amount, target, includeWithdrawFee)
@@ -145,7 +144,6 @@ func (w *Wallet) CreateAndSubmitRefund(ctx context.Context, target string, amoun
 // CreateAndSubmitFeepayment creates and submites a payment to the fee wallet
 // only an amount and hash needs to be specified
 func (w *Wallet) CreateAndSubmitFeepayment(ctx context.Context, amount uint64, txHash [32]byte) error {
-
 	txnBuild, err := w.generatePaymentOperation(amount, w.Config.StellarFeeWallet, false)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate payment operation")
@@ -220,7 +218,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 	// check if the actual transaction to be submitted already happened on the stellar network
 	memo, err := ExtractMemoFromTx(tx)
 	if err != nil {
-		log.Error("Failed to extract memo", "err", err)
+		log.Error().Err(err).Msg("Failed to extract memo")
 		return err
 	}
 	exists, err := w.TransactionStorage.TransactionWithMemoExists(memo)
@@ -229,7 +227,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 	}
 
 	if exists {
-		log.Info("Transaction with this memo already executed, skipping")
+		log.Info().Msg("Transaction with this memo already executed, skipping")
 		return
 	}
 
@@ -253,7 +251,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 		for _, signature := range signatures {
 			tx, err = tx.AddSignatureBase64(w.GetNetworkPassPhrase(), signature.Address, signature.Signature)
 			if err != nil {
-				log.Error("Failed to add signature", "err", err.Error())
+				log.Error().Err(err).Msg("Failed to add signature")
 				return err
 			}
 		}
@@ -261,7 +259,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 
 	tx, err = tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
 	if err != nil {
-		log.Error("Failed to sign transaction", "error", err)
+		log.Error().Err(err).Msg("Failed to sign transaction")
 		return errors.Wrap(err, "failed to sign transaction with keypair")
 	}
 
@@ -276,25 +274,24 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 		if hError, ok := err.(*horizonclient.Error); ok {
 			resultcodes, err := hError.ResultCodes()
 			if err != nil {
-				log.Error("Unable to extract result codes from horizon error")
+				log.Error().Err(err).Msg("Unable to extract result codes from horizon error")
 			} else {
-
 				for _, resultcode := range resultcodes.OperationCodes {
 					if resultcode == "op_no_destination" {
-						log.Warn("Invalid address, skipping")
+						log.Warn().Msg("Invalid address, skipping")
 						return nil
 					}
 					if resultcode == "op_no_trust" {
-						log.Warn("Destination address has no TFT trustline, skipping")
+						log.Warn().Msg("Destination address has no TFT trustline, skipping")
 						return nil
 					}
 				}
 			}
-			log.Error("Error submitting tx", "extras", hError.Problem.Extras)
+			log.Error().Any("extras", hError.Problem.Extras).Msg("Error submitting tx")
 		}
 		return errors.Wrap(err, "error submitting transaction")
 	}
-	log.Info(fmt.Sprintf("transaction: %s submitted to the stellar network..", txResult.Hash))
+	log.Info().Str("txHash", txResult.Hash).Msg("transaction submitted to the stellar network..")
 
 	// Store the transaction in the database
 	w.TransactionStorage.StoreTransaction(txResult)
@@ -305,15 +302,15 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 // sender is the account that made the deposit
 func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, sender string, tx hProtocol.Transaction) {
 	if totalAmount <= uint64(w.withdrawFee) {
-		log.Warn("Deposited amount is less than the withdraw fee, not refunding", "tx", tx.Hash)
+		log.Warn().Str("tx", tx.Hash).Msg("Deposited amount is less than the withdraw fee, not refunding")
 		return
 	}
 	amount := totalAmount - uint64(w.withdrawFee)
-	log.Info("Calling refund")
+	log.Info().Msg("Calling refund")
 
 	err := w.CreateAndSubmitRefund(ctx, sender, amount, tx.Hash, true)
 	for err != nil {
-		log.Error("error while refunding", "err", err.Error(), "amount", StroopsToDecimal(int64(totalAmount)), "tx", tx.Hash)
+		log.Error().Err(err).Str("amount", StroopsToDecimal(int64(totalAmount)).String()).Str("tx", tx.Hash).Msg("could not refund")
 		select {
 		case <-ctx.Done():
 			return
@@ -321,11 +318,10 @@ func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, sender s
 			err = w.CreateAndSubmitRefund(ctx, sender, amount, tx.Hash, true)
 		}
 	}
-
 }
 
 // mint handler
-type mint func(eth.ERC20Address, *big.Int, string) error
+type mint func(solana.Address, *big.Int, string) error
 
 // MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
@@ -335,37 +331,37 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 		if !tx.Successful {
 			return
 		}
-		log.Info("Received transaction on bridge stellar account", "hash", tx.Hash)
+		log.Info().Str("tx", tx.Hash).Msg("Received transaction on bridge stellar account")
 
-		//TODO: this does an horizon call while we have the transaction here
+		// TODO: this does an horizon call while we have the transaction here
 		totalAmount, sender, err := w.GetDepositAmountAndSender(tx.Hash, w.GetAddress())
 		if err != nil || totalAmount == 0 {
 			return
 		}
 
 		if totalAmount <= IntToStroops(w.depositFee) {
-			log.Warn("Deposited amount is less than the depositfee, refunding")
+			log.Warn().Msg("Deposited amount is less than the depositfee, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 			return
 		}
 
-		log.Info("deposited amount", "a", StroopsToDecimal(totalAmount))
+		log.Info().Str("amount", StroopsToDecimal(totalAmount).String()).Msg("deposited amount")
 		depositedAmount := big.NewInt(totalAmount)
-		log.Info("memo", "m", tx.Memo)
+		log.Info().Str("memo", tx.MemoBytes).Msg("tx memo")
 
-		ethAddress, err := eth.GetErc20AddressFromB64(tx.Memo)
+		solanaAddress, err := solana.AddressFromHex(tx.MemoBytes)
 		if err != nil {
-			log.Warn("error converting transaction memo to an Ethereum address, refunding", "error", err.Error())
+			log.Warn().Err(err).Msg("error converting transaction memo to an Ethereum address, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 			return
 		}
 
-		err = mintFn(ethAddress, depositedAmount, tx.Hash)
+		err = mintFn(solanaAddress, depositedAmount, tx.Hash)
 		for err != nil {
-			log.Error(fmt.Sprintf("Error occured while minting: %s", err.Error()))
-			//TODO: we already checked this above
+			log.Error().Err(err).Msg("Error occured while minting")
+			// TODO: we already checked this above
 			if err == faults.ErrInsufficientDepositAmount {
-				log.Warn("User is trying to swap less than the fee amount, refunding", "amount", totalAmount)
+				log.Warn().Int64("amount", totalAmount).Msg("User is trying to swap less than the fee amount, refunding")
 				w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 				return
 			}
@@ -374,25 +370,25 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			case <-ctx.Done():
 				return
 			case <-time.After(10 * time.Second):
-				err = mintFn(ethAddress, depositedAmount, tx.Hash)
+				err = mintFn(solanaAddress, depositedAmount, tx.Hash)
 			}
 		}
 
-		log.Info("Transferring the fee to the fee wallet", "address", w.Config.StellarFeeWallet)
+		log.Info().Str("address", w.Config.StellarFeeWallet).Msg("Transferring the fee to the fee wallet")
 
 		// convert tx hash string to bytes
 		parsedMessage, err := hex.DecodeString(tx.Hash)
 		if err != nil {
-			log.Error("Error hex decoding transaction hash", "err", err)
+			log.Error().Err(err).Msg("Error hex decoding transaction hash")
 			return
 		}
 		var memo [32]byte
 		copy(memo[:], parsedMessage)
 
-		//TODO: a context is there for a reason
+		// TODO: a context is there for a reason
 		err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
 		for err != nil {
-			log.Error("error sending fee to the fee wallet", "err", err.Error())
+			log.Error().Err(err).Msg("error sending fee to the fee wallet")
 			select {
 			case <-ctx.Done():
 				return
@@ -401,22 +397,21 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			}
 		}
 
-		log.Info("Mint succesfull, saving cursor now")
+		log.Info().Msg("Mint succesfull, saving cursor now")
 
 		// save cursor
 		cursor := tx.PagingToken()
 		err = persistency.SaveStellarCursor(cursor)
 		if err != nil {
-			log.Error("error while saving cursor:", err.Error())
+			log.Error().Err(err).Msg("error while saving cursor")
 			return
 		}
-
 	}
 
 	// get saved cursor
 	blockHeight, err := persistency.GetHeight()
 	for err != nil {
-		log.Warn("Error getting the bridge persistency", "error", err)
+		log.Warn().Err(err).Msg("Error getting the bridge persistency")
 		select {
 		case <-ctx.Done():
 			return nil
@@ -436,7 +431,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 func (w *Wallet) GetDepositAmountAndSender(txHash string, bridgeAccount string) (depositedAmount int64, sender string, err error) {
 	transactionEffects, err := w.GetTransactionEffects(txHash)
 	if err != nil {
-		log.Error("error while fetching transaction effects:", err.Error())
+		log.Error().Err(err).Msg("error while fetching transaction effects")
 		return
 	}
 	assetCode, issuer := w.GetAssetCodeAndIssuer()
@@ -450,7 +445,7 @@ func (w *Wallet) GetDepositAmountAndSender(txHash string, bridgeAccount string) 
 			if debitedEffect.Asset.Code != assetCode && debitedEffect.Asset.Issuer != issuer {
 				continue
 			}
-			//Normally a payment to the feebump service and the deposit payment are done by the same account
+			// Normally a payment to the feebump service and the deposit payment are done by the same account
 			sender = effect.GetAccount()
 		}
 		if effect.GetType() == effects.EffectTypeNames[effects.EffectAccountCredited] {
@@ -495,7 +490,7 @@ func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor str
 		return
 	}
 
-	log.Info("Start watching stellar account transactions", "horizon", client.HorizonURL, "account", w.keypair.Address(), "cursor", cursor)
+	log.Info().Str("horizon", client.HorizonURL).Str("account", w.keypair.Address()).Str("cursor", cursor).Msg("Start watching stellar account transactions")
 
 	for {
 		if ctx.Err() != nil {
@@ -517,7 +512,6 @@ func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor str
 		}
 
 	}
-
 }
 
 func (w *Wallet) ScanBridgeAccount() error {

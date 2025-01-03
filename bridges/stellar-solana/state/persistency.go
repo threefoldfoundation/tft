@@ -64,5 +64,5 @@ func (b *ChainPersistency) Save(blockheight *Blockheight) error {
 		return err
 	}
 
-	return os.WriteFile(b.location, updatedPersistency, 0644)
+	return os.WriteFile(b.location, updatedPersistency, 0o644)
 }

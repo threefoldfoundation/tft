@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -27,6 +27,9 @@ const (
 	PrecisionDigits = 7
 	PageLimit       = 100 // TODO: should this be public?
 )
+
+// ErrTxMemoNotTxHash is returned when trying to parse a tx memo as a tx hash while it is not
+var ErrTxMemoNotTxHash = errors.New("transaction memo is not of type hash")
 
 // GetHorizonClient gets an horizon client for a specific network
 func GetHorizonClient(network string) (*horizonclient.Client, error) {
@@ -85,7 +88,7 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 
 		response, err := client.Transactions(opRequest)
 		if err != nil {
-			log.Info("Error getting transactions for stellar account", "address", opRequest.ForAccount, "cursor", opRequest.Cursor, "pagelimit", opRequest.Limit, "error", err)
+			log.Info().Str("address", opRequest.ForAccount).Str("cursor", opRequest.Cursor).Uint("pagelimit", opRequest.Limit).Err(err).Msg("Error getting transactions for stellar account")
 			horizonError, ok := err.(*horizonclient.Error)
 			if ok && (horizonError.Response.StatusCode == http.StatusGatewayTimeout || horizonError.Response.StatusCode == http.StatusServiceUnavailable) {
 				timeouts++
@@ -95,7 +98,7 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 					opRequest.Limit = 1
 				}
 
-				log.Info("Request timed out, lowering pagelimit", "pagelimit", opRequest.Limit)
+				log.Info().Uint("pagelimit", opRequest.Limit).Msg("Request timed out, lowering pagelimit")
 			}
 
 			select {
@@ -112,7 +115,7 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 		}
 
 		if timeouts > 0 {
-			log.Info("Fetching transaction succeeded, resetting page limit and timeouts")
+			log.Info().Msg("Fetching transaction succeeded, resetting page limit and timeouts")
 			opRequest.Limit = PageLimit
 			timeouts = 0
 		}
@@ -122,7 +125,29 @@ func fetchTransactions(ctx context.Context, client *horizonclient.Client, addres
 		}
 
 	}
+}
 
+// ExtractTxHashMemoFromTx extrats a memo type hash from a transaction
+func ExtractTxHashMemoFromTx(txn *txnbuild.Transaction) (hash [32]byte, err error) {
+	memo := txn.Memo()
+
+	if memo == nil {
+		err = ErrTxMemoNotTxHash
+		return
+	}
+
+	txMemo, err := txn.Memo().ToXDR()
+	if err != nil {
+		return
+	}
+
+	switch txMemo.Type {
+	case xdr.MemoTypeMemoHash:
+		hashMemo := txn.Memo().(txnbuild.MemoHash)
+		return hashMemo, nil
+	default:
+		return
+	}
 }
 
 func ExtractMemoFromTx(txn *txnbuild.Transaction) (memoAsHex string, err error) {
