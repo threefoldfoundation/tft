@@ -104,7 +104,7 @@ func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amou
 		return
 	}
 
-	txnBuild.Memo = txnbuild.MemoHash(txHash)
+	txnBuild.Memo = txnbuild.MemoHash(txHash.Hash())
 
 	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
@@ -321,7 +321,7 @@ func (w *Wallet) refundDeposit(ctx context.Context, totalAmount uint64, sender s
 }
 
 // mint handler
-type mint func(solana.Address, *big.Int, string) error
+type mint func(context.Context, solana.Address, *big.Int, string) error
 
 // MonitorBridgeAccountAndMint is a blocking function that keeps monitoring
 // the bridge account on the Stellar network for new transactions and calls the
@@ -356,7 +356,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			return
 		}
 
-		err = mintFn(solanaAddress, depositedAmount, tx.Hash)
+		err = mintFn(ctx, solanaAddress, depositedAmount, tx.Hash)
 		for err != nil {
 			log.Error().Err(err).Msg("Error occured while minting")
 			// TODO: we already checked this above
@@ -370,7 +370,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			case <-ctx.Done():
 				return
 			case <-time.After(10 * time.Second):
-				err = mintFn(solanaAddress, depositedAmount, tx.Hash)
+				err = mintFn(ctx, solanaAddress, depositedAmount, tx.Hash)
 			}
 		}
 

@@ -191,7 +191,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multisig.StellarSignRequest) (*multisig.StellarSignResponse, error) {
-	arHost := s.host.(*autorelay.AutoRelay)
+	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id)

@@ -55,7 +55,9 @@ type (
 	// Transaction on the solana network
 	Transaction = solana.Transaction
 	// ShortTxID is a shortened (hashed) solana tx hash made to fit in 32 bytes. This is a one way conversion.
-	ShortTxID = [32]byte
+	ShortTxID struct {
+		hash [32]byte
+	}
 )
 
 type Solana struct {
@@ -69,18 +71,18 @@ type Solana struct {
 }
 
 // New Solana client connected to the provided network
-func New(ctx context.Context, network string, keyFile string, tokenAddr string) (*Solana, error) {
-	account, err := solana.PrivateKeyFromSolanaKeygenFile(keyFile)
+func New(ctx context.Context, cfg *SolanaConfig) (*Solana, error) {
+	account, err := solana.PrivateKeyFromSolanaKeygenFile(cfg.KeyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load solana key file")
 	}
 
-	parsedTokenAddress, err := solana.PublicKeyFromBase58(tokenAddr)
+	parsedTokenAddress, err := solana.PublicKeyFromBase58(cfg.TokenAddress)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not parse token address")
 	}
 
-	rpcClient, wsClient, err := getSolanaClient(ctx, network)
+	rpcClient, wsClient, err := getSolanaClient(ctx, cfg.NetworkName)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
@@ -97,7 +99,29 @@ func (sol *Solana) Address() Address {
 //
 // In other words, this checks if a given stellar tx ID has been used as a memo on solana to mint new tokens.
 func (sol *Solana) IsMintTxID(ctx context.Context, txID string) (bool, error) {
-	return false, errors.New("TODO")
+	sigs, err := sol.listTransactionSigs(ctx)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to load token transaction signatures")
+	}
+
+	for _, sig := range sigs {
+		txRes, err := sol.rpcClient.GetTransaction(ctx, sig, &rpc.GetTransactionOpts{
+			// This is the default commitment but set it explicitly to be sure
+			Commitment: rpc.CommitmentFinalized,
+		})
+		if err != nil {
+			return false, errors.Wrap(err, "failed to load burn transaction")
+		}
+		tx, err := txRes.Transaction.GetTransaction()
+		if err != nil {
+			return false, errors.Wrap(err, "failed to decode tranasction")
+		}
+		if memoFromTx(*tx) == txID {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // GetRequiresSignatureCount to create a solana transaction
@@ -156,8 +180,40 @@ func (sol *Solana) GetSigners(ctx context.Context) ([]Address, error) {
 	return addrs, nil
 }
 
-func (sol *Solana) CreateTokenSignature(receiver [32]byte, amount int64, txID string) (Signature, error) {
-	return Signature{}, errors.New("TODO")
+func (sol *Solana) CreateTokenSignature(tx Transaction) (Signature, int, error) {
+	// First clear possible existing signatures so we can isolate the signature we generated
+	tx.Signatures = nil
+	sigs, err := tx.PartialSign(
+		func(key solana.PublicKey) *solana.PrivateKey {
+			if sol.account.PublicKey().Equals(key) {
+				return &sol.account
+			}
+
+			return nil
+		})
+	if err != nil {
+		return Signature{}, 0, errors.Wrap(err, "could not sign transaction")
+	}
+
+	sigCount := 0
+	idx := 0
+	signature := Signature{}
+	for i, sig := range sigs {
+		if sig != [64]byte{} {
+			signature = sig
+			sigCount++
+			idx = i
+		}
+	}
+
+	switch sigCount {
+	case 0:
+		return Signature{}, 0, errors.New("no transaction signatures generated")
+	case 1:
+		return signature, idx, nil
+	default:
+		return Signature{}, 0, errors.New("generated more than 1 transaction signature")
+	}
 }
 
 // GetBurnTransaction on the solona network with the provided txId
@@ -191,10 +247,22 @@ func (sol *Solana) GetBurnTransaction(ctx context.Context, txID ShortTxID) (Burn
 	return Burn{}, ErrBurnTxNotFound
 }
 
+// Mint tokens on the solana network
+func (sol *Solana) Mint(ctx context.Context, tx *Transaction) error {
+	sig, err := confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
+	if err != nil {
+		return errors.Wrap(err, "failed to submit mint transaction")
+	}
+
+	log.Info().Str("txID", sig.String()).Msg("Submitted mint tx")
+
+	return nil
+}
+
 // Converts a base58 encoded transaction signature to shorter 32 byte ShortTxId.
 func shortenTxID(sig Signature) ShortTxID {
 	// rawSig := solana.MustSignatureFromBase58(input)
-	return blake2b.Sum256(sig[:])
+	return ShortTxID{hash: blake2b.Sum256(sig[:])}
 }
 
 // listTransactionSigs for the token address.
@@ -227,60 +295,59 @@ func AddressFromHex(encoded string) (Address, error) {
 	return address, nil
 }
 
-// MintTokens tries to mint new tokens with the given mint context.
-func (sol *Solana) MintTokens(ctx context.Context, info MintInfo) error {
+// PrepareMintTx creates a new mint transaction on solana with the provided values.
+func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transaction, error) {
 	to := solana.PublicKeyFromBytes(info.To[:])
 
 	recent, err := sol.rpcClient.GetLatestBlockhash(ctx, rpc.CommitmentFinalized)
 	if err != nil {
-		return errors.Wrap(err, "failed to get latest finalized block hash")
+		return nil, errors.Wrap(err, "failed to get latest finalized block hash")
 	}
 
 	var mint token.Mint
 	err = sol.rpcClient.GetAccountDataInto(ctx, sol.tokenAddress, &mint)
 	if err != nil {
-		return errors.Wrap(err, "failed to get token account info")
+		return nil, errors.Wrap(err, "failed to get token account info")
 	}
 
 	if mint.MintAuthority == nil {
-		return errors.New("can't mint token without mint authority")
+		return nil, errors.New("can't mint token without mint authority")
 	}
 
-	spew.Dump(mint)
+	signers, err := sol.GetSigners(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get solana mint signers")
+	}
 
 	tx, err := solana.NewTransaction([]solana.Instruction{
 		// TODO: Compute actual limit
 		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
 		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
-		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, nil).Build(),
+		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, signers).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
-		return errors.Wrap(err, "failed to create mint transaction")
+		return nil, errors.Wrap(err, "failed to create mint transaction")
 	}
 
-	spew.Dump(tx)
+	// _, err = tx.PartialSign(func(key solana.PublicKey) *solana.PrivateKey {
+	// 	if sol.account.PublicKey().Equals(key) {
+	// 		return &sol.account
+	// 	}
+	//
+	// 	return nil
+	// })
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "failed to sign mint transaction")
+	// }
 
-	_, err = tx.PartialSign(func(key solana.PublicKey) *solana.PrivateKey {
-		if sol.account.PublicKey().Equals(key) {
-			return &sol.account
-		}
+	// _, err = confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
+	// if err != nil {
+	// 	return Transaction{}, errors.Wrap(err, "failed to submit mint transaction")
+	// }
+	//
+	// log.Info().Msg("Submitted mint tx")
 
-		return nil
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to sign mint transaction")
-	}
-
-	spew.Dump(tx)
-
-	_, err = confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
-	if err != nil {
-		return errors.Wrap(err, "failed to submit mint transaction")
-	}
-
-	log.Info().Msg("Submitted mint tx")
-
-	return nil
+	return tx, nil
 }
 
 // SubscribeTokenBurns creates a subscription for **NEW** token burn events on the current token. This does not return any previous burns.
@@ -358,14 +425,14 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 			tokenDecimals := uint8(0)
 			illegalOp := false
 
+			accounts, err := tx.AccountMetaList()
+			if err != nil {
+				log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to resolve account meta list")
+				break
+			}
+
 		outer:
 			for _, ix := range tx.Message.Instructions {
-				accounts, err := tx.AccountMetaList()
-				if err != nil {
-					log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to resolve account meta list")
-					break
-				}
-
 				switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
 				case memoProgram:
 					// TODO: verify encoding
@@ -457,4 +524,91 @@ func getSolanaClient(ctx context.Context, network string) (*rpc.Client, *ws.Clie
 	}
 
 	return rpcClient, wsClient, nil
+}
+
+func NewShortTxID(hash [32]byte) ShortTxID {
+	return ShortTxID{hash: hash}
+}
+
+// String implements the Stringer interface
+func (stid ShortTxID) String() string {
+	return hex.EncodeToString(stid.hash[:])
+}
+
+// Hash returns the inner hash
+func (stid ShortTxID) Hash() [32]byte {
+	return stid.hash
+}
+
+// ExtractMintValues extracts the amount in lamports, and destination of a mint on solana
+func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
+	var amount int64
+	var memo string
+	var receiver Address
+
+	accounts, err := tx.AccountMetaList()
+	if err != nil {
+		return amount, memo, receiver, errors.Wrap(err, "could not load transaction account list")
+	}
+
+	// Validate other request params
+	if len(tx.Message.Instructions) != 3 {
+		return amount, memo, receiver, errors.New("invalid transaction instruction count")
+	}
+
+	for _, ix := range tx.Message.Instructions {
+		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
+		case memoProgram:
+			// TODO: verify encoding
+			if memo != "" {
+				return amount, memo, receiver, errors.New("mint memo already set, duplicate instruction")
+			}
+			memo = string(ix.Data)
+		case tokenProgram2022:
+			tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
+			if err != nil {
+				// TODO: Is this technically an error?
+				return amount, memo, receiver, errors.Wrap(err, "could not decode token instruction")
+			}
+
+			// At this point, verify its a mint
+			mint, ok := tokenIx.Impl.(*token.MintToChecked)
+			if !ok {
+				// Since we validate IX len, if this is not a valid mint operation there can't be another one.
+				return amount, memo, receiver, errors.Wrap(err, "could not decode token instruction to mint instruction")
+			}
+			if mint.Amount == nil {
+				return amount, memo, receiver, errors.New("mint has no value set")
+			}
+			if mint.Decimals == nil {
+				return amount, memo, receiver, errors.New("mint has no decimals set")
+			}
+			if amount != 0 {
+				return amount, memo, receiver, errors.New("mint amount already set, duplicate instruction")
+			}
+			amount = int64(*mint.Amount)
+			receiver = mint.GetDestinationAccount().PublicKey
+		case computeBudgetProgram:
+		// Nothing really to do here, we only care that this is ineed a compute budget program ix
+		default:
+			// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
+			return amount, memo, receiver, errors.New("unknown instruction")
+		}
+	}
+
+	return amount, memo, receiver, nil
+}
+
+func memoFromTx(tx Transaction) string {
+	for _, ix := range tx.Message.Instructions {
+		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
+		case memoProgram:
+			// TODO: verify encoding
+			return string(ix.Data)
+		default:
+			continue
+		}
+	}
+
+	return ""
 }

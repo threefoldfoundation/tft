@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"math/big"
 
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -37,11 +36,14 @@ type SolanaRequest struct {
 	Amount             int64
 	TxId               string
 	RequiredSignatures int64
+	// Tx is the base64 encoded solana transaction
+	Tx string
 }
 
 type SolanaResponse struct {
 	Who       solana.Address
 	Signature solana.Signature
+	SigIdx    int
 }
 
 type SignerService struct {
@@ -78,8 +80,29 @@ func NewSignerServer(host host.Host, bridgeMasterAddress string, solanaWallet *s
 func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, response *SolanaResponse) error {
 	log.Info().Str("request txid", request.TxId).Msg("sign mint request")
 
+	solTx := new(solana.Transaction)
+	err := solTx.UnmarshalBase64(request.Tx)
+	if err != nil {
+		log.Warn().Str("txid", request.TxId).Msg("could not unmarshal transaction")
+		return err
+	}
+
+	amount, memo, receiver, err := solana.ExtractMintvalues(*solTx)
+	if memo != request.TxId {
+		log.Warn().Str("requested txid", request.TxId).Str("embedded txid", memo).Msg("could not unmarshal transaction")
+		return errors.New("mismatched embedded transaction ID")
+	}
+	if err != nil {
+		log.Warn().Str("txid", request.TxId).Msg("could not unmarshal transaction")
+		return err
+	}
+
+	if receiver != request.Receiver {
+		log.Warn().Str("txid", request.TxId).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("receiver does not match")
+	}
+
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithId(request.TxId)
+	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(request.TxId)
 	if err != nil {
 		log.Info().Str("txid", request.TxId).Msg("transaction not found")
 		return err
@@ -92,12 +115,11 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	}
 	log.Debug().Int64("amount", depositedAmount).Int64("request amount", request.Amount).Msg("validating amount for sign tx")
 
-	depositFeeBigInt := big.NewInt(stellar.IntToStroops(s.depositFee))
+	depositFeeBigInt := stellar.IntToStroops(s.depositFee)
 
-	amount := &big.Int{}
-	amount = amount.Sub(big.NewInt(depositedAmount), depositFeeBigInt)
+	amount -= depositFeeBigInt
 
-	if amount.Int64() != request.Amount {
+	if amount != request.Amount {
 		return fmt.Errorf("amounts do not match")
 	}
 
@@ -115,12 +137,13 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 		return fmt.Errorf("deposit addresses do not match")
 	}
 
-	signature, err := s.solWallet.CreateTokenSignature(request.Receiver, request.Amount, request.TxId)
+	signature, idx, err := s.solWallet.CreateTokenSignature(*solTx)
 	if err != nil {
 		return err
 	}
 
 	response.Signature = signature
+	response.SigIdx = idx
 	response.Who = s.solWallet.Address()
 
 	return nil
@@ -196,11 +219,12 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 
 // validates a withdrawal (burn on solana)
 func (s *SignerService) validateWithdrawal(ctx context.Context, request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
-	shortTxID, err := stellar.ExtractTxHashMemoFromTx(txn)
+	shortTxIDHash, err := stellar.ExtractTxHashMemoFromTx(txn)
 	if err != nil {
 		log.Warn().Err(err).Msg("Unable to extract the memo from the supplied transaction")
 		return errors.Wrap(ErrInvalidTransaction, "Unable to extract the memo from the supplied transaction")
 	}
+	shortTxID := solana.NewShortTxID(shortTxIDHash)
 	withdraw, err := s.solWallet.GetBurnTransaction(ctx, shortTxID)
 	if err != nil {
 		return err

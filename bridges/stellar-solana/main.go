@@ -169,7 +169,7 @@ func main() {
 
 	var bridgeCfg bridge.BridgeConfig
 	var stellarCfg stellar.StellarConfig
-	var solCfg bridge.SolanaConfig
+	var solCfg solana.SolanaConfig
 	var bridgeMasterAddress string
 
 	flag.StringVar(&bridgeCfg.PersistencyFile, "persistency", "./node.json", "file where last seen blockheight and stellar account cursor is stored")
@@ -203,6 +203,10 @@ func main() {
 	flag.Parse()
 
 	if err := stellarCfg.Validate(); err != nil {
+		panic(err)
+	}
+
+	if err := solCfg.Validate(); err != nil {
 		panic(err)
 	}
 
@@ -244,7 +248,7 @@ func main() {
 	}
 	log.Info().Str("network", stellarCfg.StellarNetwork).Str("wallet", stellarWallet.GetAddress()).Msg("Stellar wallet loaded")
 
-	sol, err := solana.New(context.Background(), "local", "/home/lee/.config/solana/id.json")
+	sol, err := solana.New(context.Background(), &solCfg)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)

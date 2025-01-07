@@ -37,7 +37,7 @@ func NewTransactionStorage(network, addressToScan string) *TransactionStorage {
 
 // GetTransactionWithId returns a transaction with the given id (hash)
 // returns error if the transaction is not found
-func (s *TransactionStorage) GetTransactionWithId(txid string) (tx *hProtocol.Transaction, err error) {
+func (s *TransactionStorage) GetTransactionWithID(txid string) (tx *hProtocol.Transaction, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
 	err = s.ScanBridgeAccount()
@@ -77,7 +77,7 @@ func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exist
 
 // TransactionWithShortTxIDExists checks if a transaction is already executed with the given short tx id as memo.
 func (s *TransactionStorage) TransactionWithShortTxIDExists(shortID solana.ShortTxID) (bool, error) {
-	return s.TransactionWithMemoExists(hex.EncodeToString(shortID[:]))
+	return s.TransactionWithMemoExists(shortID.String())
 }
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists

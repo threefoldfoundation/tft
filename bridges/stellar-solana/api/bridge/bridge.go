@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"github.com/threefoldfoundation/tft/bridges/stellar-solana/contracts/tokenv1"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/faults"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/p2p"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
@@ -65,7 +64,7 @@ func NewBridge(ctx context.Context, wallet *stellar.Wallet, sol *solana.Solana, 
 	// Only create the signer client if the bridge is running in master mode
 	if !config.Follower {
 		relayAddrInfo, addrErr := peer.AddrInfoFromString(config.Relay)
-		if err != nil {
+		if addrErr != nil {
 			return nil, addrErr
 		}
 		cosigners, requiredSignatures, err := wallet.GetSigningRequirements()
@@ -137,35 +136,49 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 	}
 	log.Debug().Int64("count", requiredSignatureCount).Msg("required signature count")
 
+	tx, err := bridge.solanaWallet.PrepareMintTx(ctx, solana.MintInfo{
+		Amount: uint64(amount.Int64()),
+		TxID:   txID,
+		To:     receiver,
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not prepare solana transaction")
+	}
+	txB64, err := tx.ToBase64()
+	if err != nil {
+		return errors.Wrap(err, "could not encode solana transaction to base64")
+	}
+
 	res, err := bridge.signersClient.SignMint(ctx, SolanaRequest{
 		Receiver: receiver,
 		Amount:   amount.Int64(),
 		TxId:     txID,
 		// subtract 1 from the required signature count, because the master signature is already included
 		RequiredSignatures: requiredSignatureCount - 1,
+		Tx:                 txB64,
 	})
 	if err != nil {
 		return err
 	}
 
 	// First create the master signature
-	signature, err := bridge.solanaWallet.CreateTokenSignature(receiver, amount.Int64(), txID)
+	signature, idx, err := bridge.solanaWallet.CreateTokenSignature(*tx)
 	if err != nil {
 		return err
 	}
 
 	// Append to the signatures array
-	res = append(res, SolanaResponse{Who: bridge.solanaWallet.Address(), Signature: signature})
+	res = append(res, SolanaResponse{Who: bridge.solanaWallet.Address(), Signature: signature, SigIdx: idx})
 
 	signers, err := bridge.solanaWallet.GetSigners(ctx)
 	if err != nil {
 		return err
 	}
 
-	orderderedSignatures := make([]tokenv1.Signature, len(signers))
+	orderderedSignatures := make([]solana.Signature, len(signers))
 	for i := 0; i < len(signers); i++ {
 		for _, sign := range res {
-			if sign.Who == signers[i] {
+			if sign.SigIdx == i {
 				orderderedSignatures[i] = sign.Signature
 			}
 		}
@@ -173,7 +186,7 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 
 	log.Debug().Int("count", len(orderderedSignatures)).Msg("total signatures count")
 
-	return bridge.solanaWallet.Mint(receiver, amount, txID, orderderedSignatures)
+	return bridge.solanaWallet.Mint(ctx, tx)
 }
 
 // Start the main processing loop of the bridge
@@ -183,16 +196,17 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		return errors.Wrap(err, "failed to subscribe to solana burns")
 	}
 
-	go func() {
-		err := bridge.bridgeContract.SubscribeMint()
-		if err != nil {
-			panic(err)
-		}
-	}()
+	// go func() {
+	// 	err := bridge.bridgeContract.SubscribeMint()
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// }()
 
 	// Channel where withdrawal events are stored
 	// Should only be read from by the master bridge
-	withdrawChan := make(chan WithdrawEvent)
+	// withdrawChan := make(chan WithdrawEvent)
+	// withdrawChan := make(chan solana.Burn)
 
 	// Only the bridge running as the master bridge should do the following things:
 	// - Monitor the Bridge Stellar account and initiate Minting transactions accordingly
@@ -204,7 +218,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		}
 
 		// Monitor the bridge wallet for incoming transactions
-		// mint transactions on ERC20 if possible
+		// mint transactions on solana if possible
 		go func() {
 			if err := bridge.wallet.MonitorBridgeAccountAndMint(ctx, bridge.mint, bridge.blockPersistency); err != nil {
 				panic(err)
@@ -213,104 +227,108 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 		// Sync up any withdrawals made if the blockheight is manually set
 		// to a previous value
-		currentBlock, err := bridge.bridgeContract.ethc.BlockNumber(ctx)
-		if err != nil {
-			return err
-		}
-
-		var lastHeight uint64
-		// If the user provides a height to rescan from, use that
-		// Otherwise use the saved height in the persistency file
-		if bridge.config.RescanFromHeight > 0 {
-			lastHeight = uint64(bridge.config.RescanFromHeight) - EthBlockDelay
-		} else {
-			height, err := bridge.blockPersistency.GetHeight()
-			if err != nil {
-				return err
-			}
-			// if the saved height is 0, just use current block
-			if height.LastHeight == 0 {
-				lastHeight = currentBlock
-			}
-			if height.LastHeight > EthBlockDelay {
-				lastHeight = height.LastHeight - EthBlockDelay
-			}
-		}
-
-		if lastHeight < currentBlock {
-			// todo filter logs
-			go func() {
-				if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, currentBlock); err != nil {
-					panic(err)
-				}
-			}()
-		}
+		// currentBlock, err := bridge.bridgeContract.ethc.BlockNumber(ctx)
+		// if err != nil {
+		// 	return err
+		// }
+		//
+		// var lastHeight uint64
+		// // If the user provides a height to rescan from, use that
+		// // Otherwise use the saved height in the persistency file
+		// if bridge.config.RescanFromHeight > 0 {
+		// 	lastHeight = uint64(bridge.config.RescanFromHeight) - EthBlockDelay
+		// } else {
+		// 	height, err := bridge.blockPersistency.GetHeight()
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	// if the saved height is 0, just use current block
+		// 	if height.LastHeight == 0 {
+		// 		lastHeight = currentBlock
+		// 	}
+		// 	if height.LastHeight > EthBlockDelay {
+		// 		lastHeight = height.LastHeight - EthBlockDelay
+		// 	}
+		// }
+		//
+		// if lastHeight < currentBlock {
+		// 	// todo filter logs
+		// 	go func() {
+		// 		if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, currentBlock); err != nil {
+		// 			panic(err)
+		// 		}
+		// 	}()
+		// }
 		// TODO bug: currentblock is not taken into account and if it would be passed,
 		// blocks in past don't work anyway so if the chain progressed between getting the current block
 		// and the start of the watching, events are lost if there are any.
-		go func() {
-			err := bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
-			if err != nil {
-				panic(err)
-			}
-		}()
+		// go func() {
+		// err := bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
+		// withdrawChan, err := bridge.solanaWallet.SubscribeTokenBurns(ctx)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// }()
 
 	}
 
 	go func() {
-		txMap := make(map[string]WithdrawEvent)
+		// txMap := make(map[string]solana.Burn)
 		for {
 			select {
 			// Remember new withdraws
 			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
-			case we := <-withdrawChan:
-				if we.network == BridgeNetwork {
-					log.Info().Str("txHash", we.TxHash()).Int("height", we.BlockHeight).Str("network", we.network).Msg("Remembering withdraw event")
-					txMap[we.txHash.String()] = we
-				} else {
-					log.Warn().Str("txHash", we.TxHash()).Int("height", we.BlockHeight).Str("network", we.network).Msg("Ignoring withdrawal, invalid target network")
-				}
-			case head := <-heads:
-				bridge.mut.Lock()
-
-				progress, err := bridge.bridgeContract.ethc.SyncProgress(ctx)
+			case burn := <-solanaBurns:
+				// log.Info().Str("txHash", burn.TxID().String()).Str("shortTxHash", burn.ShortTxID().String()).Msg("Remembering withdraw event")
+				log.Info().Str("txHash", burn.TxID().String()).Str("shortTxHash", burn.ShortTxID().String()).Msg("Starting withdrawal")
+				// txMap[burn.ShortTxID().String()] = burn
+				// log.Info().Str("txHash", we.TxID().String()).Msg("Starting withdrawal")
+				err := bridge.withdraw(ctx, burn)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to get sync progress")
+					log.Error().Err(err).Str("address", burn.Memo()).Msg("failed to create payment for withdrawal")
+					continue
 				}
-				if progress == nil {
-					bridge.synced = true
-				}
-
-				log.Info().Int("head", head.Number).Bool("synced", bridge.synced).Msg("found new head")
-
-				if bridge.synced {
-					ids := make([]string, 0, len(txMap))
-					for id := range txMap {
-						ids = append(ids, id)
-					}
-
-					for _, id := range ids {
-						we := txMap[id]
-						if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
-							log.Info().Str("txHash", we.TxHash()).Msg("Starting withdrawal")
-							err := bridge.withdraw(ctx, we)
-							if err != nil {
-								log.Error().Err(err).Str("address", we.blockchain_address).Msg("failed to create payment for withdrawal")
-								continue
-							}
-
-							// forget about our tx
-							delete(txMap, id)
-						}
-					}
-
-				}
-
-				err = bridge.blockPersistency.SaveHeight(head.Number.Uint64())
-				if err != nil {
-					log.Error().Err(err).Msg("error occured saving blockheight")
-				}
-				bridge.mut.Unlock()
+			// case head := <-heads:
+			// 	bridge.mut.Lock()
+			//
+			// 	progress, err := bridge.bridgeContract.ethc.SyncProgress(ctx)
+			// 	if err != nil {
+			// 		log.Error().Err(err).Msg("failed to get sync progress")
+			// 	}
+			// 	if progress == nil {
+			// 		bridge.synced = true
+			// 	}
+			//
+			// 	log.Info().Int("head", head.Number).Bool("synced", bridge.synced).Msg("found new head")
+			//
+			// 	if bridge.synced {
+			// 		ids := make([]string, 0, len(txMap))
+			// 		for id := range txMap {
+			// 			ids = append(ids, id)
+			// 		}
+			//
+			// 		for _, id := range ids {
+			// 			we := txMap[id]
+			// 			if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
+			// 				log.Info().Str("txHash", we.TxID().String()).Msg("Starting withdrawal")
+			// 				err := bridge.withdraw(ctx, we)
+			// 				if err != nil {
+			// 					log.Error().Err(err).Str("address", we.blockchain_address).Msg("failed to create payment for withdrawal")
+			// 					continue
+			// 				}
+			//
+			// 				// forget about our tx
+			// 				delete(txMap, id)
+			// 			}
+			// 		}
+			//
+			// 	}
+			//
+			// 	err = bridge.blockPersistency.SaveHeight(head.Number.Uint64())
+			// 	if err != nil {
+			// 		log.Error().Err(err).Msg("error occured saving blockheight")
+			// 	}
+			// 	bridge.mut.Unlock()
 			case <-ctx.Done():
 				return
 			}
@@ -320,32 +338,33 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 	return nil
 }
 
-func (bridge *Bridge) withdraw(ctx context.Context, we solana.Burn) (err error) {
+func (bridge *Bridge) withdraw(ctx context.Context, burn solana.Burn) (err error) {
 	// if a withdraw was made to the bridge fee wallet or the bridge address, soak the funds and return
 	// TODO: Should these adresses be fetched through the wallet?
-	if we.blockchain_address == bridge.wallet.Config.StellarFeeWallet || we.blockchain_address == bridge.wallet.GetAddress() {
+	if burn.Memo() == bridge.wallet.Config.StellarFeeWallet || burn.Memo() == bridge.wallet.GetAddress() {
 		log.Warn().Msg("Received a withdrawal with destination which is either the fee wallet or the bridge wallet, skipping...")
 		return nil
 	}
 
-	hash := we.TxHash()
-	amount := we.amount.Uint64()
+	hash := burn.TxID()
+	shortTxID := burn.ShortTxID()
+	amount := burn.RawAmount()
 
 	if amount == 0 {
-		log.Warn().Str("ethTx", hash).Msg("Can not withdraw an amount of 0")
+		log.Warn().Str("solanaTx", hash.String()).Str("shortSolanaTxID", shortTxID.String()).Msg("Can not withdraw an amount of 0")
 		return
 	}
 
 	if amount <= uint64(WithdrawFee) {
-		log.Warn().Str("amount", stellar.StroopsToDecimal(int64(amount)).String()).Str("ethTx", hash).Msg("Withdrawn amount is less than the withdraw fee, skip it")
+		log.Warn().Str("amount", stellar.StroopsToDecimal(int64(amount)).String()).Str("solanaTx", hash.String()).Str("shortSolanaTxID", shortTxID.String()).Msg("Withdrawn amount is less than the withdraw fee, skip it")
 		return
 	}
 
-	log.Info().Str("ethTx", hash).Str("destination", we.blockchain_address).Str("amount", stellar.StroopsToDecimal(int64(amount)).String()).Msg("Creating a withdraw tx")
+	log.Info().Str("solanaTx", hash.String()).Str("shortSolanaTxID", shortTxID.String()).Str("destination", burn.Memo()).Str("amount", stellar.StroopsToDecimal(int64(amount)).String()).Msg("Creating a withdraw tx")
 
 	amount -= uint64(WithdrawFee)
 	// TODO: Should this adress be fetched through the wallet?
 	includeWithdrawFee := bridge.wallet.Config.StellarFeeWallet != ""
-	err = bridge.wallet.CreateAndSubmitPayment(ctx, we.blockchain_address, amount, we.receiver, we.blockHeight, hash, "", includeWithdrawFee)
+	err = bridge.wallet.CreateAndSubmitPayment(ctx, burn.Memo(), amount, burn.Caller(), burn.BlockHeight(), shortTxID, "", includeWithdrawFee)
 	return
 }

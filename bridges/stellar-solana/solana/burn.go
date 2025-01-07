@@ -22,6 +22,14 @@ type Burn struct {
 	// Memo attached to the Tx
 	memo string
 
+	// Account which called the burn operation on Solana
+	// TODO: fill in
+	caller Address
+
+	// Heigt of the block? the tx was part of
+	// TODO: fill in
+	blockHeight uint64
+
 	// signature of the transaction, which is also the txId
 	signature Signature
 }
@@ -44,6 +52,16 @@ func (b Burn) TxID() Signature {
 // ShortTxID of the transaction
 func (b Burn) ShortTxID() ShortTxID {
 	return shortenTxID(b.signature)
+}
+
+// Caller of the burn operation
+func (b Burn) Caller() Address {
+	return b.caller
+}
+
+// BlockHeight the tx was included at
+func (b Burn) BlockHeight() uint64 {
+	return b.blockHeight
 }
 
 func burnFromTransaction(tx solana.Transaction) (Burn, error) {
@@ -106,7 +124,7 @@ outer:
 
 			default:
 				illegalOp = true
-				break
+				break outer
 			}
 		case computeBudgetProgram:
 		// Nothing really to do here, we only care that this is ineed a compute budget program ix
