@@ -73,6 +73,9 @@ func (w *Wallet) GetSigningRequirements() (cosigners []string, requiredSignature
 		if signer.Key == w.GetAddress() {
 			continue
 		}
+		if signer.Weight == 0 {
+			continue
+		}
 		cosigners = append(cosigners, signer.Key)
 	}
 	requiredSignatures = int(account.Thresholds.MedThreshold)
