@@ -2,6 +2,7 @@ package solana
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"time"
 
@@ -292,6 +293,19 @@ func AddressFromHex(encoded string) (Address, error) {
 	}
 	var address Address
 	copy(address[:], b)
+	return address, nil
+}
+
+// AddressFromB64 decodes a base 64 encoded Solana address
+func AddressFromB64(encoded string) (Address, error) {
+	var address Address
+	n, err := base64.StdEncoding.Decode(address[:], []byte(encoded))
+	if err != nil {
+		return Address{}, errors.Wrap(err, "could not decode hex encoded address")
+	}
+	if n != len(Address{}) {
+		return Address{}, errors.New("incomplete address")
+	}
 	return address, nil
 }
 
