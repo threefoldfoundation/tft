@@ -337,8 +337,9 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 		log.Info().Str("tx", tx.Hash).Msg("Received transaction on bridge stellar account")
 
 		// TODO: this does an horizon call while we have the transaction here
-		totalAmount, sender, err := w.GetDepositAmountAndSender(tx.Hash, w.GetAddress())
+		totalAmount, sender, err := w.GetDepositAmountAndSender(tx.Hash, w.TransactionStorage.addressToScan)
 		if err != nil || totalAmount == 0 {
+			log.Debug().Err(err).Int64("amount", totalAmount).Str("sender", sender).Msg("Could not extract deposit amount and sender")
 			return
 		}
 
@@ -479,7 +480,7 @@ func (w *Wallet) getAccountDetails() (account hProtocol.Account, err error) {
 	if err != nil {
 		return hProtocol.Account{}, err
 	}
-	ar := horizonclient.AccountRequest{AccountID: w.GetAddress()}
+	ar := horizonclient.AccountRequest{AccountID: w.TransactionStorage.addressToScan}
 	account, err = client.AccountDetail(ar)
 	if err != nil {
 		return hProtocol.Account{}, errors.Wrapf(err, "failed to get account details for account: %s", w.GetAddress())
