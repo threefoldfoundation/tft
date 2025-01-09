@@ -446,7 +446,7 @@ func (w *Wallet) GetDepositAmountAndSender(txHash string, bridgeAccount string) 
 			// Only TFT payments matter, Assume normal payments
 
 			debitedEffect := effect.(effects.AccountDebited)
-			if debitedEffect.Asset.Code != assetCode && debitedEffect.Asset.Issuer != issuer {
+			if debitedEffect.Code != assetCode && debitedEffect.Issuer != issuer {
 				continue
 			}
 			// Normally a payment to the feebump service and the deposit payment are done by the same account
@@ -459,7 +459,7 @@ func (w *Wallet) GetDepositAmountAndSender(txHash string, bridgeAccount string) 
 				continue
 			}
 			creditedEffect := effect.(effects.AccountCredited)
-			if creditedEffect.Asset.Code != assetCode && creditedEffect.Asset.Issuer != issuer {
+			if creditedEffect.Code != assetCode && creditedEffect.Issuer != issuer {
 				continue
 			}
 			parsedAmount, err := amount.ParseInt64(creditedEffect.Amount)
