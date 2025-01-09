@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/hex"
 	"math/big"
 	"sync"
 
@@ -109,7 +108,7 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 	if !bridge.synced {
 		return errors.New("bridge is not synced, retry later")
 	}
-	log.Info().Str("receiver", hex.EncodeToString(receiver[:])).Str("txID", txID).Msg("Minting")
+	log.Info().Str("receiver", receiver.String()).Str("txID", txID).Msg("Minting")
 	// check if we already know this ID
 	known, err := bridge.solanaWallet.IsMintTxID(ctx, txID)
 	if err != nil {
@@ -274,6 +273,7 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 
 	go func() {
 		// txMap := make(map[string]solana.Burn)
+		bridge.synced = true
 		for {
 			select {
 			// Remember new withdraws
