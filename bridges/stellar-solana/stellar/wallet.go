@@ -351,11 +351,11 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 
 		log.Info().Str("amount", StroopsToDecimal(totalAmount).String()).Msg("deposited amount")
 		depositedAmount := big.NewInt(totalAmount)
-		log.Info().Str("memo", tx.MemoBytes).Msg("tx memo")
+		log.Info().Str("memo", tx.Memo).Msg("tx memo")
 
-		solanaAddress, err := solana.AddressFromHex(tx.MemoBytes)
+		solanaAddress, err := solana.AddressFromB64(tx.Memo)
 		if err != nil {
-			log.Warn().Err(err).Msg("error converting transaction memo to an Ethereum address, refunding")
+			log.Warn().Err(err).Msg("error converting transaction memo to a Solana address, refunding")
 			w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
 			return
 		}
