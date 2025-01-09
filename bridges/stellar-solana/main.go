@@ -237,7 +237,7 @@ func main() {
 	}
 
 	txStorage := stellar.NewTransactionStorage(stellarCfg.StellarNetwork, bridgeMasterAddress)
-	err = txStorage.ScanBridgeAccount()
+	err = txStorage.ScanBridgeAccount(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -248,7 +248,7 @@ func main() {
 	}
 	log.Info().Str("network", stellarCfg.StellarNetwork).Str("wallet", stellarWallet.GetAddress()).Msg("Stellar wallet loaded")
 
-	sol, err := solana.New(context.Background(), &solCfg)
+	sol, err := solana.New(ctx, &solCfg)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
@@ -266,7 +266,7 @@ func main() {
 
 	// Start the signer server
 	if bridgeCfg.Follower {
-		err := bridge.NewSignerServer(host, bridgeMasterAddress, sol, stellarWallet, bridgeCfg.DepositFee)
+		err = bridge.NewSignerServer(host, bridgeMasterAddress, sol, stellarWallet, bridgeCfg.DepositFee)
 		if err != nil {
 			panic(err)
 		}

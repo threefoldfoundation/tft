@@ -37,10 +37,10 @@ func NewTransactionStorage(network, addressToScan string) *TransactionStorage {
 
 // GetTransactionWithId returns a transaction with the given id (hash)
 // returns error if the transaction is not found
-func (s *TransactionStorage) GetTransactionWithID(txid string) (tx *hProtocol.Transaction, err error) {
+func (s *TransactionStorage) GetTransactionWithID(ctx context.Context, txid string) (tx *hProtocol.Transaction, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
-	err = s.ScanBridgeAccount()
+	err = s.ScanBridgeAccount(ctx)
 	if err != nil {
 		return
 	}
@@ -57,10 +57,10 @@ func (s *TransactionStorage) GetTransactionWithID(txid string) (tx *hProtocol.Tr
 // TransactionExists checks if a transaction exists on the stellar network
 // it hashes the transaction and checks if the hash is in the list of known transactions
 // this can be used to check if a transaction was already submitted to the stellar network
-func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exists bool, err error) {
+func (s *TransactionStorage) TransactionExists(ctx context.Context, txn *txnbuild.Transaction) (exists bool, err error) {
 	// trigger a rescan
 	// will not rescan from start since we saved the cursor
-	err = s.ScanBridgeAccount()
+	err = s.ScanBridgeAccount(ctx)
 	if err != nil {
 		return
 	}
@@ -76,13 +76,13 @@ func (s *TransactionStorage) TransactionExists(txn *txnbuild.Transaction) (exist
 }
 
 // TransactionWithShortTxIDExists checks if a transaction is already executed with the given short tx id as memo.
-func (s *TransactionStorage) TransactionWithShortTxIDExists(shortID solana.ShortTxID) (bool, error) {
-	return s.TransactionWithMemoExists(shortID.String())
+func (s *TransactionStorage) TransactionWithShortTxIDExists(ctx context.Context, shortID solana.ShortTxID) (bool, error) {
+	return s.TransactionWithMemoExists(ctx, shortID.String())
 }
 
 // TransactionWithMemoExists checks if a transaction with the given memo exists
-func (s *TransactionStorage) TransactionWithMemoExists(memo string) (exists bool, err error) {
-	err = s.ScanBridgeAccount()
+func (s *TransactionStorage) TransactionWithMemoExists(ctx context.Context, memo string) (exists bool, err error) {
+	err = s.ScanBridgeAccount(ctx)
 	if err != nil {
 		return
 	}
@@ -118,7 +118,7 @@ func (s *TransactionStorage) StoreTransaction(tx hProtocol.Transaction) {
 	}
 }
 
-func (s *TransactionStorage) ScanBridgeAccount() error {
+func (s *TransactionStorage) ScanBridgeAccount(ctx context.Context) error {
 	if s.addressToScan == "" {
 		return errors.New("no account set, aborting now")
 	}
@@ -134,8 +134,7 @@ func (s *TransactionStorage) ScanBridgeAccount() error {
 	}
 
 	log.Debug().Str("account", s.addressToScan).Str("cursor", s.stellarCursor).Msg("start fetching stellar transactions")
-	// TODO: we should not use the background context here
-	return fetchTransactions(context.Background(), client, s.addressToScan, s.stellarCursor, transactionHandler)
+	return fetchTransactions(ctx, client, s.addressToScan, s.stellarCursor, transactionHandler)
 }
 
 // GetHorizonClient gets the horizon client based on the transaction storage's network

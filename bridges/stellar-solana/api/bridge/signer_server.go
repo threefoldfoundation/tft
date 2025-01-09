@@ -102,7 +102,7 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	}
 
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(request.TxId)
+	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(ctx, request.TxId)
 	if err != nil {
 		log.Info().Str("txid", request.TxId).Msg("transaction not found")
 		return err
@@ -176,7 +176,7 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 	} else if request.Message != "" {
 		// If the signrequest has a message attached we know it's a refund transaction
 		log.Info().Str("deposit", request.Message).Msg("Validating refund signing request")
-		err := s.validateRefundTransaction(request, txn)
+		err := s.validateRefundTransaction(ctx, request, txn)
 		if err != nil {
 			if errors.Is(err, ErrInvalidTransaction) {
 				log.Warn().Err(err).Msg("Refund validation error")
@@ -189,7 +189,7 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 		// If the signrequest is not a withdrawal request and a refund request
 		// then it's most likely a transfer to fee wallet transaction from a deposit
 		log.Info().Msg("Validating fee transfer signing request")
-		err := s.validateDepositFeeTransfer(request, txn)
+		err = s.validateDepositFeeTransfer(ctx, request, txn)
 		if err != nil {
 			if errors.Is(err, ErrInvalidTransaction) {
 				log.Info().Err(err).Msg("Fee transfer validation error")
@@ -233,7 +233,7 @@ func (s *SignerService) validateWithdrawal(ctx context.Context, request multisig
 	amount := int64(withdraw.RawAmount())
 	receiver := withdraw.Memo()
 	log.Info().Str("amount", stellar.StroopsToDecimal(amount).String()).Str("receiver", receiver).Str("tx", withdraw.TxID().String()).Msg("validating withdrawal")
-	withdrawalAlreadyExecuted, err := s.stellarWallet.TransactionStorage.TransactionWithShortTxIDExists(shortTxID)
+	withdrawalAlreadyExecuted, err := s.stellarWallet.TransactionStorage.TransactionWithShortTxIDExists(ctx, shortTxID)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (s *SignerService) validateWithdrawal(ctx context.Context, request multisig
 	return nil
 }
 
-func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
+func (s *SignerService) validateRefundTransaction(ctx context.Context, request multisig.StellarSignRequest, txn *txnbuild.Transaction) error {
 	// check if a refund already happened
 	memo, err := stellar.ExtractMemoFromTx(txn)
 	if err != nil {
@@ -296,7 +296,7 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 	if memo != request.Message {
 		return errors.Wrap(ErrInvalidTransaction, "The transaction memo and the signrequest message do not match")
 	}
-	alreadyRefunded, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
+	alreadyRefunded, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(ctx, memo)
 	if err != nil {
 		return err
 	}
@@ -378,14 +378,14 @@ func (s *SignerService) validateRefundTransaction(request multisig.StellarSignRe
 	return nil
 }
 
-func (s *SignerService) validateDepositFeeTransfer(request multisig.StellarSignRequest, txn *txnbuild.Transaction) (err error) {
+func (s *SignerService) validateDepositFeeTransfer(ctx context.Context, request multisig.StellarSignRequest, txn *txnbuild.Transaction) (err error) {
 	// Check if a fee transfer for this already happened
 	memo, err := stellar.ExtractMemoFromTx(txn)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to extract memo")
 		return ErrInvalidTransaction
 	}
-	alreadyExists, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(memo)
+	alreadyExists, err := s.stellarWallet.TransactionStorage.TransactionWithMemoExists(ctx, memo)
 	if err != nil {
 		return
 	}

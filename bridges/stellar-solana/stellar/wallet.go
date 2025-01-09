@@ -221,7 +221,7 @@ func (w *Wallet) signAndSubmitTransaction(ctx context.Context, txn txnbuild.Tran
 		log.Error().Err(err).Msg("Failed to extract memo")
 		return err
 	}
-	exists, err := w.TransactionStorage.TransactionWithMemoExists(memo)
+	exists, err := w.TransactionStorage.TransactionWithMemoExists(ctx, memo)
 	if err != nil {
 		return errors.Wrapf(err, "failed to check if transaction exists with memo %s", memo)
 	}
@@ -490,7 +490,7 @@ func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor str
 		return
 	}
 
-	log.Info().Str("horizon", client.HorizonURL).Str("account", w.keypair.Address()).Str("cursor", cursor).Msg("Start watching stellar account transactions")
+	log.Info().Str("horizon", client.HorizonURL).Str("account", w.TransactionStorage.addressToScan).Str("cursor", cursor).Msg("Start watching stellar account transactions")
 
 	for {
 		if ctx.Err() != nil {
@@ -501,7 +501,7 @@ func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor str
 			handler(tx)
 			cursor = tx.PagingToken()
 		}
-		err = fetchTransactions(ctx, client, w.GetAddress(), cursor, internalHandler)
+		err = fetchTransactions(ctx, client, w.TransactionStorage.addressToScan, cursor, internalHandler)
 		if err != nil {
 			return
 		}
@@ -514,8 +514,8 @@ func (w *Wallet) StreamBridgeStellarTransactions(ctx context.Context, cursor str
 	}
 }
 
-func (w *Wallet) ScanBridgeAccount() error {
-	return w.TransactionStorage.ScanBridgeAccount()
+func (w *Wallet) ScanBridgeAccount(ctx context.Context) error {
+	return w.TransactionStorage.ScanBridgeAccount(ctx)
 }
 
 // TODO: is this function really needed?
