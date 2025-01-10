@@ -8,4 +8,6 @@ type MintInfo struct {
 	TxID string
 	// To raw address bytes of the receiver of the tokens
 	To [32]byte
+	// Signers which are online
+	OnlineSigners []Address
 }

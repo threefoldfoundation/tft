@@ -324,11 +324,20 @@ func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transacti
 		return nil, errors.Wrap(err, "could not get solana mint signers")
 	}
 
+	filteredSigners := make([]Address, 0, len(info.OnlineSigners))
+	for _, signer := range signers {
+		for _, os := range info.OnlineSigners {
+			if signer.Equals(os) {
+				filteredSigners = append(filteredSigners, signer)
+			}
+		}
+	}
+
 	tx, err := solana.NewTransaction([]solana.Instruction{
 		// TODO: Compute actual limit
 		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
 		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
-		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, sol.tokenAddress, to, *mint.MintAuthority, signers).Build(),
+		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, sol.tokenAddress, to, *mint.MintAuthority, filteredSigners).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create mint transaction")

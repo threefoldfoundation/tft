@@ -94,11 +94,12 @@ func NewHost(ctx context.Context, secret, relay string, psk string) (host.Host, 
 }
 
 type SignersClient struct {
-	peers  []peer.ID
-	host   host.Host
-	router routing.PeerRouting
-	client *gorpc.Client
-	relay  *peer.AddrInfo
+	peers    []peer.ID
+	host     host.Host
+	router   routing.PeerRouting
+	client   *gorpc.Client
+	idClient *gorpc.Client
+	relay    *peer.AddrInfo
 }
 
 type response struct {
@@ -113,14 +114,21 @@ type solanaResponse struct {
 	err    error
 }
 
+type idResponse struct {
+	answer *IDResponse
+	peer   peer.ID
+	err    error
+}
+
 // NewSignersClient creates a signer client to ask cosigners to sign
 func NewSignersClient(host host.Host, router routing.PeerRouting, cosigners []peer.ID, relay *peer.AddrInfo) *SignersClient {
 	return &SignersClient{
-		client: gorpc.NewClient(host, Protocol),
-		host:   host,
-		router: router,
-		peers:  cosigners,
-		relay:  relay,
+		client:   gorpc.NewClient(host, Protocol),
+		idClient: gorpc.NewClient(host, SolIDProtocol),
+		host:     host,
+		router:   router,
+		peers:    cosigners,
+		relay:    relay,
 	}
 }
 
@@ -163,6 +171,8 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 					if reply.answer != nil {
 						log.Info().Str("peerID", reply.peer.String()).Msg("got a valid reply")
 						results = append(results, *reply.answer)
+					} else {
+						log.Info().Str("peerID", reply.peer.String()).Msg("got empty signing request reply")
 					}
 				}
 				break responsechannelsLoop
@@ -198,6 +208,7 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multis
 	}
 
 	var response multisig.StellarSignResponse
+	log.Info().Str("PeerID", id.String()).Msg("Calling SignerService Sign")
 	if err := s.client.CallContext(ctx, id, "SignerService", "Sign", &signRequest, &response); err != nil {
 		return nil, err
 	}
@@ -205,13 +216,13 @@ func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multis
 	return &response, nil
 }
 
-func (s *SignersClient) SignMint(ctx context.Context, signRequest SolanaRequest) ([]SolanaResponse, error) {
+func (s *SignersClient) SignMint(ctx context.Context, peers []peer.ID, signRequest SolanaRequest) ([]SolanaResponse, error) {
 	// cancel context after 30 seconds
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	responseChannels := make([]chan solanaResponse, 0, len(s.peers))
-	for _, addr := range s.peers {
+	for _, addr := range peers {
 		respCh := make(chan solanaResponse, 1)
 		responseChannels = append(responseChannels, respCh)
 		go func(peerID peer.ID, ch chan solanaResponse) {
@@ -280,6 +291,87 @@ func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest So
 
 	var response SolanaResponse
 	if err := s.client.CallContext(ctx, id, "SignerService", "SignMint", &signRequest, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (s *SignersClient) SolID(ctx context.Context, requiredPeers int) (map[peer.ID]solana.Address, error) {
+	// cancel context after 30 seconds
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	responseChannels := make([]chan idResponse, 0, len(s.peers))
+	for _, addr := range s.peers {
+		respCh := make(chan idResponse, 1)
+		responseChannels = append(responseChannels, respCh)
+		go func(peerID peer.ID, ch chan idResponse) {
+			defer close(ch)
+			answer, err := s.solID(ctxWithTimeout, peerID)
+
+			select {
+			case <-ctxWithTimeout.Done():
+			case ch <- idResponse{answer: answer, peer: peerID, err: err}:
+			}
+		}(addr, respCh)
+
+	}
+
+	results := make(map[peer.ID]solana.Address)
+
+	for len(responseChannels) > 0 {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		receivedFrom := -1
+	responsechannelsLoop:
+		for i, responseChannel := range responseChannels {
+			select {
+			case reply := <-responseChannel:
+				receivedFrom = i
+				if reply.err != nil {
+					log.Error().Err(reply.err).Str("peerID", reply.peer.String()).Msg("failed to get solana ID")
+				} else {
+					if reply.answer != nil {
+						log.Info().Str("Peer ID", reply.peer.String()).Str("Solana ID", reply.answer.ID.String()).Msg("got a valid reply from a peer")
+						results[reply.peer] = reply.answer.ID
+					}
+				}
+				break responsechannelsLoop
+			default: // don't block
+			}
+		}
+		if receivedFrom >= 0 {
+			// Remove the channel from the list
+			responseChannels[receivedFrom] = responseChannels[len(responseChannels)-1]
+			responseChannels = responseChannels[:len(responseChannels)-1]
+			// check if we have enough signatures
+			if len(results) == requiredPeers {
+				break
+			}
+		} else {
+			time.Sleep(time.Millisecond * 100)
+		}
+
+	}
+
+	if len(results) < requiredPeers {
+		return nil, fmt.Errorf("required number of peers not identified")
+	}
+
+	return results, nil
+}
+
+func (s *SignersClient) solID(ctx context.Context, id peer.ID) (*IDResponse, error) {
+	arHost := s.host.(*autorelay.AutoRelayHost)
+
+	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
+		return nil, errors.Wrapf(err, "failed to connect to host id '%s'", id)
+	}
+
+	var response IDResponse
+	if err := s.idClient.CallContext(ctx, id, "SolIDService", "ID", &SolanaRequest{}, &response); err != nil {
 		return nil, err
 	}
 

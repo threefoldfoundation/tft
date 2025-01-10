@@ -135,10 +135,23 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 	}
 	log.Debug().Int64("count", requiredSignatureCount).Msg("required signature count")
 
+	// We don't need to resolve our own peer address
+	onlineSigners, err := bridge.signersClient.SolID(ctx, int(requiredSignatureCount-1))
+	if err != nil {
+		return errors.Wrap(err, "could not resolve online solana signers")
+	}
+
+	os := make([]solana.Address, 0, len(onlineSigners)+1)
+	for _, v := range onlineSigners {
+		os = append(os, v)
+	}
+
 	tx, err := bridge.solanaWallet.PrepareMintTx(ctx, solana.MintInfo{
-		Amount: uint64(amount.Int64()),
-		TxID:   txID,
-		To:     receiver,
+		// We are always online and ready to sign
+		OnlineSigners: append(os, bridge.solanaWallet.Address()),
+		Amount:        uint64(amount.Int64()),
+		TxID:          txID,
+		To:            receiver,
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not prepare solana transaction")
@@ -148,7 +161,12 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 		return errors.Wrap(err, "could not encode solana transaction to base64")
 	}
 
-	res, err := bridge.signersClient.SignMint(ctx, SolanaRequest{
+	onlinePeers := make([]peer.ID, 0, len(onlineSigners))
+	for p := range onlineSigners {
+		onlinePeers = append(onlinePeers, p)
+	}
+
+	res, err := bridge.signersClient.SignMint(ctx, onlinePeers, SolanaRequest{
 		Receiver: receiver,
 		Amount:   amount.Int64(),
 		TxId:     txID,
