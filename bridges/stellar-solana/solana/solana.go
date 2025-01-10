@@ -169,12 +169,7 @@ func (sol *Solana) GetSigners(ctx context.Context) ([]Address, error) {
 		return []Address{*mint.MintAuthority}, nil
 	}
 
-	addrs := make([]Address, 0, ma.N)
-	for _, signer := range ma.Signers {
-		addrs = append(addrs, signer)
-	}
-
-	return addrs, nil
+	return ma.Signers[:ma.N], nil
 }
 
 func (sol *Solana) CreateTokenSignature(tx Transaction) (Signature, int, error) {
