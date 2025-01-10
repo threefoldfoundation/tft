@@ -27,15 +27,11 @@ var (
 	// memoProgram is the address of the memo program
 	memoProgram = solana.MustPublicKeyFromBase58("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
 
-	// tftAddress is the address of the tft token on chain, hardcoded for now
-	// tftAddress = solana.MustPublicKeyFromBase58("tftu9NtpEyxfsT1ggw3e5ZEyctC8yYz4CVz9GyAyGV7")
-	tftAddress = solana.MustPublicKeyFromBase58("TFT7gjfh2yatov3nnuwHmG8pEU5Y9xAditVymo74iag")
-
 	// computeBudgetProgram is the address of the compute budget program
 	computeBudgetProgram = solana.MustPublicKeyFromBase58("ComputeBudget111111111111111111111111111111")
 
-	// systemSig is an (apparant) system generated signature
-	systemSig = solana.MustSignatureFromBase58("1111111111111111111111111111111111111111111111111111111111111111")
+	// systemSig is an (apparant) system generated signature (this is the all 0 sig)
+	systemSig = Signature{}
 
 	// ErrSolanaNetworkNotSupported is returned when an unknown Solana network name is requested
 	ErrSolanaNetworkNotSupported = errors.New("the provided network is not a valid Solana network")
@@ -337,7 +333,7 @@ func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transacti
 		// TODO: Compute actual limit
 		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
 		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
-		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, tftAddress, to, *mint.MintAuthority, signers).Build(),
+		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, sol.tokenAddress, to, *mint.MintAuthority, signers).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create mint transaction")
