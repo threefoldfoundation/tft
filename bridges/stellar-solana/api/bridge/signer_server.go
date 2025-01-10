@@ -98,7 +98,8 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	}
 
 	if receiver != request.Receiver {
-		log.Warn().Str("txid", request.TxId).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("receiver does not match")
+		log.Warn().Str("txid", request.TxId).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("Receiver does not match")
+		return errors.New("Tx receiver does not match requested receiver")
 	}
 
 	// Check in transaction storage if the deposit transaction exists
@@ -113,13 +114,14 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	if err != nil {
 		return err
 	}
-	log.Debug().Int64("amount", depositedAmount).Int64("request amount", request.Amount).Msg("validating amount for sign tx")
-
 	depositFeeBigInt := stellar.IntToStroops(s.depositFee)
+	// Subtract fee from deposit amount
+	depositedAmount -= depositFeeBigInt
 
-	amount -= depositFeeBigInt
+	log.Debug().Int64("embedded amount", amount).Int64("amount", depositedAmount).Int64("request amount", request.Amount).Msg("validating amount for sign tx")
 
-	if amount != request.Amount {
+	if amount != request.Amount || amount != depositedAmount {
+		log.Warn().Int64("request amount", request.Amount).Int64("embedded amount", amount).Int64("deposit amount", depositedAmount).Msg("tx amounts don't match")
 		return fmt.Errorf("amounts do not match")
 	}
 
@@ -128,7 +130,7 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	if tx.MemoType != "hash" {
 		return errors.New("memo is not of type memo hash")
 	}
-	addr, err := solana.AddressFromHex(tx.MemoBytes)
+	addr, err := solana.AddressFromB64(tx.Memo)
 	if err != nil {
 		return err
 	}
@@ -152,6 +154,8 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 // Sign signs a stellar sign request
 // This is calable on the libp2p network with RPC
 func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRequest, response *multisig.StellarSignResponse) error {
+	log.Info().Msg("got signing request")
+
 	loaded, err := txnbuild.TransactionFromXDR(request.TxnXDR)
 	if err != nil {
 		return err
@@ -164,7 +168,7 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 
 	if request.Block != 0 {
 		log.Info().Msg("Validating withdrawal signing request")
-		err := s.validateWithdrawal(ctx, request, txn)
+		err = s.validateWithdrawal(ctx, request, txn)
 		if err != nil {
 			if errors.Is(err, ErrInvalidTransaction) {
 				log.Warn().Err(err).Msg("Withdrawal validation error")
@@ -176,7 +180,7 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 	} else if request.Message != "" {
 		// If the signrequest has a message attached we know it's a refund transaction
 		log.Info().Str("deposit", request.Message).Msg("Validating refund signing request")
-		err := s.validateRefundTransaction(ctx, request, txn)
+		err = s.validateRefundTransaction(ctx, request, txn)
 		if err != nil {
 			if errors.Is(err, ErrInvalidTransaction) {
 				log.Warn().Err(err).Msg("Refund validation error")
