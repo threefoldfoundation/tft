@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -548,7 +549,7 @@ func (stid ShortTxID) Hash() [32]byte {
 // ExtractMintValues extracts the amount in lamports, and destination of a mint on solana
 func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 	var amount int64
-	var memo string
+	var memostring string
 	var receiver Address
 
 	accounts, err := tx.AccountMetaList()
@@ -558,38 +559,50 @@ func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 
 	// Validate other request params
 	if len(tx.Message.Instructions) != 3 {
-		return amount, memo, receiver, errors.New("invalid transaction instruction count")
+		return amount, memostring, receiver, errors.New("invalid transaction instruction count")
 	}
 
 	for _, ix := range tx.Message.Instructions {
 		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
 		case memoProgram:
 			// TODO: verify encoding
-			if memo != "" {
-				return amount, memo, receiver, errors.New("mint memo already set, duplicate instruction")
+			if memostring != "" {
+				return amount, memostring, receiver, errors.New("mint memo already set, duplicate instruction")
 			}
-			memo = string(ix.Data)
+			if len(ix.Data) != 65 {
+				return amount, memostring, receiver, errors.New(fmt.Sprintf("mint memo has invalid length %d", len(ix.Data)))
+			}
+			if ix.Data[0] != byte(64) {
+				return amount, memostring, receiver, errors.New("mint memo has invalid leading byte length specifier")
+			}
+
+			memostring = string(ix.Data[1:])
 		case tokenProgram2022:
+			accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
+			spew.Dump(accounts)
+			if err != nil {
+				return amount, memostring, receiver, errors.Wrap(err, "could not resolve instruction accounts")
+			}
 			tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
 			if err != nil {
 				// TODO: Is this technically an error?
-				return amount, memo, receiver, errors.Wrap(err, "could not decode token instruction")
+				return amount, memostring, receiver, errors.Wrap(err, "could not decode token instruction")
 			}
 
 			// At this point, verify its a mint
 			mint, ok := tokenIx.Impl.(*token.MintToChecked)
 			if !ok {
 				// Since we validate IX len, if this is not a valid mint operation there can't be another one.
-				return amount, memo, receiver, errors.Wrap(err, "could not decode token instruction to mint instruction")
+				return amount, memostring, receiver, errors.Wrap(err, "could not decode token instruction to mint instruction")
 			}
 			if mint.Amount == nil {
-				return amount, memo, receiver, errors.New("mint has no value set")
+				return amount, memostring, receiver, errors.New("mint has no value set")
 			}
 			if mint.Decimals == nil {
-				return amount, memo, receiver, errors.New("mint has no decimals set")
+				return amount, memostring, receiver, errors.New("mint has no decimals set")
 			}
 			if amount != 0 {
-				return amount, memo, receiver, errors.New("mint amount already set, duplicate instruction")
+				return amount, memostring, receiver, errors.New("mint amount already set, duplicate instruction")
 			}
 			amount = int64(*mint.Amount)
 			receiver = mint.GetDestinationAccount().PublicKey
@@ -597,11 +610,11 @@ func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 		// Nothing really to do here, we only care that this is ineed a compute budget program ix
 		default:
 			// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
-			return amount, memo, receiver, errors.New("unknown instruction")
+			return amount, memostring, receiver, errors.New("unknown instruction")
 		}
 	}
 
-	return amount, memo, receiver, nil
+	return amount, memostring, receiver, nil
 }
 
 func memoFromTx(tx Transaction) string {
@@ -609,7 +622,7 @@ func memoFromTx(tx Transaction) string {
 		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
 		case memoProgram:
 			// TODO: verify encoding
-			return string(ix.Data)
+			return string(ix.Data[1:])
 		default:
 			continue
 		}
