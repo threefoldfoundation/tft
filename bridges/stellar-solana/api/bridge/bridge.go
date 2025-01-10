@@ -285,7 +285,12 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			select {
 			// Remember new withdraws
 			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
-			case burn := <-solanaBurns:
+			case burn, closed := <-solanaBurns:
+				if closed {
+					log.Warn().Msg("Solana burn channel is closed")
+					return
+				}
+
 				// log.Info().Str("txHash", burn.TxID().String()).Str("shortTxHash", burn.ShortTxID().String()).Msg("Remembering withdraw event")
 				log.Info().Str("txHash", burn.TxID().String()).Str("shortTxHash", burn.ShortTxID().String()).Msg("Starting withdrawal")
 				// txMap[burn.ShortTxID().String()] = burn
