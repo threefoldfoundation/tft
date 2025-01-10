@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/solana-go"
 	budget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/memo"
@@ -426,8 +425,6 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 					continue
 				}
 
-				spew.Dump(tx)
-
 				// TODO: Compute limit is optional
 				ixLen := len(tx.Message.Instructions)
 				if len(tx.Message.Instructions) != 3 {
@@ -565,11 +562,6 @@ func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 	var memostring string
 	var receiver Address
 
-	accounts, err := tx.AccountMetaList()
-	if err != nil {
-		return amount, memo, receiver, errors.Wrap(err, "could not load transaction account list")
-	}
-
 	// Validate other request params
 	if len(tx.Message.Instructions) != 3 {
 		return amount, memostring, receiver, errors.New("invalid transaction instruction count")
@@ -592,7 +584,6 @@ func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 			memostring = string(ix.Data[1:])
 		case tokenProgram2022:
 			accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
-			spew.Dump(accounts)
 			if err != nil {
 				return amount, memostring, receiver, errors.Wrap(err, "could not resolve instruction accounts")
 			}
