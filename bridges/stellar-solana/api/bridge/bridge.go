@@ -174,7 +174,7 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 		return err
 	}
 
-	orderderedSignatures := make([]solana.Signature, len(signers))
+	orderderedSignatures := make([]solana.Signature, len(res))
 	for i := 0; i < len(signers); i++ {
 		for _, sign := range res {
 			if sign.SigIdx == i {
@@ -183,7 +183,14 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 		}
 	}
 
-	log.Debug().Int("count", len(orderderedSignatures)).Msg("total signatures count")
+	log.Debug().Int("count", len(orderderedSignatures)).Msg("Total signatures count")
+
+	tx.Signatures = orderderedSignatures
+
+	if err = tx.VerifySignatures(); err != nil {
+		log.Error().Err(err).Msg("Signature verification error")
+		return err
+	}
 
 	return bridge.solanaWallet.Mint(ctx, tx)
 }
