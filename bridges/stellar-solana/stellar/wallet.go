@@ -97,7 +97,7 @@ func (w *Wallet) Sign(tx *txnbuild.Transaction) (*txnbuild.Transaction, error) {
 	return tx.Sign(w.GetNetworkPassPhrase(), w.keypair)
 }
 
-func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver solana.Address, blockheight uint64, txHash solana.ShortTxID, message string, includeWithdrawFee bool) (err error) {
+func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amount uint64, receiver solana.Address, txHash solana.ShortTxID, message string, includeWithdrawFee bool) (err error) {
 	if !IsValidStellarAddress(target) {
 		log.Warn().Str("address", target).Msg("Invalid address, skipping payment")
 		return
@@ -112,7 +112,6 @@ func (w *Wallet) CreateAndSubmitPayment(ctx context.Context, target string, amou
 	signReq := multisig.StellarSignRequest{
 		RequiredSignatures: w.signatureCount,
 		Receiver:           receiver,
-		Block:              blockheight,
 		Message:            message,
 	}
 

@@ -34,7 +34,7 @@ var (
 type SolanaRequest struct {
 	Receiver           solana.Address
 	Amount             int64
-	TxId               string
+	TxID               string
 	RequiredSignatures int64
 	// Tx is the base64 encoded solana transaction
 	Tx string
@@ -78,39 +78,39 @@ func NewSignerServer(host host.Host, bridgeMasterAddress string, solanaWallet *s
 }
 
 func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, response *SolanaResponse) error {
-	log.Info().Str("request txid", request.TxId).Msg("sign mint request")
+	log.Info().Str("request txid", request.TxID).Msg("sign mint request")
 
 	solTx := new(solana.Transaction)
 	err := solTx.UnmarshalBase64(request.Tx)
 	if err != nil {
-		log.Warn().Str("txid", request.TxId).Msg("could not unmarshal transaction")
+		log.Warn().Str("txid", request.TxID).Msg("could not unmarshal transaction")
 		return err
 	}
 
 	amount, memo, receiver, err := solana.ExtractMintvalues(*solTx)
-	if memo != request.TxId {
-		log.Warn().Str("requested txid", request.TxId).Str("embedded txid", memo).Msg("could not unmarshal transaction")
+	if memo != request.TxID {
+		log.Warn().Str("requested txid", request.TxID).Str("embedded txid", memo).Msg("could not unmarshal transaction")
 		return errors.New("mismatched embedded transaction ID")
 	}
 	if err != nil {
-		log.Warn().Str("txid", request.TxId).Msg("could not unmarshal transaction")
+		log.Warn().Str("txid", request.TxID).Msg("could not unmarshal transaction")
 		return err
 	}
 
 	if receiver != request.Receiver {
-		log.Warn().Str("txid", request.TxId).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("Receiver does not match")
+		log.Warn().Str("txid", request.TxID).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("Receiver does not match")
 		return errors.New("Tx receiver does not match requested receiver")
 	}
 
 	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(ctx, request.TxId)
+	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(ctx, request.TxID)
 	if err != nil {
-		log.Info().Str("txid", request.TxId).Msg("transaction not found")
+		log.Info().Str("txid", request.TxID).Msg("transaction not found")
 		return err
 	}
 
 	// Validate amount
-	depositedAmount, _, err := s.stellarWallet.GetDepositAmountAndSender(request.TxId, s.bridgeMasterAddress)
+	depositedAmount, _, err := s.stellarWallet.GetDepositAmountAndSender(request.TxID, s.bridgeMasterAddress)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,8 @@ func (s *SignerService) Sign(ctx context.Context, request multisig.StellarSignRe
 		return fmt.Errorf("provided transaction is of wrong type")
 	}
 
-	if request.Block != 0 {
+	var emptyAddr solana.Address
+	if request.Receiver != emptyAddr {
 		log.Info().Msg("Validating withdrawal signing request")
 		err = s.validateWithdrawal(ctx, request, txn)
 		if err != nil {

@@ -266,10 +266,16 @@ func main() {
 
 	// Start the signer server
 	if bridgeCfg.Follower {
+		err = bridge.NewSolIDServer(host, sol.Address())
+		if err != nil {
+			panic(err)
+		}
+		log.Info().Msg("Registered SolIDService")
 		err = bridge.NewSignerServer(host, bridgeMasterAddress, sol, stellarWallet, bridgeCfg.DepositFee)
 		if err != nil {
 			panic(err)
 		}
+		log.Info().Msg("Registered SignerService")
 	}
 
 	sigs := make(chan os.Signal, 1)

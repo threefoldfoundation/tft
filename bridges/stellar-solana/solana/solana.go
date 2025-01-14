@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	ag_binary "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	budget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/memo"
@@ -304,6 +305,10 @@ func AddressFromB64(encoded string) (Address, error) {
 func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transaction, error) {
 	to := solana.PublicKeyFromBytes(info.To[:])
 
+	if len(info.TxID) != 64 {
+		return nil, errors.New("invalid txid length")
+	}
+
 	recent, err := sol.rpcClient.GetLatestBlockhash(ctx, rpc.CommitmentFinalized)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get latest finalized block hash")
@@ -333,10 +338,14 @@ func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transacti
 		}
 	}
 
+	txID := [64]byte{}
+	copy(txID[:], []byte(info.TxID))
+
 	tx, err := solana.NewTransaction([]solana.Instruction{
 		// TODO: Compute actual limit
 		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
-		memo.NewMemoInstruction([]byte(info.TxID), sol.account.PublicKey()).Build(),
+		CustomMemoInstruction(txID, sol.account.PublicKey()),
+		// memo.NewMemoInstruction(txID, sol.account.PublicKey()).Build(),
 		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, sol.tokenAddress, to, *mint.MintAuthority, filteredSigners).Build(),
 	}, recent.Value.Blockhash, solana.TransactionPayer(sol.account.PublicKey()))
 	if err != nil {
@@ -383,6 +392,102 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 	//      - One will be a token instruction. Try to parse this as a burn instruction to extract the value.
 	//      - One is compute budget, we don't care for this.
 
+	extractBurnFromSig := func(sig solana.Signature) *Burn {
+		log.Debug().Str("signature", sig.String()).Msg("Fetch tx with sig")
+		res, err := sol.rpcClient.GetTransaction(ctx, sig, nil)
+		if err != nil {
+			if errors.Is(err, rpc.ErrNotFound) {
+				// TODO: Considering we get the actual log twice, there might be a better way to handle this
+				log.Info().Str("signature", sig.String()).Msg("Skipping tx which can't be found")
+				return nil
+			}
+			log.Error().Err(err).Str("signature", sig.String()).Msg("Could not fetch transaction")
+			// TODO: Perhaps we should retry here?
+			return nil
+		}
+
+		tx, err := res.Transaction.GetTransaction()
+		if err != nil {
+			log.Err(err).Str("signature", sig.String()).Msg("Failed to decode transaction")
+			return nil
+		}
+
+		// TODO: Compute limit is optional
+		ixLen := len(tx.Message.Instructions)
+		if len(tx.Message.Instructions) != 3 {
+			log.Debug().Int("ixLen", ixLen).Str("signature", sig.String()).Msg("Skipping Tx which did not have the expected 3 instructions")
+			return nil
+		}
+
+		memoText := ""
+		burnAmount := uint64(0)
+		tokenDecimals := uint8(0)
+		source := Address{}
+		illegalOp := false
+
+	outer:
+		for _, ix := range tx.Message.Instructions {
+			switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
+			case memoProgram:
+				// TODO: verify encoding
+				if len(ix.Data) == 0 {
+					log.Debug().Msg("Empty memo instruction")
+					illegalOp = true
+					break
+				}
+				memoText = string(ix.Data[:])
+			case tokenProgram2022:
+				accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
+				if err != nil {
+					log.Error().Err(err).Str("signature", sig.String()).Msg("Failed to resolve token accounts")
+					break
+				}
+				tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
+				if err != nil {
+					// TODO: Is this technically an error?
+					log.Error().Err(err).Str("signature", sig.String()).Msg("Failed to decode token instruction")
+					illegalOp = true
+					break
+				}
+
+				// At this point, verify its a burn
+				// TODO: it seems burnchecked is returned but maybe we also need to check for regular `burn`
+				burn, ok := tokenIx.Impl.(*token.BurnChecked)
+				if !ok {
+					log.Info().Str("signature", sig.String()).Msg("Skipping tx since token IX is not of type burnChecked")
+					// Since we validate IX len, if this is not a valid burn operation there can't be another one.
+					illegalOp = true
+					break outer
+				}
+				if burn.Amount == nil {
+					log.Info().Str("signature", sig.String()).Msg("Skipping tx since token IX is burnChecked, but without an amount set")
+					illegalOp = true
+					break outer
+				}
+				if burn.Decimals == nil {
+					log.Info().Str("signature", sig.String()).Msg("Skipping tx since token IX is burnChecked, but without decimals set")
+					illegalOp = true
+					break outer
+				}
+				source = burn.GetSourceAccount().PublicKey
+				burnAmount = *burn.Amount
+				tokenDecimals = *burn.Decimals
+			case computeBudgetProgram:
+			// Nothing really to do here, we only care that this is ineed a compute budget program ix
+			default:
+				// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
+				illegalOp = true
+				break outer
+			}
+		}
+
+		if memoText != "" && burnAmount != 0 && !illegalOp {
+			return &Burn{amount: burnAmount, decimals: tokenDecimals, memo: memoText, caller: source, signature: sig}
+		}
+
+		return nil
+	}
+
 	ch := make(chan Burn, 10)
 	go func() {
 		// Close the channel in case the goroutine exits
@@ -402,12 +507,11 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 				time.Sleep(time.Second * 10)
 			}
 
-		recvloop:
 			for {
 				got, err := sub.Recv(ctx)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to get new tx logs from subscription")
-					break recvloop
+					break
 				}
 
 				if got.Value.Signature.Equals(systemSig) {
@@ -415,97 +519,123 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 					continue
 				}
 
-				log.Debug().Str("signature", got.Value.Signature.String()).Msg("Fetch tx with sig")
-				res, err := sol.rpcClient.GetTransaction(ctx, got.Value.Signature, nil)
-				if err != nil {
-					if errors.Is(err, rpc.ErrNotFound) {
-						// TODO: Considering we get the actual log twice, there might be a better way to handle this
-						log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx which can't be found")
-						continue
-					}
-					log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Could not fetch transaction")
-					// TODO: Perhaps we should retry here?
-					continue
-				}
+				// insert here
+				burn := extractBurnFromSig(got.Value.Signature)
 
-				tx, err := res.Transaction.GetTransaction()
-				if err != nil {
-					log.Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode transaction")
-					continue
-				}
-
-				// TODO: Compute limit is optional
-				ixLen := len(tx.Message.Instructions)
-				if len(tx.Message.Instructions) != 3 {
-					log.Debug().Int("ixLen", ixLen).Str("signature", got.Value.Signature.String()).Msg("Skipping Tx which did not have the expected 3 instructions")
-					continue
-				}
-
-				memoText := ""
-				burnAmount := uint64(0)
-				tokenDecimals := uint8(0)
-				source := Address{}
-				illegalOp := false
-
-			outer:
-				for _, ix := range tx.Message.Instructions {
-					switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
-					case memoProgram:
-						// TODO: verify encoding
-						memoText = string(ix.Data)
-					case tokenProgram2022:
-						accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
-						if err != nil {
-							log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to resolve token accounts")
-							break
-						}
-						tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
-						if err != nil {
-							// TODO: Is this technically an error?
-							log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode token instruction")
-							illegalOp = true
-							break
-						}
-
-						// At this point, verify its a burn
-						// TODO: it seems burnchecked is returned but maybe we also need to check for regular `burn`
-						burn, ok := tokenIx.Impl.(*token.BurnChecked)
-						if !ok {
-							log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is not of type burnChecked")
-							// Since we validate IX len, if this is not a valid burn operation there can't be another one.
-							illegalOp = true
-							break outer
-						}
-						if burn.Amount == nil {
-							log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without an amount set")
-							illegalOp = true
-							break outer
-						}
-						if burn.Decimals == nil {
-							log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without decimals set")
-							illegalOp = true
-							break outer
-						}
-						source = burn.GetSourceAccount().PublicKey
-						burnAmount = *burn.Amount
-						tokenDecimals = *burn.Decimals
-					case computeBudgetProgram:
-					// Nothing really to do here, we only care that this is ineed a compute budget program ix
-					default:
-						// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
-						illegalOp = true
-						break outer
-					}
-				}
-
-				if memoText != "" && burnAmount != 0 && !illegalOp {
-					ch <- Burn{amount: burnAmount, decimals: tokenDecimals, memo: memoText, caller: source, signature: got.Value.Signature}
+				// 	log.Debug().Str("signature", got.Value.Signature.String()).Msg("Fetch tx with sig")
+				// 	res, err := sol.rpcClient.GetTransaction(ctx, got.Value.Signature, nil)
+				// 	if err != nil {
+				// 		if errors.Is(err, rpc.ErrNotFound) {
+				// 			// TODO: Considering we get the actual log twice, there might be a better way to handle this
+				// 			log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx which can't be found")
+				// 			continue
+				// 		}
+				// 		log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Could not fetch transaction")
+				// 		// TODO: Perhaps we should retry here?
+				// 		continue
+				// 	}
+				//
+				// 	tx, err := res.Transaction.GetTransaction()
+				// 	if err != nil {
+				// 		log.Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode transaction")
+				// 		continue
+				// 	}
+				//
+				// 	// TODO: Compute limit is optional
+				// 	ixLen := len(tx.Message.Instructions)
+				// 	if len(tx.Message.Instructions) != 3 {
+				// 		log.Debug().Int("ixLen", ixLen).Str("signature", got.Value.Signature.String()).Msg("Skipping Tx which did not have the expected 3 instructions")
+				// 		continue
+				// 	}
+				//
+				// 	memoText := ""
+				// 	burnAmount := uint64(0)
+				// 	tokenDecimals := uint8(0)
+				// 	source := Address{}
+				// 	illegalOp := false
+				//
+				// outer:
+				// 	for _, ix := range tx.Message.Instructions {
+				// 		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
+				// 		case memoProgram:
+				// 			// TODO: verify encoding
+				// 			if len(ix.Data) == 0 {
+				// 				log.Debug().Msg("Empty memo instruction")
+				// 				illegalOp = true
+				// 				break
+				// 			}
+				// 			memoText = string(ix.Data[:])
+				// 		case tokenProgram2022:
+				// 			accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
+				// 			if err != nil {
+				// 				log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to resolve token accounts")
+				// 				break
+				// 			}
+				// 			tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
+				// 			if err != nil {
+				// 				// TODO: Is this technically an error?
+				// 				log.Error().Err(err).Str("signature", got.Value.Signature.String()).Msg("Failed to decode token instruction")
+				// 				illegalOp = true
+				// 				break
+				// 			}
+				//
+				// 			// At this point, verify its a burn
+				// 			// TODO: it seems burnchecked is returned but maybe we also need to check for regular `burn`
+				// 			burn, ok := tokenIx.Impl.(*token.BurnChecked)
+				// 			if !ok {
+				// 				log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is not of type burnChecked")
+				// 				// Since we validate IX len, if this is not a valid burn operation there can't be another one.
+				// 				illegalOp = true
+				// 				break outer
+				// 			}
+				// 			if burn.Amount == nil {
+				// 				log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without an amount set")
+				// 				illegalOp = true
+				// 				break outer
+				// 			}
+				// 			if burn.Decimals == nil {
+				// 				log.Info().Str("signature", got.Value.Signature.String()).Msg("Skipping tx since token IX is burnChecked, but without decimals set")
+				// 				illegalOp = true
+				// 				break outer
+				// 			}
+				// 			source = burn.GetSourceAccount().PublicKey
+				// 			burnAmount = *burn.Amount
+				// 			tokenDecimals = *burn.Decimals
+				// 		case computeBudgetProgram:
+				// 		// Nothing really to do here, we only care that this is ineed a compute budget program ix
+				// 		default:
+				// 			// We don't allow for other instructions at this time, so this condition is terminal for the tx validation.
+				// 			illegalOp = true
+				// 			break outer
+				// 		}
+				// 	}
+				//
+				// 	if memoText != "" && burnAmount != 0 && !illegalOp {
+				// 		ch <- Burn{amount: burnAmount, decimals: tokenDecimals, memo: memoText, caller: source, signature: got.Value.Signature}
+				// 	}
+				if burn != nil {
+					ch <- *burn
 				}
 
 			}
 
 			// Also close the subscription now that we are done with it
 			sub.Unsubscribe()
+		}
+	}()
+
+	// Start loading historic signatures
+	// NOTE: This is done after starting the subscription to avoid a possible minor gap.
+	sigs, err := sol.listTransactionSigs(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load historic token tx signatures")
+	}
+	go func() {
+		for _, sig := range sigs {
+			burn := extractBurnFromSig(sig)
+			if burn != nil {
+				ch <- *burn
+			}
 		}
 	}()
 
@@ -583,14 +713,11 @@ func ExtractMintvalues(tx Transaction) (int64, string, Address, error) {
 			if memostring != "" {
 				return amount, memostring, receiver, errors.New("mint memo already set, duplicate instruction")
 			}
-			if len(ix.Data) != 65 {
+			if len(ix.Data) != 64 {
 				return amount, memostring, receiver, errors.New(fmt.Sprintf("mint memo has invalid length %d", len(ix.Data)))
 			}
-			if ix.Data[0] != byte(64) {
-				return amount, memostring, receiver, errors.New("mint memo has invalid leading byte length specifier")
-			}
 
-			memostring = string(ix.Data[1:])
+			memostring = string(ix.Data[:])
 		case tokenProgram2022:
 			accounts, err := ix.ResolveInstructionAccounts(&tx.Message)
 			if err != nil {
@@ -642,4 +769,29 @@ func memoFromTx(tx Transaction) string {
 	}
 
 	return ""
+}
+
+func CustomMemoInstruction(txID [64]byte, signer solana.PublicKey) *memo.MemoInstruction {
+	nd := CustomMemoVariant{
+		AccountMetaSlice: make(solana.AccountMetaSlice, 1),
+	}
+
+	nd.AccountMetaSlice[0] = solana.Meta(signer).SIGNER()
+	nd.Message = txID
+
+	return &memo.MemoInstruction{
+		BaseVariant: ag_binary.BaseVariant{
+			Impl:   nd,
+			TypeID: ag_binary.NoTypeIDDefaultID,
+		},
+	}
+}
+
+type CustomMemoVariant struct {
+	// The memo message
+	Message [64]byte
+
+	// [0] = [SIGNER] Signer
+	// ··········· The account that will pay for the transaction
+	solana.AccountMetaSlice `bin:"-" borsh_skip:"true"`
 }

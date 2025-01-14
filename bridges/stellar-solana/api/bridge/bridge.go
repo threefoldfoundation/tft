@@ -169,7 +169,7 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 	res, err := bridge.signersClient.SignMint(ctx, onlinePeers, SolanaRequest{
 		Receiver: receiver,
 		Amount:   amount.Int64(),
-		TxId:     txID,
+		TxID:     txID,
 		// subtract 1 from the required signature count, because the master signature is already included
 		RequiredSignatures: requiredSignatureCount - 1,
 		Tx:                 txB64,
@@ -303,8 +303,9 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 			select {
 			// Remember new withdraws
 			// Never happens for cosigners, only for the master since the cosugners are not subscribed to withdraw events
-			case burn, closed := <-solanaBurns:
-				if closed {
+			case burn, ok := <-solanaBurns:
+				// Check for closed channel
+				if !ok {
 					log.Warn().Msg("Solana burn channel is closed")
 					return
 				}
@@ -395,6 +396,6 @@ func (bridge *Bridge) withdraw(ctx context.Context, burn solana.Burn) (err error
 	amount -= uint64(WithdrawFee)
 	// TODO: Should this adress be fetched through the wallet?
 	includeWithdrawFee := bridge.wallet.Config.StellarFeeWallet != ""
-	err = bridge.wallet.CreateAndSubmitPayment(ctx, burn.Memo(), amount, burn.Caller(), burn.BlockHeight(), shortTxID, "", includeWithdrawFee)
+	err = bridge.wallet.CreateAndSubmitPayment(ctx, burn.Memo(), amount, burn.Caller(), shortTxID, "", includeWithdrawFee)
 	return
 }

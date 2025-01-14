@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/errors"
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/multisig"
+	"github.com/threefoldfoundation/tft/bridges/stellar-solana/solana"
 	"github.com/threefoldtech/libp2p-relay/client"
 )
 

@@ -8,8 +8,7 @@ type StellarSignRequest struct {
 	TxnXDR             string
 	RequiredSignatures int
 	Receiver           solana.Address // TODO: Valid ?
-	Block              uint64
-	Message            string // Contains the deposit transaction hash in case of a refund
+	Message            string         // Contains the deposit transaction hash in case of a refund
 }
 
 type StellarSignResponse struct {

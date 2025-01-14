@@ -4,6 +4,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -28,7 +29,7 @@ type Burn struct {
 
 	// Heigt of the block? the tx was part of
 	// TODO: fill in
-	blockHeight uint64
+	// blockHeight uint64
 
 	// signature of the transaction, which is also the txId
 	signature Signature
@@ -60,9 +61,9 @@ func (b Burn) Caller() Address {
 }
 
 // BlockHeight the tx was included at
-func (b Burn) BlockHeight() uint64 {
-	return b.blockHeight
-}
+// func (b Burn) BlockHeight() uint64 {
+// 	return b.blockHeight
+// }
 
 func burnFromTransaction(tx solana.Transaction) (Burn, error) {
 	// Compute limit is optional
@@ -86,7 +87,12 @@ outer:
 		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
 		case memoProgram:
 			// TODO: verify encoding
-			memoText = string(ix.Data)
+			if len(ix.Data) == 0 {
+				log.Debug().Msg("Empty memo instruction")
+				illegalOp = true
+				break
+			}
+			memoText = string(ix.Data[:])
 		case tokenProgram2022:
 			tokenIx, err := token.DecodeInstruction(accounts, ix.Data)
 			if err != nil {
