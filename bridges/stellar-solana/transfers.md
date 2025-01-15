@@ -1,41 +1,55 @@
-# Transferring TFT between Stellar and Ethereum compatible chains
+# Transferring TFT between Stellar and Solana
 
-## From Ethereum to Stellar
+## From Solana to Stellar
 
-The `withdraw` method must be called on contract token contract with the following parameters:
+The bridge monitors the `Mint` account and looks for transactions with the following
+format:
 
-- blockchain_address: Your stellar address
-- network: stellar
-- amount: any amount that does not exceed your balance (unsigned integer with a precision of 7 decimals, so 1 TFT = 10000000 )
+- 2 or 3 operations
+- one of the operations invokes the MemoProgram
+- one of the operations invokes the Token-2022 program with a BurnToChecked instruction
+- If there are 3 operations, the 3rd operations invokes the `compute-budget` program
 
-## From Stellar to Ethereum
+The instructions are then parsed and processed by the bridge. In order to withdraw
+tokens from Solana to Stellar, the following format must be followed:
 
-Transfer the TFT to the bridge address with the target address in the memo text in a specially encoded way.
+- Add the destination account which will receive the stellar TFT as Memo. There
+  is no additional encoding.
+- Burn the amount of tokens which must be withdrawn. In a BurnToChecked, the amount
+  of decimals used in the token must also be provided.
+- Optionally set a custom compute-budget limit
 
-### Encoding the target address
+> WARNING: If the destination account does not exist, or does not have a TFT trustline,
+this will result in a loss of tokens (though the transaction can be picked up later
+if the bridge is run from scratch).
 
-Hex decode the target address and then base64 encode it again.
+## From Stellar to Solana
 
-Example in python to generate the memo text to send to 0x65e491D7b985f77e60c85105834A0332fF3002CE:
+Transfer the TFT to the bridge address with the target address in the MEMO_HASH.
 
-```python
-b= bytes.fromhex("65e491D7b985f77e60c85105834A0332fF3002CE")
-base64.b64encode(b).decode("utf-8")
-'ZeSR17mF935gyFEFg0oDMv8wAs4='
-```
+### Solana address encoding
 
-### Fees
+A Solana address in readable form is simply a base58 encoded 32byte public key.
+Because this can't be specified in a MEMO_TEXT field, the address must instead
+be decoded to the raw bytes, which can then be set as MEMO_HASH. Depending on the
+tooling/libraries used to create the stellar transaction, you might have to encode
+this raw value to set it.
 
-- From Stellar to Ethereum:
+## Fees
 
-   To cover the costs of the bridge, a default fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
+- From Stellar to Solana:
 
-   Make sure the  amount received on the bridge's Stellar address is larger than the Fee..
+  To cover the costs of the bridge, a default fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
 
-- From Ethereum to Stellar:
+  Make sure the amount received on the bridge's Stellar address is larger than the Fee.
 
-   a fee of 1 TFT is deducted from the withdrawn amount
+- From Solana to Stellar:
+
+  a fee of 1 TFT is deducted from the withdrawn amount
 
 ## Refunds
 
-When the supplied memo text of a deposit transaction can not be decoded to a valid Ethereum address, the deposited TFT's are sent back minus 1 TFT to cover the transaction fees of the bridge and to make a DOS attack on the bridge more expensive.
+When the supplied memo text of a deposit transaction can not be decoded to a valid
+Solana address, the deposited TFT's are sent back minus 1 TFT to cover the transaction
+fees of the bridge and to make a DOS attack on the bridge more expensive. This is
+also the case if the deposit amount is not large enough to cover the bridge fees.
