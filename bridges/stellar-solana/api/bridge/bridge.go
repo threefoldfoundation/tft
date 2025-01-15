@@ -220,18 +220,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 		return errors.Wrap(err, "failed to subscribe to solana burns")
 	}
 
-	// go func() {
-	// 	err := bridge.bridgeContract.SubscribeMint()
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// }()
-
-	// Channel where withdrawal events are stored
-	// Should only be read from by the master bridge
-	// withdrawChan := make(chan WithdrawEvent)
-	// withdrawChan := make(chan solana.Burn)
-
 	// Only the bridge running as the master bridge should do the following things:
 	// - Monitor the Bridge Stellar account and initiate Minting transactions accordingly
 	// - Monitor the Contract for Withdrawal events and initiate a Withdrawal transaction accordingly
@@ -248,51 +236,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 				panic(err)
 			}
 		}()
-
-		// Sync up any withdrawals made if the blockheight is manually set
-		// to a previous value
-		// currentBlock, err := bridge.bridgeContract.ethc.BlockNumber(ctx)
-		// if err != nil {
-		// 	return err
-		// }
-		//
-		// var lastHeight uint64
-		// // If the user provides a height to rescan from, use that
-		// // Otherwise use the saved height in the persistency file
-		// if bridge.config.RescanFromHeight > 0 {
-		// 	lastHeight = uint64(bridge.config.RescanFromHeight) - EthBlockDelay
-		// } else {
-		// 	height, err := bridge.blockPersistency.GetHeight()
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	// if the saved height is 0, just use current block
-		// 	if height.LastHeight == 0 {
-		// 		lastHeight = currentBlock
-		// 	}
-		// 	if height.LastHeight > EthBlockDelay {
-		// 		lastHeight = height.LastHeight - EthBlockDelay
-		// 	}
-		// }
-		//
-		// if lastHeight < currentBlock {
-		// 	// todo filter logs
-		// 	go func() {
-		// 		if err := bridge.bridgeContract.FilterWithdraw(withdrawChan, lastHeight, currentBlock); err != nil {
-		// 			panic(err)
-		// 		}
-		// 	}()
-		// }
-		// TODO bug: currentblock is not taken into account and if it would be passed,
-		// blocks in past don't work anyway so if the chain progressed between getting the current block
-		// and the start of the watching, events are lost if there are any.
-		// go func() {
-		// err := bridge.bridgeContract.SubscribeWithdraw(withdrawChan, currentBlock)
-		// withdrawChan, err := bridge.solanaWallet.SubscribeTokenBurns(ctx)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// }()
 
 	}
 
@@ -319,47 +262,6 @@ func (bridge *Bridge) Start(ctx context.Context) error {
 					log.Error().Err(err).Str("address", burn.Memo()).Msg("failed to create payment for withdrawal")
 					continue
 				}
-			// case head := <-heads:
-			// 	bridge.mut.Lock()
-			//
-			// 	progress, err := bridge.bridgeContract.ethc.SyncProgress(ctx)
-			// 	if err != nil {
-			// 		log.Error().Err(err).Msg("failed to get sync progress")
-			// 	}
-			// 	if progress == nil {
-			// 		bridge.synced = true
-			// 	}
-			//
-			// 	log.Info().Int("head", head.Number).Bool("synced", bridge.synced).Msg("found new head")
-			//
-			// 	if bridge.synced {
-			// 		ids := make([]string, 0, len(txMap))
-			// 		for id := range txMap {
-			// 			ids = append(ids, id)
-			// 		}
-			//
-			// 		for _, id := range ids {
-			// 			we := txMap[id]
-			// 			if head.Number.Uint64() >= we.blockHeight+EthBlockDelay {
-			// 				log.Info().Str("txHash", we.TxID().String()).Msg("Starting withdrawal")
-			// 				err := bridge.withdraw(ctx, we)
-			// 				if err != nil {
-			// 					log.Error().Err(err).Str("address", we.blockchain_address).Msg("failed to create payment for withdrawal")
-			// 					continue
-			// 				}
-			//
-			// 				// forget about our tx
-			// 				delete(txMap, id)
-			// 			}
-			// 		}
-			//
-			// 	}
-			//
-			// 	err = bridge.blockPersistency.SaveHeight(head.Number.Uint64())
-			// 	if err != nil {
-			// 		log.Error().Err(err).Msg("error occured saving blockheight")
-			// 	}
-			// 	bridge.mut.Unlock()
 			case <-ctx.Done():
 				return
 			}

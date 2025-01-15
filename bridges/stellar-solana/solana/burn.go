@@ -27,10 +27,6 @@ type Burn struct {
 	// TODO: fill in
 	caller Address
 
-	// Heigt of the block? the tx was part of
-	// TODO: fill in
-	// blockHeight uint64
-
 	// signature of the transaction, which is also the txId
 	signature Signature
 }
@@ -59,11 +55,6 @@ func (b Burn) ShortTxID() ShortTxID {
 func (b Burn) Caller() Address {
 	return b.caller
 }
-
-// BlockHeight the tx was included at
-// func (b Burn) BlockHeight() uint64 {
-// 	return b.blockHeight
-// }
 
 func burnFromTransaction(tx solana.Transaction) (Burn, error) {
 	// Compute limit is optional
