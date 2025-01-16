@@ -352,24 +352,6 @@ func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transacti
 		return nil, errors.Wrap(err, "failed to create mint transaction")
 	}
 
-	// _, err = tx.PartialSign(func(key solana.PublicKey) *solana.PrivateKey {
-	// 	if sol.account.PublicKey().Equals(key) {
-	// 		return &sol.account
-	// 	}
-	//
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "failed to sign mint transaction")
-	// }
-
-	// _, err = confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
-	// if err != nil {
-	// 	return Transaction{}, errors.Wrap(err, "failed to submit mint transaction")
-	// }
-	//
-	// log.Info().Msg("Submitted mint tx")
-
 	return tx, nil
 }
 
