@@ -487,6 +487,8 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 				log.Error().Err(err).Msg("Failed to open solana log subscription")
 				// Wait 10 seconds in case it is a transient network error, then try again
 				time.Sleep(time.Second * 10)
+				// Restart the loop
+				continue
 			}
 
 			for {
