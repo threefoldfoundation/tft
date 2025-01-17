@@ -369,6 +369,12 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 				return
 			}
 
+			if err == faults.ErrInvalidReceiver {
+				log.Warn().Str("Receiver", solanaAddress.String()).Msg("Target address is not valid to receive tokens, refunding")
+				w.refundDeposit(ctx, uint64(totalAmount), sender, tx)
+				return
+			}
+
 			select {
 			case <-ctx.Done():
 				return

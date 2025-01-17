@@ -173,6 +173,32 @@ func (sol *Solana) GetSigners(ctx context.Context) ([]Address, error) {
 	return ma.Signers[:ma.N], nil
 }
 
+// IsValidReceiver checks if the target address is a valid PDA set up to receive our specific Mint
+func (sol *Solana) IsValidReceiver(ctx context.Context, receiver Address) (bool, error) {
+	resp, err := sol.rpcClient.GetAccountInfo(ctx, receiver)
+	if err != nil {
+		if errors.Is(err, rpc.ErrNotFound) {
+			// Account does not exist, so it's definitely not a valid account
+			return false, nil
+		}
+
+		return false, errors.Wrap(err, "could not load account info")
+	}
+
+	var account token.Account
+	err = ag_binary.NewBinDecoder(resp.Value.Data.GetBinary()).Decode(&account)
+	if err != nil {
+		log.Info().Err(err).Str("Account", receiver.String()).Msg("Could not decode associated token account, invalid account")
+		return false, nil
+	}
+
+	if account.Mint != sol.tokenAddress {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (sol *Solana) CreateTokenSignature(tx Transaction) (Signature, int, error) {
 	// First clear possible existing signatures so we can isolate the signature we generated
 	tx.Signatures = nil

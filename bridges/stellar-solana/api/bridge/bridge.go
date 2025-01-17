@@ -108,6 +108,16 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 	if !bridge.synced {
 		return errors.New("bridge is not synced, retry later")
 	}
+
+	valid, err := bridge.solanaWallet.IsValidReceiver(ctx, receiver)
+	if err != nil {
+		return errors.Wrap(err, "Failed to check if receiver is proper")
+	}
+
+	if !valid {
+		return faults.ErrInvalidReceiver
+	}
+
 	log.Info().Str("receiver", receiver.String()).Str("txID", txID).Msg("Minting")
 	// check if we already know this ID
 	known, err := bridge.solanaWallet.IsMintTxID(ctx, txID)
