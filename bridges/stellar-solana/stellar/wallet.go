@@ -394,8 +394,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 		var memo [32]byte
 		copy(memo[:], parsedMessage)
 
-		// TODO: a context is there for a reason
-		err = w.CreateAndSubmitFeepayment(context.Background(), uint64(IntToStroops(w.depositFee)), memo)
+		err = w.CreateAndSubmitFeepayment(ctx, uint64(IntToStroops(w.depositFee)), memo)
 		for err != nil {
 			log.Error().Err(err).Msg("error sending fee to the fee wallet")
 			select {
