@@ -86,7 +86,7 @@ func NewHost(ctx context.Context, secret, relay string, psk string) (host.Host, 
 	if err != nil {
 		return nil, nil, err
 	}
-	err = emitReachabilityChanged.Emit(event.EvtLocalReachabilityChanged{Reachability: network.ReachabilityUnknown})
+	err = emitReachabilityChanged.Emit(event.EvtLocalReachabilityChanged{Reachability: network.ReachabilityPrivate})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -202,6 +202,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multisig.StellarSignRequest) (*multisig.StellarSignResponse, error) {
+	ctx = network.WithUseTransient(ctx, "transient connection is allowed as the signatures prove private key ownership")
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
@@ -284,6 +285,7 @@ func (s *SignersClient) SignMint(ctx context.Context, peers []peer.ID, signReque
 }
 
 func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest SolanaRequest) (*SolanaResponse, error) {
+	ctx = network.WithUseTransient(ctx, "transient connection is allowed as the signatures prove private key ownership")
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
@@ -365,6 +367,7 @@ func (s *SignersClient) SolID(ctx context.Context, requiredPeers int) (map[peer.
 }
 
 func (s *SignersClient) solID(ctx context.Context, id peer.ID) (*IDResponse, error) {
+	ctx = network.WithUseTransient(ctx, "transient connection is allowed as the signatures prove private key ownership")
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
