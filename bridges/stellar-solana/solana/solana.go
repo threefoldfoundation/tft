@@ -59,6 +59,8 @@ type (
 )
 
 type Solana struct {
+	network string
+
 	rpcClient *rpc.Client
 	wsClient  *ws.Client
 
@@ -85,7 +87,7 @@ func New(ctx context.Context, cfg *SolanaConfig) (*Solana, error) {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
 
-	return &Solana{rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress}, nil
+	return &Solana{network: cfg.NetworkName, rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress}, nil
 }
 
 // Address of the solana wallet
@@ -511,6 +513,12 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 			sub, err := sol.wsClient.LogsSubscribeMentions(sol.tokenAddress, rpc.CommitmentFinalized)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to open solana log subscription")
+				// Reconnect the websocket, in case the websocket itself is closed.
+				sol.wsClient.Close()
+				sol.wsClient, err = newSolanaWsClient(ctx, sol.network)
+				if err != nil {
+					log.Error().Err(err).Str("network", sol.network).Msg("Failed to create new solana websocket connection")
+				}
 				// Wait 10 seconds in case it is a transient network error, then try again
 				time.Sleep(time.Second * 10)
 				// Restart the loop
@@ -567,6 +575,23 @@ func (sol *Solana) Close() error {
 
 // getSolanaClient gets an RPC client and websocket client for a specific solana network
 func getSolanaClient(ctx context.Context, network string) (*rpc.Client, *ws.Client, error) {
+	config, err := getNetworkConfig(network)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rpcClient := rpc.NewWithCustomRPCClient(rpc.NewWithLimiter(config.RPC, rate.Every(time.Second), 10))
+
+	wsClient, err := ws.Connect(ctx, config.WS)
+	if err != nil {
+		rpcClient.Close()
+		return nil, nil, errors.Wrap(err, "failed to establish websocket connection")
+	}
+
+	return rpcClient, wsClient, nil
+}
+
+func getNetworkConfig(network string) (rpc.Cluster, error) {
 	var config rpc.Cluster
 	var err error
 
@@ -583,19 +608,20 @@ func getSolanaClient(ctx context.Context, network string) (*rpc.Client, *ws.Clie
 		err = ErrSolanaNetworkNotSupported
 	}
 
+	return config, err
+}
+
+func newSolanaWsClient(ctx context.Context, network string) (*ws.Client, error) {
+	config, err := getNetworkConfig(network)
 	if err != nil {
-		return nil, nil, err
+		return nil, errors.Wrap(err, "could not open websocket connection")
 	}
-
-	rpcClient := rpc.NewWithCustomRPCClient(rpc.NewWithLimiter(config.RPC, rate.Every(time.Second), 10))
-
 	wsClient, err := ws.Connect(ctx, config.WS)
 	if err != nil {
-		rpcClient.Close()
-		return nil, nil, errors.Wrap(err, "failed to establish websocket connection")
+		return nil, errors.Wrap(err, "failed to establish websocket connection")
 	}
 
-	return rpcClient, wsClient, nil
+	return wsClient, nil
 }
 
 func NewShortTxID(hash [32]byte) ShortTxID {
