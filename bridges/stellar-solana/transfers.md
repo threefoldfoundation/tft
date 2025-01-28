@@ -39,7 +39,9 @@ this raw value to set it.
 
 - From Stellar to Solana:
 
-  To cover the costs of the bridge, a default fee of 50 TFT is charged. This fee can be modified if it does not cover the gas price for the bridge.
+  To cover the costs of the bridge, a default fee in TFT is charged. This fee can
+  be modified if it does not cover the gas price for the bridge. On `testnet`, the
+  fee is currenty `100 TFT`.
 
   Make sure the amount received on the bridge's Stellar address is larger than the Fee.
 
