@@ -28,6 +28,12 @@ jobs:
       - name: compress stellar-evm bridge
         run: cd dist && tar -czf stellarevmbridge_linux_amd64.tar.gz stellar-evm
 
+      - name: build stellar-solana bridge
+        run: cd bridges/stellar-solana && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X 'main.Version=${{ github.ref }}'" -o ../../dist/
+
+      - name: compress stellar-solana bridge
+        run: cd dist && tar -czf stellarsolanabridge_linux_amd64.tar.gz stellar-solana
+
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
@@ -53,4 +59,14 @@ jobs:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./dist/stellarevmbridge_linux_amd64.tar.gz
           asset_name: stellarevmbridge_linux_amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload stellar-solana bridge binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./dist/stellarsolanabridge_linux_amd64.tar.gz
+          asset_name: stellarsolanabridge_linux_amd64.tar.gz
           asset_content_type: application/gzip
