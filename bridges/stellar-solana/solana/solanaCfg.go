@@ -9,17 +9,22 @@ type SolanaConfig struct {
 	NetworkName string
 	// TokenAddress of the Solana token to use in the bridge
 	TokenAddress string
+	// Endpoint to connect to. If this is not an empty string, override the NetworkName
+	Endpoint string
 }
 
+// Validate the Solana config
 func (cfg SolanaConfig) Validate() error {
 	var err error
-	switch cfg.NetworkName {
-	case "local":
-	case "devnet":
-	case "testnet":
-	case "production":
-	default:
-		err = ErrSolanaNetworkNotSupported
+	if cfg.Endpoint != "" {
+		switch cfg.NetworkName {
+		case "local":
+		case "devnet":
+		case "testnet":
+		case "production":
+		default:
+			err = ErrSolanaNetworkNotSupported
+		}
 	}
 
 	if err != nil {
