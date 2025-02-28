@@ -88,7 +88,14 @@ func New(ctx context.Context, cfg *SolanaConfig) (*Solana, error) {
 		return nil, errors.Wrap(err, "could not parse token address")
 	}
 
-	rpcClient, wsClient, err := getSolanaClient(ctx, cfg.NetworkName)
+	var rpcClient *rpc.Client
+	var wsClient *ws.Client
+
+	if cfg.Endpoint != "" {
+		rpcClient, wsClient, err = getSolanaClientCustomEndpoint(ctx, cfg.Endpoint)
+	} else {
+		rpcClient, wsClient, err = getSolanaClient(ctx, cfg.NetworkName)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
@@ -601,6 +608,19 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 func (sol *Solana) Close() error {
 	sol.wsClient.Close()
 	return sol.rpcClient.Close()
+}
+
+// getSolanaClientCustomEndpoint gets an RPC client and websocket client which connects to a custom URL endpoint
+func getSolanaClientCustomEndpoint(ctx context.Context, endpoint string) (*rpc.Client, *ws.Client, error) {
+	rpcClient := rpc.NewWithCustomRPCClient(rpc.NewWithLimiter(fmt.Sprintf("https://%s", endpoint), rate.Every(time.Second), 10))
+
+	wsClient, err := ws.Connect(ctx, fmt.Sprintf("wss://%s", endpoint))
+	if err != nil {
+		rpcClient.Close()
+		return nil, nil, errors.Wrap(err, "failed to establish websocket connection")
+	}
+
+	return rpcClient, wsClient, nil
 }
 
 // getSolanaClient gets an RPC client and websocket client for a specific solana network
