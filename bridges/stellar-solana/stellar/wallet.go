@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/stellar/go/amount"
 	"github.com/stellar/go/clients/horizonclient"
@@ -20,7 +21,6 @@ import (
 	"github.com/threefoldfoundation/tft/bridges/stellar-solana/faults"
 
 	"github.com/stellar/go/protocols/horizon/effects"
-	"github.com/stellar/go/support/errors"
 	"github.com/stellar/go/txnbuild"
 )
 
@@ -375,12 +375,16 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 				return
 			}
 
-			log.Info().Msg("Unknown error, waiting 2 minutes in case the tx was submitted")
+			timeout := time.Second * 10
+			if errors.Is(err, solana.ErrMintSubmitFailed) {
+				// Make sure there is enough time in case the transaction was submitted, for it to be properly finalized.
+				// Otherwise we might mint again by mistake.
+				timeout = time.Second * 120
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(120 * time.Second):
-
+			case <-time.After(timeout):
 				err = mintFn(ctx, solanaAddress, depositedAmount, tx.Hash)
 			}
 		}

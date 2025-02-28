@@ -38,6 +38,9 @@ var (
 	ErrSolanaNetworkNotSupported = errors.New("the provided network is not a valid Solana network")
 	// ErrBurnTxNotFound is returned when we are trying to find a burn transaction
 	ErrBurnTxNotFound = errors.New("burn transaction for the provided signature not found")
+	// ErrMintSubmitFailed is returned when submitting (and waiting for confirmation of finalization)
+	// of a solana mint tx fails
+	ErrMintSubmitFailed = errors.New("failed to submit mint transaction to solana network")
 )
 
 // Override the default "old" token program to the token program 2022
@@ -107,10 +110,12 @@ func (sol *Solana) GetTransaction(ctx context.Context, sig Signature) (*rpc.GetT
 		return cachedTx, nil
 	}
 
+	maxTxVersion := uint64(0)
 	// Not found in cache, load from rpc server
 	txRes, err := sol.rpcClient.GetTransaction(ctx, sig, &rpc.GetTransactionOpts{
 		// This is the default commitment but set it explicitly to be sure
-		Commitment: rpc.CommitmentFinalized,
+		Commitment:                     rpc.CommitmentFinalized,
+		MaxSupportedTransactionVersion: &maxTxVersion,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load mint transaction")
@@ -295,6 +300,8 @@ func (sol *Solana) GetBurnTransaction(ctx context.Context, txID ShortTxID) (Burn
 func (sol *Solana) Mint(ctx context.Context, tx *Transaction) error {
 	sig, err := confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
 	if err != nil {
+		log.Error().Err(err).Msg("could not submit solana mint transaction")
+
 		return errors.Wrap(err, "failed to submit mint transaction")
 	}
 
