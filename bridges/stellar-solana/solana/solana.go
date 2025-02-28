@@ -434,7 +434,7 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 
 	extractBurnFromSig := func(sig solana.Signature) *Burn {
 		log.Debug().Str("signature", sig.String()).Msg("Fetch tx with sig")
-		res, err := sol.rpcClient.GetTransaction(ctx, sig, nil)
+		res, err := sol.GetTransaction(ctx, sig)
 		if err != nil {
 			if errors.Is(err, rpc.ErrNotFound) {
 				// TODO: Considering we get the actual log twice, there might be a better way to handle this
