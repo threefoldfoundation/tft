@@ -68,6 +68,9 @@ type Solana struct {
 
 	// The address of the token to use
 	tokenAddress solana.PublicKey
+
+	// txCache for GetTransaction result caching
+	txCache *transactionCache
 }
 
 // New Solana client connected to the provided network
@@ -87,12 +90,38 @@ func New(ctx context.Context, cfg *SolanaConfig) (*Solana, error) {
 		return nil, errors.Wrap(err, "could not create Solana RPC client")
 	}
 
-	return &Solana{network: cfg.NetworkName, rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress}, nil
+	txCache := newTransactionCache()
+
+	return &Solana{network: cfg.NetworkName, rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress, txCache: txCache}, nil
 }
 
 // Address of the solana wallet
 func (sol *Solana) Address() Address {
 	return sol.account.PublicKey()
+}
+
+// GetTransaction loads the transaction for a given signature. If the tx exists, it is added to a cache to avoid future network calls for this sig.
+func (sol *Solana) GetTransaction(ctx context.Context, sig Signature) (*rpc.GetTransactionResult, error) {
+	// First check the cache
+	if cachedTx := sol.txCache.getTransaction(sig); cachedTx != nil {
+		return cachedTx, nil
+	}
+
+	// Not found in cache, load from rpc server
+	txRes, err := sol.rpcClient.GetTransaction(ctx, sig, &rpc.GetTransactionOpts{
+		// This is the default commitment but set it explicitly to be sure
+		Commitment: rpc.CommitmentFinalized,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load mint transaction")
+	}
+
+	// If we have data, add it to the cache
+	if txRes != nil {
+		sol.txCache.addTransaction(sig, *txRes)
+	}
+
+	return txRes, nil
 }
 
 // IsMintTxID checks if a transaction ID is a known mint transaction.
