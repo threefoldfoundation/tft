@@ -378,7 +378,7 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(10 * time.Second):
+			case <-time.After(60 * time.Second):
 				err = mintFn(ctx, solanaAddress, depositedAmount, tx.Hash)
 			}
 		}
