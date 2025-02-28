@@ -272,10 +272,7 @@ func (sol *Solana) GetBurnTransaction(ctx context.Context, txID ShortTxID) (Burn
 
 	for _, sig := range sigs {
 		if shortenTxID(sig) == txID {
-			txRes, err := sol.rpcClient.GetTransaction(ctx, sig, &rpc.GetTransactionOpts{
-				// This is the default commitment but set it explicitly to be sure
-				Commitment: rpc.CommitmentFinalized,
-			})
+			txRes, err := sol.GetTransaction(ctx, sig)
 			if err != nil {
 				return Burn{}, errors.Wrap(err, "failed to load burn transaction")
 			}
