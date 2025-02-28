@@ -375,10 +375,12 @@ func (w *Wallet) MonitorBridgeAccountAndMint(ctx context.Context, mintFn mint, p
 				return
 			}
 
+			log.Info().Msg("Unknown error, waiting 2 minutes in case the tx was submitted")
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(60 * time.Second):
+			case <-time.After(120 * time.Second):
+
 				err = mintFn(ctx, solanaAddress, depositedAmount, tx.Hash)
 			}
 		}
