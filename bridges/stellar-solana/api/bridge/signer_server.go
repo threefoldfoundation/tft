@@ -139,6 +139,15 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 		return fmt.Errorf("deposit addresses do not match")
 	}
 
+	known, err := s.solWallet.IsMintTxID(ctx, tx.ID)
+	if err != nil {
+		return errors.Wrap(err, "Could not verify if we already know this mint")
+	}
+
+	if known {
+		return errors.New("Refusing to sign mint request for transaction we already minted")
+	}
+
 	signature, idx, err := s.solWallet.CreateTokenSignature(*solTx)
 	if err != nil {
 		return err
