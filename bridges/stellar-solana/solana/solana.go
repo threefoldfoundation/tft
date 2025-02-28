@@ -754,8 +754,7 @@ func memoFromTx(tx Transaction) string {
 	for _, ix := range tx.Message.Instructions {
 		switch tx.Message.AccountKeys[ix.ProgramIDIndex] {
 		case memoProgram:
-			// TODO: verify encoding
-			return string(ix.Data[1:])
+			return string(ix.Data[:])
 		default:
 			continue
 		}
