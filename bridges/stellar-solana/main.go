@@ -54,6 +54,7 @@ func main() {
 	flag.StringVar(&solCfg.KeyFile, "solana-key", "", "path to the solana keyfile containing the private key used to sign")
 	flag.StringVar(&solCfg.NetworkName, "solana-network", "", "the solana network to connect to")
 	flag.StringVar(&solCfg.TokenAddress, "solana-token-address", "", "the solana token address to bridge for")
+	flag.StringVar(&solCfg.Endpoint, "solana-rpc-url", "", "custom url to use for solana rpc and ws connections, overrides solana-network provided built-in urls")
 
 	var debug bool
 	flag.BoolVar(&debug, "debug", false, "sets debug level log output")
