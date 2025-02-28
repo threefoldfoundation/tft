@@ -110,7 +110,7 @@ func (sol *Solana) IsMintTxID(ctx context.Context, txID string) (bool, error) {
 			Commitment: rpc.CommitmentFinalized,
 		})
 		if err != nil {
-			return false, errors.Wrap(err, "failed to load burn transaction")
+			return false, errors.Wrap(err, "failed to load mint transaction")
 		}
 		tx, err := txRes.Transaction.GetTransaction()
 		if err != nil {
