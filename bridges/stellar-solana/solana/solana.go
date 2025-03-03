@@ -309,7 +309,9 @@ func (sol *Solana) Mint(ctx context.Context, tx *Transaction) error {
 	if err != nil {
 		log.Error().Err(err).Msg("could not submit solana mint transaction")
 
-		return errors.Wrap(err, "failed to submit mint transaction")
+		// Return custom error here so an upstream caller can check for it. It might be that the
+		// tx is submitted successfully but we got an error while waiting for finalization.
+		return ErrMintSubmitFailed
 	}
 
 	log.Info().Str("txID", sig.String()).Msg("Submitted mint tx")
