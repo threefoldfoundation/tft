@@ -192,6 +192,7 @@ func (s *SignersClient) Sign(ctx context.Context, signRequest multisig.StellarSi
 }
 
 func (s *SignersClient) sign(ctx context.Context, id peer.ID, signRequest multisig.StellarSignRequest) (*multisig.StellarSignResponse, error) {
+	ctx = network.WithUseTransient(ctx, "transient connection is allowed as the signature proves private key ownership")
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
@@ -273,6 +274,7 @@ func (s *SignersClient) SignMint(ctx context.Context, signRequest EthSignRequest
 }
 
 func (s *SignersClient) signMint(ctx context.Context, id peer.ID, signRequest EthSignRequest) (*EthSignResponse, error) {
+	ctx = network.WithUseTransient(ctx, "transient connection is allowed as the signature proves private key ownership")
 	arHost := s.host.(*autorelay.AutoRelayHost)
 
 	if err := client.ConnectToPeer(ctx, arHost, s.router, s.relay, id); err != nil {
