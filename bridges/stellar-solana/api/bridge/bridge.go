@@ -104,21 +104,13 @@ func (bridge *Bridge) Close() error {
 	return nil
 }
 
-func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, depositedAmount *big.Int, txID string) (err error) {
+func (bridge *Bridge) mint(ctx context.Context, memoAddress solana.Address, depositedAmount *big.Int, txID string) (err error) {
 	if !bridge.synced {
 		return errors.New("bridge is not synced, retry later")
 	}
 
-	valid, err := bridge.solanaWallet.IsValidReceiver(ctx, receiver)
-	if err != nil {
-		return errors.Wrap(err, "Failed to check if receiver is proper")
-	}
-
-	if !valid {
-		return faults.ErrInvalidReceiver
-	}
-
-	log.Info().Str("receiver", receiver.String()).Str("txID", txID).Msg("Minting")
+	// Check if this tx is a known mint TX
+	log.Info().Str("receiver", memoAddress.String()).Str("txID", txID).Msg("Minting")
 	// check if we already know this ID
 	known, err := bridge.solanaWallet.IsMintTxID(ctx, txID)
 	if err != nil {
@@ -128,6 +120,32 @@ func (bridge *Bridge) mint(ctx context.Context, receiver solana.Address, deposit
 		log.Info().Str("txID", txID).Msg("Skipping known minting transaction")
 		// we already know this withdrawal address, so ignore the transaction
 		return
+	}
+
+	// Check if we've already refunded this TX
+	known, err = bridge.wallet.TransactionStorage.TransactionWithMemoExists(ctx, txID)
+	if err != nil {
+		return
+	}
+	if known {
+		log.Info().Str("txID", txID).Msg("Skipping minting transaction we've already refunded")
+		// we already refunded this, so ignore the transaction
+		return
+	}
+
+	// Convert receiver address to derived ATA
+	receiver, err := bridge.solanaWallet.ATAFromMasterAddress(memoAddress)
+	if err != nil {
+		return errors.Wrap(err, "could not convert memo master address to derived ATA")
+	}
+
+	valid, err := bridge.solanaWallet.IsValidReceiver(ctx, receiver)
+	if err != nil {
+		return errors.Wrap(err, "Failed to check if receiver is proper")
+	}
+
+	if !valid {
+		return faults.ErrInvalidReceiver
 	}
 
 	depositFeeBigInt := big.NewInt(stellar.IntToStroops(bridge.config.DepositFee))
