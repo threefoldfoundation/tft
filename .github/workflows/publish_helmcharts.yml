@@ -11,18 +11,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      
+
       - name: Get version
         id: semver
-        uses: LykkeBusiness/get-semver-from-tag-action@v1.0.2
+        uses: LykkeBusiness/get-semver-from-tag-action@v1.0.3
         with:
-            tag: ${{ github.ref }}
+          tag: ${{ github.ref }}
 
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
         env:
-              GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Package tftbscbridge chart
         uses: WyriHaximus/github-action-helm3@v3
@@ -32,13 +32,12 @@ jobs:
       - name: Upload tftbscbridge packaged chart
         uses: actions/upload-release-asset@v1.0.2
         env:
-              GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-              upload_url: ${{ steps.get_release.outputs.upload_url }}
-              asset_path: packagedcharts/tftbscbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
-              asset_name: tftbscbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
-              asset_content_type: application/gzip
-
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: packagedcharts/tftbscbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+          asset_name: tftbscbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+          asset_content_type: application/gzip
 
       - name: Package tftethbridge chart
         uses: WyriHaximus/github-action-helm3@v3
@@ -48,11 +47,9 @@ jobs:
       - name: Upload tftethbridge packaged chart
         uses: actions/upload-release-asset@v1.0.2
         env:
-            GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-            upload_url: ${{ steps.get_release.outputs.upload_url }}
-            asset_path: packagedcharts/tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
-            asset_name: tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
-            asset_content_type: application/gzip
-
-      
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: packagedcharts/tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+          asset_name: tftethbridge-${{ steps.semver.outputs.non-prefixed }}.tgz
+          asset_content_type: application/gzip
