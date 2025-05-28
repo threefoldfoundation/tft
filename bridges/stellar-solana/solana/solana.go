@@ -410,7 +410,7 @@ func (sol *Solana) PrepareMintTx(ctx context.Context, info MintInfo) (*Transacti
 
 	tx, err := solana.NewTransaction([]solana.Instruction{
 		// TODO: Compute actual limit
-		budget.NewSetComputeUnitLimitInstruction(40000).Build(),
+		budget.NewSetComputeUnitLimitInstruction(50000).Build(),
 		CustomMemoInstruction(txID, sol.account.PublicKey()),
 		// memo.NewMemoInstruction(txID, sol.account.PublicKey()).Build(),
 		token.NewMintToCheckedInstruction(info.Amount, mint.Decimals, sol.tokenAddress, to, *mint.MintAuthority, filteredSigners).Build(),
