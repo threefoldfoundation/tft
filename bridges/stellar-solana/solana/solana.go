@@ -344,6 +344,13 @@ func (sol *Solana) listTransactionSigs(ctx context.Context) ([]Signature, error)
 	return signatures, nil
 }
 
+// ATAFromMasterAddress derives the expected ATA for the current mint assuming the given
+// adddress is the master account.
+func (sol *Solana) ATAFromMasterAddress(master Address) (Address, error) {
+	addr, _, err := solana.FindAssociatedTokenAddress(master, sol.tokenAddress)
+	return addr, err
+}
+
 // AddressFromHex decodes a hex encoded Solana address
 func AddressFromHex(encoded string) (Address, error) {
 	b, err := hex.DecodeString(encoded)
