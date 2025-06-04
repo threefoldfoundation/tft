@@ -139,6 +139,7 @@ func (bridge *Bridge) mint(ctx context.Context, memoAddress solana.Address, depo
 		return errors.Wrap(err, "could not convert memo master address to derived ATA")
 	}
 
+	log.Debug().Str("ATA", receiver.String()).Msg("Checking if computed receiver ATA is valid")
 	valid, err := bridge.solanaWallet.IsValidReceiver(ctx, receiver)
 	if err != nil {
 		return errors.Wrap(err, "Failed to check if receiver is proper")
