@@ -146,7 +146,15 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	if tx.MemoType != "hash" {
 		return errors.New("memo is not of type memo hash")
 	}
+
+	// Extract master address from stellar tx
 	addr, err := solana.AddressFromB64(tx.Memo)
+	if err != nil {
+		return err
+	}
+
+	// convert to ATA address, which is the one passed in the solana mint tx and the signing request
+	addr, err = s.solWallet.ATAFromMasterAddress(addr)
 	if err != nil {
 		return err
 	}
