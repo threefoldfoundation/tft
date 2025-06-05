@@ -87,6 +87,29 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 		return err
 	}
 
+	// Check in transaction storage if the deposit transaction exists
+	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(ctx, request.TxID)
+	if err != nil {
+		log.Info().Str("txid", request.TxID).Msg("transaction not found")
+		return err
+	}
+
+	known, err := s.solWallet.IsMintTxID(ctx, tx.ID)
+	if err != nil {
+		return errors.Wrap(err, "Could not verify if we already know this mint")
+	}
+	if known {
+		return errors.New("Refusing to sign mint request for transaction we already minted")
+	}
+
+	known, err = s.stellarWallet.TransactionStorage.TransactionWithMemoExists(ctx, request.TxID)
+	if err != nil {
+		return errors.Wrap(err, "Could not verify if we already refunded this tx")
+	}
+	if known {
+		return errors.New("Refusing to sign mint request for transaction we already refunded")
+	}
+
 	amount, memo, receiver, err := solana.ExtractMintvalues(*solTx)
 	if memo != request.TxID {
 		log.Warn().Str("requested txid", request.TxID).Str("embedded txid", memo).Msg("could not unmarshal transaction")
@@ -100,13 +123,6 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	if receiver != request.Receiver {
 		log.Warn().Str("txid", request.TxID).Str("tx receiver", receiver.String()).Str("requested receiver", request.Receiver.String()).Msg("Receiver does not match")
 		return errors.New("Tx receiver does not match requested receiver")
-	}
-
-	// Check in transaction storage if the deposit transaction exists
-	tx, err := s.stellarWallet.TransactionStorage.GetTransactionWithID(ctx, request.TxID)
-	if err != nil {
-		log.Info().Str("txid", request.TxID).Msg("transaction not found")
-		return err
 	}
 
 	// Validate amount
@@ -130,22 +146,21 @@ func (s *SignerService) SignMint(ctx context.Context, request SolanaRequest, res
 	if tx.MemoType != "hash" {
 		return errors.New("memo is not of type memo hash")
 	}
+
+	// Extract master address from stellar tx
 	addr, err := solana.AddressFromB64(tx.Memo)
+	if err != nil {
+		return err
+	}
+
+	// convert to ATA address, which is the one passed in the solana mint tx and the signing request
+	addr, err = s.solWallet.ATAFromMasterAddress(addr)
 	if err != nil {
 		return err
 	}
 
 	if addr != request.Receiver {
 		return fmt.Errorf("deposit addresses do not match")
-	}
-
-	known, err := s.solWallet.IsMintTxID(ctx, tx.ID)
-	if err != nil {
-		return errors.Wrap(err, "Could not verify if we already know this mint")
-	}
-
-	if known {
-		return errors.New("Refusing to sign mint request for transaction we already minted")
 	}
 
 	signature, idx, err := s.solWallet.CreateTokenSignature(*solTx)

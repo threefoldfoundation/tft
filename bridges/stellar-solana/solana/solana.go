@@ -344,6 +344,22 @@ func (sol *Solana) listTransactionSigs(ctx context.Context) ([]Signature, error)
 	return signatures, nil
 }
 
+// ATAFromMasterAddress derives the expected ATA for the current mint assuming the given
+// adddress is the master account.
+func (sol *Solana) ATAFromMasterAddress(master Address) (Address, error) {
+	// Rather than calling solana.FindAssociatedTokenAddress(master, sol.tokenAddress), we call the internal function that function call directly.
+	// The reason for this is that we use Token2022 programs, and the library uses the regular token program, which leads to different ATA derivations.
+	addr, _, err := solana.FindProgramAddress([][]byte{
+		master[:],
+		solana.Token2022ProgramID[:],
+		sol.tokenAddress[:],
+	},
+		solana.SPLAssociatedTokenAccountProgramID,
+	)
+
+	return addr, err
+}
+
 // AddressFromHex decodes a hex encoded Solana address
 func AddressFromHex(encoded string) (Address, error) {
 	b, err := hex.DecodeString(encoded)
