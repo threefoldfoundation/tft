@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	ag_binary "github.com/gagliardetto/binary"
@@ -63,9 +64,14 @@ type (
 
 type Solana struct {
 	network string
+	// endpoint is the custom rpc/ws host (without scheme) if one was configured, empty otherwise.
+	// It is remembered so the websocket can be re-dialed to the same place after a disconnect.
+	endpoint string
 
 	rpcClient *rpc.Client
-	wsClient  *ws.Client
+	// wsClient is replaced when the websocket connection dies, so guard access with wsMu.
+	wsMu     sync.Mutex
+	wsClient *ws.Client
 
 	account solana.PrivateKey
 
@@ -102,7 +108,48 @@ func New(ctx context.Context, cfg *SolanaConfig) (*Solana, error) {
 
 	txCache := newTransactionCache()
 
-	return &Solana{network: cfg.NetworkName, rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress, txCache: txCache}, nil
+	return &Solana{network: cfg.NetworkName, endpoint: cfg.Endpoint, rpcClient: rpcClient, wsClient: wsClient, account: account, tokenAddress: parsedTokenAddress, txCache: txCache}, nil
+}
+
+// ws returns the current websocket client, which may be nil while a reconnect is in progress.
+func (sol *Solana) ws() *ws.Client {
+	sol.wsMu.Lock()
+	defer sol.wsMu.Unlock()
+	return sol.wsClient
+}
+
+// replaceWs closes the current websocket client (if any) and installs the given one, which may be nil.
+// Closing cancels the client's ping goroutine and the underlying connection, which the ws client
+// does not do by itself when its read loop fails.
+func (sol *Solana) replaceWs(client *ws.Client) {
+	sol.wsMu.Lock()
+	defer sol.wsMu.Unlock()
+	if sol.wsClient != nil {
+		sol.wsClient.Close()
+	}
+	sol.wsClient = client
+}
+
+// dialWs opens a new websocket connection to the same place the initial one was opened to:
+// the custom endpoint if one was configured, otherwise the built-in url of the network.
+func (sol *Solana) dialWs(ctx context.Context) (*ws.Client, error) {
+	url := ""
+	if sol.endpoint != "" {
+		url = fmt.Sprintf("wss://%s", sol.endpoint)
+	} else {
+		config, err := getNetworkConfig(sol.network)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not open websocket connection")
+		}
+		url = config.WS
+	}
+
+	wsClient, err := ws.Connect(ctx, url)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to establish websocket connection")
+	}
+
+	return wsClient, nil
 }
 
 // Address of the solana wallet
@@ -305,7 +352,12 @@ func (sol *Solana) GetBurnTransaction(ctx context.Context, txID ShortTxID) (Burn
 
 // Mint tokens on the solana network
 func (sol *Solana) Mint(ctx context.Context, tx *Transaction) error {
-	sig, err := confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, sol.wsClient, tx)
+	wsClient := sol.ws()
+	if wsClient == nil {
+		log.Error().Msg("could not submit solana mint transaction: websocket is reconnecting")
+		return ErrMintSubmitFailed
+	}
+	sig, err := confirm.SendAndConfirmTransaction(ctx, sol.rpcClient, wsClient, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("could not submit solana mint transaction")
 
@@ -461,6 +513,10 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 		log.Debug().Str("signature", sig.String()).Msg("Fetch tx with sig")
 		res, err := sol.GetTransaction(ctx, sig)
 		if err != nil {
+			if ctx.Err() != nil {
+				// Shutting down, not an error worth reporting
+				return nil
+			}
 			if errors.Is(err, rpc.ErrNotFound) {
 				// TODO: Considering we get the actual log twice, there might be a better way to handle this
 				log.Info().Str("signature", sig.String()).Msg("Skipping tx which can't be found")
@@ -554,30 +610,89 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 	}
 
 	ch := make(chan Burn, 10)
+
+	// replaySignatures pushes every burn found in the recent token signatures on the channel. It is
+	// used once at startup, and again after every reconnect to cover burns which happened while the
+	// subscription was down. Duplicates are harmless: the withdrawal path skips transactions which
+	// were already executed.
+	replaySignatures := func(sigs []solana.Signature) {
+		for _, sig := range sigs {
+			burn := extractBurnFromSig(sig)
+			if burn != nil {
+				select {
+				case ch <- *burn:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+
+	// sleep waits for the given duration unless the context is cancelled first. Returns false on cancel.
+	sleep := func(d time.Duration) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(d):
+			return true
+		}
+	}
+
+	const (
+		minBackoff = 10 * time.Second
+		maxBackoff = 2 * time.Minute
+	)
+
 	go func() {
 		// Close the channel in case the goroutine exits
 		defer close(ch)
 
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+		backoff := minBackoff
+		subscriptions := 0
+
+		for ctx.Err() == nil {
+			// (Re)dial the websocket if we currently don't have one. The client is dropped after every
+			// failure below, so this is the only place a connection is created.
+			client := sol.ws()
+			if client == nil {
+				var err error
+				client, err = sol.dialWs(ctx)
+				if err != nil {
+					log.Error().Err(err).Dur("retryIn", backoff).Msg("Failed to create new solana websocket connection")
+					if !sleep(backoff) {
+						return
+					}
+					backoff = min(backoff*2, maxBackoff)
+					continue
+				}
+				sol.replaceWs(client)
 			}
 
-			sub, err := sol.wsClient.LogsSubscribeMentions(sol.tokenAddress, rpc.CommitmentFinalized)
+			sub, err := client.LogsSubscribeMentions(sol.tokenAddress, rpc.CommitmentFinalized)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to open solana log subscription")
-				// Reconnect the websocket, in case the websocket itself is closed.
-				sol.wsClient.Close()
-				sol.wsClient, err = newSolanaWsClient(ctx, sol.network)
-				if err != nil {
-					log.Error().Err(err).Str("network", sol.network).Msg("Failed to create new solana websocket connection")
+				log.Error().Err(err).Dur("retryIn", backoff).Msg("Failed to open solana log subscription")
+				// The connection is not usable, drop it so the next iteration dials a fresh one
+				sol.replaceWs(nil)
+				if !sleep(backoff) {
+					return
 				}
-				// Wait 10 seconds in case it is a transient network error, then try again
-				time.Sleep(time.Second * 10)
-				// Restart the loop
+				backoff = min(backoff*2, maxBackoff)
 				continue
+			}
+
+			backoff = minBackoff
+			subscriptions++
+			log.Info().Int("subscription", subscriptions).Msg("Subscribed to solana token logs")
+
+			if subscriptions > 1 {
+				// This is a reconnect: catch up on burns which happened while we were not subscribed.
+				sigs, err := sol.listTransactionSigs(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("Could not load token tx signatures to replay after reconnect")
+				} else {
+					log.Info().Int("signatures", len(sigs)).Msg("Replaying recent token signatures after reconnect")
+					go replaySignatures(sigs)
+				}
 			}
 
 			for {
@@ -601,6 +716,17 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 
 			// Also close the subscription now that we are done with it
 			sub.Unsubscribe()
+			// A receive error means the websocket client's read loop has exited. The client itself does
+			// not close the connection, and anything written on it afterwards silently goes nowhere, so
+			// never reuse it: close it and dial a new one on the next iteration.
+			sol.replaceWs(nil)
+			if ctx.Err() != nil {
+				return
+			}
+			log.Warn().Msg("Solana log subscription lost, reconnecting")
+			if !sleep(time.Second) {
+				return
+			}
 		}
 	}()
 
@@ -610,21 +736,14 @@ func (sol *Solana) SubscribeTokenBurns(ctx context.Context) (<-chan Burn, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load historic token tx signatures")
 	}
-	go func() {
-		for _, sig := range sigs {
-			burn := extractBurnFromSig(sig)
-			if burn != nil {
-				ch <- *burn
-			}
-		}
-	}()
+	go replaySignatures(sigs)
 
 	return ch, nil
 }
 
 // Close the client terminating all subscriptions and open connections
 func (sol *Solana) Close() error {
-	sol.wsClient.Close()
+	sol.replaceWs(nil)
 	return sol.rpcClient.Close()
 }
 
@@ -677,19 +796,6 @@ func getNetworkConfig(network string) (rpc.Cluster, error) {
 	}
 
 	return config, err
-}
-
-func newSolanaWsClient(ctx context.Context, network string) (*ws.Client, error) {
-	config, err := getNetworkConfig(network)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not open websocket connection")
-	}
-	wsClient, err := ws.Connect(ctx, config.WS)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to establish websocket connection")
-	}
-
-	return wsClient, nil
 }
 
 func NewShortTxID(hash [32]byte) ShortTxID {
